@@ -1,0 +1,8 @@
+{
+  "name": "@arena/config",
+  "version": "0.0.0",
+  "private": true,
+  "license": "UNLICENSED",
+  "main": "index.js",
+  "files": ["tsconfig.lib.json", "tsconfig.app.json"]
+}

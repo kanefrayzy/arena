@@ -1,0 +1,1163 @@
+================================================================================
+ТЕХНИЧЕСКОЕ ЗАДАНИЕ
+Проект: Arena1v1 — браузерная PvP-игра 1 на 1 на реальные деньги (skill-game)
+Документ предназначен для передачи AI-ассистенту (Claude) в новом чате
+для полной реализации проекта с нуля.
+Версия документа: 1.0
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+0. ИНСТРУКЦИЯ ДЛЯ AI-АССИСТЕНТА (читать первым)
+────────────────────────────────────────────────────────────────────────────────
+
+Ты — senior fullstack-разработчик. Тебе передаётся это ТЗ как полная
+спецификация продукта. Твоя задача:
+
+1. Создать монорепозиторий по описанной структуре с НУЛЯ.
+2. Реализовать ВСЕ перечисленные модули. Не делай заглушек там, где описана
+   реальная логика. Заглушки допустимы только там, где это явно указано
+   ("placeholder", "stub", "TODO v1.1").
+3. Код должен быть production-ready: типизирован (TypeScript strict),
+   с обработкой ошибок, валидацией входов (Zod), и базовыми тестами критичных
+   модулей (ledger, auth, match-finish).
+4. После реализации проект должен запускаться ОДНОЙ командой:
+       docker compose up
+   и быть доступен на http://localhost.
+5. Документация: README.md в корне с разделами Quick Start, Configuration,
+   Architecture, Deployment.
+6. Принципы:
+   - Server-authoritative геймплей (клиент шлёт только input).
+   - Ledger-based финансы (двойная запись, идемпотентность).
+   - Data-driven контент (персонажи/скины/комнаты — в БД, не в коде).
+   - Никогда не апдейти баланс напрямую — только через ledger.
+   - Все межсервисные вызовы — с HMAC-подписью.
+   - Все деньги — Decimal(20,8), никаких float.
+7. Если встречаешь неоднозначность — выбирай решение в пользу:
+   а) безопасности денег,
+   б) расширяемости,
+   в) простоты деплоя.
+8. Не используй экзотические библиотеки. Только стек, явно указанный в §3.
+9. Все строки UI — через i18next с ключами (ru, en).
+10. Когда закончишь — выдай чек-лист §17 (Definition of Done) и отметь
+    каждый пункт: реализован/не реализован/частично.
+
+────────────────────────────────────────────────────────────────────────────────
+1. КРАТКОЕ ОПИСАНИЕ ПРОДУКТА
+────────────────────────────────────────────────────────────────────────────────
+
+Браузерная PWA-игра в жанре real-time 2D top-down арена-шутер 1v1
+(в духе Brawl Stars / .io-шутеров).
+
+Три режима матчей:
+  FREE    — без денег, для тренировки.
+  CASUAL  — фиксированный приз/штраф (по умолчанию ±0.03 USD), включается
+            админом, может быть отключён.
+  STAKE   — комнаты с фиксированными ставками (1, 5, 10 USD и далее настраиваются
+            в админке). Победитель получает 80% банка, 20% — комиссия.
+
+Юридическая модель: skill-game (победа определяется навыком игрока,
+никакого RNG в исходе боя).
+
+Валюта: USD.
+Платежи: Betra H2H (депозиты + выплаты).
+
+────────────────────────────────────────────────────────────────────────────────
+2. КЛЮЧЕВЫЕ ТРЕБОВАНИЯ
+────────────────────────────────────────────────────────────────────────────────
+
+Геймплей:
+  - 2D top-down арена 1v1.
+  - Персонажи с разными статами (HP, скорость, урон, оружие, способность).
+  - Скины (могут быть чисто косметическими или модифицировать статы — галка в админке).
+  - Server-authoritative: клиент шлёт input, сервер считает физику.
+  - Tickrate 30 Hz (настраивается в админке).
+  - Client-side prediction + server reconciliation.
+  - Lag compensation для выстрелов (откат на RTT/2).
+
+Матчмейкинг:
+  - Кнопка «Играть» → очередь по выбранному режиму.
+  - Если за 10 секунд оппонента нет → клиенту показывается «Продолжить ожидание / Отмена».
+  - В FREE-режиме: опционально (галка в админке) через 30 сек ожидания подсаживается
+    бот-оппонент. В CASUAL/STAKE — никогда.
+  - MMR существует в БД, но в v1 не используется (ELO=1000 у всех).
+
+Финансы:
+  - Все операции через ledger (двойная запись, идемпотентность).
+  - При входе в платный матч — ставка резервируется (locked).
+  - При завершении: атомарная транзакция (unlock + win + loss + commission).
+  - Баланс не может быть < 0.
+  - В админке галка: «Можно ли играть с нулевым балансом» (для CASUAL/STAKE).
+  - Депозит/вывод через Betra H2H, идемпотентные webhook'и.
+  - Вывод: ручной апрув в админке (или авто, если включено в settings).
+
+Прогрессия:
+  - 3 стартовых персонажа («Стрелок», «Танк», «Скаут») × по 1 базовому скину.
+  - Магазин скинов: цена в монетах (внутренняя валюта) или USD.
+  - Loadout: выбор активного персонажа+скина перед матчем.
+  - Статистика: сыграно, побед, поражений, заработано, потеряно, MMR.
+
+Античит (server-side):
+  - Скорость, ROF, дальность — валидируются на сервере.
+  - Input не содержит позиций, только направление.
+  - Rate-limit по IP и user_id.
+  - AFK-detection: 10 сек без input → технический проигрыш.
+  - Реплеи матчей в gzip (input+snapshots), хранятся 30 дней.
+
+UI:
+  - PWA, single-page, full-viewport (как мобильная игра, без скролла).
+  - Установка на главный экран на iOS/Android.
+  - Полноэкранный режим, поддержка safe-area для notch.
+  - Single common design system (Tailwind + shadcn/ui).
+  - 11 экранов игрока + 9 экранов админки (см. §12).
+
+Деплой:
+  - Один git-репозиторий.
+  - `docker compose up` — локальная разработка.
+  - `docker compose -f compose.prod.yml up -d` — продакшен на чистом VPS.
+  - Caddy с авто-SSL (Let's Encrypt).
+  - Никаких ручных шагов, только `cp .env.example .env` и редактирование.
+
+Расширяемость (заложить в архитектуру):
+  - ECS на game-сервере → легко добавить новые режимы (2v2, 3v3, capture flag).
+  - Data-driven контент → новые персонажи/скины без релиза кода.
+  - Идемпотентные интеграции → лёгкая замена платёжного провайдера.
+  - Reusable workflow в CI → копируется на новые сервисы.
+
+────────────────────────────────────────────────────────────────────────────────
+3. ТЕХНОЛОГИЧЕСКИЙ СТЕК (фиксирован)
+────────────────────────────────────────────────────────────────────────────────
+
+Менеджер пакетов: pnpm 9 + workspaces.
+Язык: TypeScript 5 (strict mode).
+Node.js: 22 LTS (alpine images).
+
+apps/api          NestJS 10
+                  Prisma 5
+                  Zod 3 (валидация)
+                  Passport-JWT (auth)
+                  argon2 (хеш паролей)
+                  BullMQ (отложенные задачи)
+                  @nestjs/throttler (rate-limit)
+                  helmet, cors
+
+apps/game         Node.js 22 + uWebSockets.js (uws)
+                  @msgpack/msgpack (бинарный протокол)
+                  собственная минимальная ECS (см. §11)
+                  ioredis (presence, locks)
+
+apps/web          Vite 5
+                  React 18
+                  TypeScript
+                  Zustand (стор)
+                  TanStack Query (data fetching)
+                  PixiJS v8 (рендер матча)
+                  Tailwind CSS 3 + shadcn/ui
+                  i18next + react-i18next
+                  vite-plugin-pwa
+                  React Router 6
+
+packages/shared   Zod-схемы, общие типы, константы
+
+packages/protocol Msgpack-схемы для game-WS (общие types для api/game/web)
+
+База данных:      PostgreSQL 16
+Кеш/очереди:      Redis 7
+Reverse proxy:    Caddy 2 (auto-SSL)
+
+Тесты:
+  - vitest (unit, e2e на api)
+  - supertest (e2e api)
+  - @testing-library/react (web)
+  - playwright (1 happy-path e2e на v1)
+
+Линтинг/формат:
+  - eslint + @typescript-eslint
+  - prettier
+  - husky + lint-staged + commitlint (conventional commits)
+
+CI/CD: GitHub Actions → GHCR → SSH-deploy на VPS.
+
+ЗАПРЕЩЕНО использовать:
+  - PHP, Python, Go, Rust (стек только TS).
+  - Socket.io (используем uWebSockets.js + msgpack).
+  - JWT в localStorage (только httpOnly cookie).
+  - Float для денег (только Decimal/Prisma.Decimal).
+  - ORM кроме Prisma.
+  - Стейт-менеджеры кроме Zustand для глобального стора.
+
+────────────────────────────────────────────────────────────────────────────────
+4. СТРУКТУРА РЕПОЗИТОРИЯ
+────────────────────────────────────────────────────────────────────────────────
+
+arena1v1/
+├── apps/
+│   ├── api/                # NestJS: REST + admin + matchmaker + lobby WS
+│   │   ├── src/
+│   │   │   ├── auth/
+│   │   │   ├── users/
+│   │   │   ├── wallet/        # ledger + кеш
+│   │   │   ├── payments/      # betra-h2h
+│   │   │   ├── rooms/
+│   │   │   ├── characters/
+│   │   │   ├── skins/
+│   │   │   ├── inventory/
+│   │   │   ├── shop/
+│   │   │   ├── matches/
+│   │   │   ├── queue/         # matchmaker
+│   │   │   ├── lobby/         # WS gateway (баланс, queue:status)
+│   │   │   ├── stats/
+│   │   │   ├── leaderboard/
+│   │   │   ├── settings/
+│   │   │   ├── admin/
+│   │   │   ├── internal/      # /internal/match/* (HMAC)
+│   │   │   ├── common/        # guards, decorators, filters
+│   │   │   └── main.ts
+│   │   └── test/
+│   │
+│   ├── game/                # uWS game server
+│   │   ├── src/
+│   │   │   ├── server.ts
+│   │   │   ├── match/
+│   │   │   │   ├── match.ts          # одна сущность матча
+│   │   │   │   ├── ecs/
+│   │   │   │   │   ├── world.ts
+│   │   │   │   │   ├── components/
+│   │   │   │   │   └── systems/
+│   │   │   │   │       ├── movement.ts
+│   │   │   │   │       ├── shooting.ts
+│   │   │   │   │       ├── collision.ts
+│   │   │   │   │       ├── damage.ts
+│   │   │   │   │       ├── cooldown.ts
+│   │   │   │   │       └── snapshot.ts
+│   │   │   │   ├── physics.ts
+│   │   │   │   ├── lag-comp.ts
+│   │   │   │   └── replay.ts
+│   │   │   ├── protocol/             # msgpack encode/decode
+│   │   │   ├── api-client.ts         # вызовы к api (HMAC)
+│   │   │   └── config.ts
+│   │   └── test/
+│   │
+│   └── web/                 # Vite + React + Pixi
+│       ├── src/
+│       │   ├── app/                  # роутер, провайдеры
+│       │   ├── pages/
+│       │   │   ├── splash/
+│       │   │   ├── home/
+│       │   │   ├── queue/
+│       │   │   ├── match/            # canvas + Pixi
+│       │   │   ├── result/
+│       │   │   ├── profile/
+│       │   │   ├── wallet/
+│       │   │   ├── shop/
+│       │   │   ├── locker/
+│       │   │   ├── leaderboard/
+│       │   │   └── settings/
+│       │   ├── admin/                # админ-роуты, скрыты ролью
+│       │   ├── shared/
+│       │   │   ├── api/              # tanstack query hooks
+│       │   │   ├── ws/               # lobby WS клиент
+│       │   │   ├── ui/               # shadcn компоненты
+│       │   │   ├── i18n/
+│       │   │   └── store/
+│       │   ├── game/
+│       │   │   ├── pixi/             # рендер
+│       │   │   ├── input/            # joystick, клавиатура
+│       │   │   ├── prediction.ts
+│       │   │   ├── reconciliation.ts
+│       │   │   └── ws-client.ts      # game WS + msgpack
+│       │   ├── pwa/                  # SW, manifest hooks
+│       │   └── main.tsx
+│       └── public/
+│           ├── manifest.json
+│           ├── icons/
+│           └── assets/
+│
+├── packages/
+│   ├── shared/              # Zod-схемы, типы, константы
+│   │   └── src/
+│   │       ├── schemas/
+│   │       ├── types/
+│   │       └── constants.ts
+│   ├── protocol/            # msgpack схемы матча
+│   │   └── src/
+│   └── config/              # eslint/tsconfig/prettier presets
+│
+├── prisma/
+│   ├── schema.prisma
+│   ├── migrations/
+│   └── seed.ts              # 3 персонажа, 6 скинов, базовые комнаты, admin user
+│
+├── docker/
+│   ├── api.Dockerfile
+│   ├── game.Dockerfile
+│   ├── web.Dockerfile
+│   ├── web.nginx.conf
+│   └── Caddyfile
+│
+├── scripts/
+│   ├── backup.sh            # pg_dump cron
+│   └── restore.sh
+│
+├── docs/
+│   ├── architecture.md
+│   ├── protocol.md
+│   ├── ledger.md
+│   ├── deployment.md
+│   └── legal/
+│       ├── tos.md
+│       └── privacy.md
+│
+├── .github/
+│   └── workflows/
+│       ├── ci.yml
+│       └── deploy.yml
+│
+├── compose.yml              # dev (hot reload через bind mounts)
+├── compose.prod.yml         # prod
+├── .env.example
+├── .gitignore
+├── .nvmrc                   # 22
+├── package.json             # workspaces root
+├── pnpm-workspace.yaml
+├── tsconfig.base.json
+├── README.md
+└── LICENSE                  # MIT или proprietary, на выбор владельца
+
+────────────────────────────────────────────────────────────────────────────────
+5. АРХИТЕКТУРА
+────────────────────────────────────────────────────────────────────────────────
+
+5.1. Поток матча
+
+  [Browser PWA]
+       │
+       │ HTTPS REST   ──────►  [api: NestJS]  ──────►  [Postgres]
+       │ WSS /ws/lobby ─────►  [api: lobby gateway]
+       │                          │ (создаёт match, JWT match_token)
+       │                          ▼
+       │                       [Redis: queue]
+       │                          │
+       │                          │ matchmaker нашёл пару → match_found
+       │                          ▼
+       │ WSS /ws/match ────────► [game: uWS]
+       │   (match_token)            │
+       │                            │ tick 30Hz
+       │                            ▼
+       │                       (по окончании)
+       │                            │
+       │                            └─HMAC─► [api /internal/match/finish]
+       │                                       │
+       │                                       ▼
+       │                                  Postgres TX:
+       │                                  ledger×4 + match update + stats
+       │                                       │
+       │                                       └──► lobby WS push: wallet:update
+
+5.2. Caddy роутинг
+
+  /api/*       → api:3000
+  /ws/lobby    → api:3000 (websocket upgrade)
+  /ws/match    → game:3001 (websocket upgrade)
+  /            → web (статика, обслуживается nginx из web-образа)
+
+5.3. Сервисы в compose
+
+  - postgres   (volume: pgdata)
+  - redis      (volume: redisdata, appendonly yes)
+  - api        (depends_on: postgres, redis; миграции через init)
+  - game       (depends_on: api, redis)
+  - web        (nginx со статикой, кроме dev — там vite dev server)
+  - caddy      (volume: caddy_data, caddy_config)
+  - backup     (cron, pg_dump → /backups, опционально)
+
+────────────────────────────────────────────────────────────────────────────────
+6. СХЕМА БД (Prisma)
+────────────────────────────────────────────────────────────────────────────────
+
+// (полная схема ниже — реализовать дословно, с миграциями)
+
+enum Role         { PLAYER ADMIN MODERATOR }
+enum RoomMode     { FREE CASUAL STAKE }
+enum WinCondition { KILL BEST_OF_3 TIMEOUT_HP }
+enum MatchStatus  { PENDING RUNNING FINISHED DISPUTED CANCELLED }
+enum LedgerType   { DEPOSIT WITHDRAWAL
+                    MATCH_STAKE_LOCK MATCH_STAKE_UNLOCK
+                    MATCH_WIN MATCH_LOSS COMMISSION
+                    ADJUSTMENT BONUS SHOP_PURCHASE }
+
+model User {
+  id            Int       @id @default(autoincrement())
+  email         String    @unique
+  passwordHash  String
+  username      String    @unique
+  role          Role      @default(PLAYER)
+  isBanned      Boolean   @default(false)
+  country       String?
+  acceptedTosAt DateTime?
+  createdAt     DateTime  @default(now())
+  meta          Json?
+
+  wallet        Wallet?
+  inventory     UserInventory[]
+  loadout       UserLoadout?
+  ledger        Ledger[]
+  stats         UserStats?
+  matchesAsP1   Match[]   @relation("p1")
+  matchesAsP2   Match[]   @relation("p2")
+}
+
+model Wallet {
+  userId   Int      @id
+  balance  Decimal  @db.Decimal(20,8) @default(0)  // КЕШ
+  locked   Decimal  @db.Decimal(20,8) @default(0)
+  coins    Int      @default(0)                    // внутренняя валюта
+  updatedAt DateTime @updatedAt
+  user     User     @relation(fields:[userId], references:[id])
+}
+
+model Ledger {
+  id              BigInt    @id @default(autoincrement())
+  userId          Int
+  amount          Decimal   @db.Decimal(20,8)
+  type            LedgerType
+  refType         String?    // 'match' | 'payment' | 'admin' | 'shop'
+  refId           String?
+  idempotencyKey  String    @unique
+  meta            Json?
+  createdAt       DateTime  @default(now())
+  user            User      @relation(fields:[userId], references:[id])
+
+  @@index([userId, createdAt])
+  @@index([refType, refId])
+}
+
+model Room {
+  id             Int          @id @default(autoincrement())
+  name           String
+  mode           RoomMode
+  stakeUsd       Decimal?     @db.Decimal(20,8)
+  commissionPct  Int          @default(20)
+  matchDurationS Int          @default(120)
+  winCondition   WinCondition @default(KILL)
+  isActive       Boolean      @default(true)
+  minBalanceRequired Boolean  @default(true)
+  createdAt      DateTime     @default(now())
+}
+
+model Match {
+  id            String      @id @default(uuid())
+  roomId        Int
+  player1Id     Int
+  player2Id     Int
+  player1CharId Int
+  player1SkinId Int
+  player2CharId Int
+  player2SkinId Int
+  stakeUsd      Decimal     @db.Decimal(20,8)
+  winnerId      Int?
+  status        MatchStatus @default(PENDING)
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  replayUrl     String?
+  durationMs    Int?
+  meta          Json?
+
+  player1       User        @relation("p1", fields:[player1Id], references:[id])
+  player2       User        @relation("p2", fields:[player2Id], references:[id])
+  room          Room        @relation(fields:[roomId], references:[id])
+
+  @@index([player1Id, finishedAt])
+  @@index([player2Id, finishedAt])
+  @@index([status])
+}
+
+model Character {
+  id               Int     @id @default(autoincrement())
+  slug             String  @unique
+  name             String
+  baseHp           Int
+  baseSpeed        Float
+  baseDamage       Int
+  weaponType       String  // 'ranged' | 'rocket' | 'shotgun'
+  abilityType      String?
+  abilityCooldownS Int     @default(10)
+  isActive         Boolean @default(true)
+  skins            Skin[]
+}
+
+model Skin {
+  id            Int      @id @default(autoincrement())
+  characterId   Int
+  name          String
+  rarity        String   // common|rare|epic|legendary
+  spriteSetUrl  String
+  tint          String?
+  statModifiers Json?    // { hpPct?, damagePct?, speedPct? } | null
+  priceCoin     Int?
+  priceUsd      Decimal? @db.Decimal(20,8)
+  isActive      Boolean  @default(true)
+  character     Character @relation(fields:[characterId], references:[id])
+}
+
+model UserInventory {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  skinId     Int
+  source     String   // purchase|reward|admin|starter
+  acquiredAt DateTime @default(now())
+  @@unique([userId, skinId])
+}
+
+model UserLoadout {
+  userId      Int @id
+  characterId Int
+  skinId      Int
+  user        User @relation(fields:[userId], references:[id])
+}
+
+model Payment {
+  id          String    @id @default(uuid())
+  userId      Int
+  type        String    // deposit | withdrawal
+  status      String    // pending | success | failed | cancelled
+  amountUsd   Decimal   @db.Decimal(20,8)
+  provider    String    // 'betra-h2h'
+  externalId  String?
+  meta        Json?
+  createdAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  @@index([userId, createdAt])
+  @@index([externalId])
+}
+
+model UserStats {
+  userId         Int      @id
+  matchesPlayed  Int      @default(0)
+  wins           Int      @default(0)
+  losses         Int      @default(0)
+  draws          Int      @default(0)
+  mmr            Int      @default(1000)
+  totalEarned    Decimal  @db.Decimal(20,8) @default(0)
+  totalLost      Decimal  @db.Decimal(20,8) @default(0)
+}
+
+model Setting {
+  key   String @id
+  value Json
+}
+
+────────────────────────────────────────────────────────────────────────────────
+7. ФИНАНСОВАЯ ЛОГИКА (КРИТИЧНО)
+────────────────────────────────────────────────────────────────────────────────
+
+7.1. Принцип
+
+  - balance в Wallet — это КЕШ.
+  - Source of truth: SUM(amount) по ledger для userId.
+  - Любая мутация — INSERT в ledger + UPDATE кеша wallet, в одной TX.
+  - Каждая запись ledger имеет UNIQUE idempotency_key (защита от двойных проводок).
+
+7.2. Резерв ставки при входе в матч
+
+  TX:
+    INSERT INTO ledger (user, amount=-stake, type=MATCH_STAKE_LOCK,
+                        refType='match', refId=matchId,
+                        idempotencyKey="match:{matchId}:user:{userId}:lock");
+    UPDATE wallet SET balance=balance-stake, locked=locked+stake;
+    Аналогично для второго игрока.
+  COMMIT.
+
+  Если у любого недостаточно средств → всё откатывается, матч не создаётся,
+  обоим возвращается queue:retry.
+
+7.3. Завершение матча (НА game-сервере → api /internal/match/finish)
+
+  TX:
+    -- Разлок ставок (для обоих)
+    INSERT ledger (winner,  +stake, MATCH_STAKE_UNLOCK, key="match:{id}:user:{w}:unlock")
+    INSERT ledger (loser,   +stake, MATCH_STAKE_UNLOCK, key="match:{id}:user:{l}:unlock")
+    UPDATE wallet[winner], wallet[loser] (locked-=stake, balance+=stake)
+
+    -- Распределение приза
+    prize      = stake * 2 * (1 - commission/100)   // например, 1.6$ от банка 2$
+    commission = stake * 2 * commission/100         // 0.4$
+
+    INSERT ledger (winner, +prize,      MATCH_WIN,   key="match:{id}:win")
+    INSERT ledger (loser,  -stake,      MATCH_LOSS,  key="match:{id}:loss")
+    INSERT ledger (system, +commission, COMMISSION,  key="match:{id}:comm")
+
+    UPDATE wallet[winner] balance += (prize - stake)   // чистый приход
+    UPDATE wallet[loser]  balance -= 0                  // ставка уже списана при разлоке-возврате
+    -- (математика проверяется в тестах)
+
+    UPDATE match SET status=FINISHED, winnerId, finishedAt, durationMs, replayUrl
+    UPDATE userStats обоих
+  COMMIT.
+
+  Идемпотентность: повторный вызов finish с тем же matchId — no-op
+  (по UNIQUE idempotencyKey в ledger).
+
+7.4. Ничья (одновременная смерть, истечение времени с равным HP)
+
+  - Оба ledger MATCH_STAKE_UNLOCK.
+  - Без MATCH_WIN/LOSS/COMMISSION (комиссии нет).
+  - status=FINISHED, winnerId=null.
+
+7.5. Disconnect / AFK
+
+  - Игрок, не отправлявший input 10 сек или закрывший вкладку — проигравший.
+  - Если оба disconnect одновременно → ничья.
+  - Если матч не успел стартовать (disconnect до welcome) → CANCELLED + полный
+    возврат через MATCH_STAKE_UNLOCK без win/loss.
+
+7.6. Disputed
+
+  - Любая ошибка в TX (race, deadlock, нарушение инварианта) → match.status=DISPUTED.
+  - Админ в админке вручную: «вернуть ставки обоим» / «засчитать победу X».
+  - Все ручные операции через ledger тип ADJUSTMENT с ref на admin user.
+
+7.7. Депозит (Betra H2H)
+
+  POST /api/wallet/deposit { amountUsd }
+    → Payment(pending) → Betra create → возвращает redirect URL
+    → клиент идёт оплачивать
+
+  POST /api/payments/betra/callback (webhook, HMAC)
+    if status=success:
+      TX:
+        UPDATE payment SET status=success, finishedAt
+        INSERT ledger (DEPOSIT, +amountUsd, key="payment:{paymentId}:deposit")
+        UPDATE wallet balance += amountUsd
+      COMMIT
+      → push wallet:update через lobby WS
+
+  Идемпотентность: повторный webhook с тем же externalId — no-op.
+
+7.8. Вывод
+
+  POST /api/wallet/withdraw { amountUsd, destination }
+    → проверки: balance >= amount, KYC если включён, лимиты
+    → TX: INSERT ledger (-amountUsd, WITHDRAWAL, status_meta='pending'),
+           UPDATE wallet balance -= amount, locked += amount
+    → создаём Payment(pending, type=withdrawal)
+    → если settings.auto_withdrawal=true → сразу в Betra payout
+    → иначе ждёт админ-апрува
+
+  Webhook payout success:
+    UPDATE payment success, locked -= amount (списание окончательное)
+  Webhook payout failed:
+    Отмена: ledger ADJUSTMENT +amount, locked-=amount, balance+=amount.
+
+────────────────────────────────────────────────────────────────────────────────
+8. МАТЧМЕЙКИНГ
+────────────────────────────────────────────────────────────────────────────────
+
+  Очереди в Redis (sorted set по timestamp):
+    mm:free
+    mm:casual
+    mm:room:{roomId}
+
+  Map: mm:user:{userId} → mode/queueKey
+
+  Воркер (внутри api, BullMQ или setInterval 500мс):
+    Для каждой очереди:
+      участники = ZRANGE 0 -1
+      пока len(участники) >= 2:
+        a, b = первые двое
+        ZREM обоих
+        попытка createMatch(a, b, queueKey)
+          ↳ если у кого-то нет средств → возврат в очередь, удаление другого с retry
+          ↳ если успех → push 'match_found' обоим через lobby WS
+
+  Таймаут ожидания:
+    через 10 сек клиенту: queue:waiting_long {canRetry, canCancel}
+    UI: «Продолжить ждать?» / «Отмена»
+    через 30 сек в FREE-режиме (если settings.bot_in_free=true) — bot match.
+
+  Бот-оппонент (только FREE):
+    создаётся match с player2 = botUser (системный, role=PLAYER, прячется в leaderboard).
+    На game-сервере boot AI-системой (отдельный контроллер с базовой логикой).
+
+────────────────────────────────────────────────────────────────────────────────
+9. REST API
+────────────────────────────────────────────────────────────────────────────────
+
+Формат ошибок: { error: { code, message, details? } }, HTTP 4xx/5xx.
+Auth: JWT в httpOnly cookie + CSRF-токен в заголовке X-CSRF-Token для мутаций.
+
+Public:
+  POST /api/auth/register      { email, username, password, acceptTos:true }
+  POST /api/auth/login         { email, password }
+  POST /api/auth/logout
+  POST /api/auth/refresh
+  GET  /api/auth/me
+
+Player (auth):
+  GET  /api/wallet
+  POST /api/wallet/deposit     { amountUsd }
+  POST /api/wallet/withdraw    { amountUsd, destination }
+  GET  /api/wallet/history?cursor=&limit=
+  GET  /api/rooms              ?mode=
+  POST /api/queue/join         { mode:'free'|'casual'|'stake', roomId? }
+  POST /api/queue/leave
+  GET  /api/characters
+  GET  /api/inventory
+  POST /api/loadout            { characterId, skinId }
+  POST /api/shop/buy           { skinId, currency:'coin'|'usd' }   (Idempotency-Key обяз.)
+  GET  /api/stats/me
+  GET  /api/stats/leaderboard  ?period=daily|weekly|alltime
+  GET  /api/matches/me         ?cursor=&limit=
+  GET  /api/matches/:id
+
+Admin (role=ADMIN):
+  CRUD /api/admin/rooms
+  CRUD /api/admin/characters
+  CRUD /api/admin/skins
+  CRUD /api/admin/settings
+  GET  /api/admin/users        ?search=
+  POST /api/admin/users/:id/ban
+  POST /api/admin/users/:id/unban
+  POST /api/admin/users/:id/adjust-balance  { amountUsd, reason }
+  GET  /api/admin/matches      ?status=
+  POST /api/admin/matches/:id/force-finish  { winnerId|null, reason }
+  POST /api/admin/matches/:id/refund
+  GET  /api/admin/payments     ?status=&type=
+  POST /api/admin/payments/:id/approve
+  POST /api/admin/payments/:id/reject
+  GET  /api/admin/disputes
+  GET  /api/admin/stats/dashboard
+
+Internal (HMAC между api ↔ game, заголовок X-Internal-Signature):
+  POST /internal/match/start    { matchId }
+  POST /internal/match/finish   { matchId, winnerId|null, durationMs, score, replayUrl }
+  POST /internal/match/abort    { matchId, reason }
+
+WebSocket /ws/lobby (auth по cookie):
+  S→C: wallet:update, queue:status, match:found, notification, system
+  C→S: ping
+  Heartbeat ping/pong каждые 25 сек.
+
+────────────────────────────────────────────────────────────────────────────────
+10. ПРОТОКОЛ МАТЧА (game-WS, бинарный msgpack)
+────────────────────────────────────────────────────────────────────────────────
+
+Подключение: wss://<host>/ws/match?token=<matchToken>
+matchToken = JWT { matchId, userId, exp }, подписан INTERNAL_SECRET, TTL 30 сек.
+
+Заголовок каждого сообщения: 1 байт типа.
+
+Client → Server:
+  0x01 hello       { matchToken }
+  0x02 input       { seq, dx:[-1..1], dy:[-1..1], angle:0..2π, fire:bool, ability:bool }
+                   Шлётся 30 раз/сек.
+  0x03 ping        { t }
+  0x04 leave       {}                        (явный выход)
+
+Server → Client:
+  0x10 welcome     { matchId, you, opponent, mapW, mapH, tickRate, room }
+                   you/opponent: { id, characterId, skinId, username,
+                                   stats:{hp,speed,damage,abilityCooldownS},
+                                   spawnX, spawnY }
+  0x11 snapshot    { tick, ackInputSeq,
+                     players:[{id,x,y,angle,hp,ammo,abilityCdMs,buffs?}],
+                     bullets:[{id,x,y,owner,type,ttl}],
+                     events:[{kind:'shoot'|'hit'|'pickup', ...}] }
+  0x12 hit         { victim, attacker, dmg, x, y }   (отдельным сообщением для VFX-точки)
+  0x13 match:end   { winnerId|null, reason:'kill'|'timeout'|'disconnect'|'draw',
+                     durationMs, score:{...} }
+  0x14 pong        { t }
+  0x15 error       { code, message }
+
+Снапшоты: full-snapshot 5 Hz, delta-snapshot 30 Hz (delta относительно последнего ack).
+Размер delta стремится к < 200 байт.
+
+Реплей:
+  game-сервер пишет stream { ts, type, payload } в gzip-файл /tmp/replays/{matchId}.bin.gz
+  По окончании — POST в api с replayUrl (если хранилище S3 — uploadStream),
+  иначе локально /var/data/replays/, в meta в Match — относительный путь.
+
+────────────────────────────────────────────────────────────────────────────────
+11. ИГРОВАЯ ЛОГИКА (game-сервер)
+────────────────────────────────────────────────────────────────────────────────
+
+11.1. ECS
+
+  World — массивы компонентов по entityId.
+  Components: Position, Velocity, Health, Weapon, Cooldowns, Owner,
+              Bullet, Hitbox, AbilityState, AfkTimer, ReplayLog.
+  Systems (порядок):
+    1. InputApply — применяет последний input игрока к Velocity и желаемому fire/ability
+    2. Movement   — Position += Velocity * dt; clamp в карту
+    3. Shooting   — если fire+cooldown=0 → spawn Bullet, ROF check
+    4. AbilityCast— если ability+cd=0 → активация эффекта
+    5. BulletMove — пуля летит, ttl--, проверка границ
+    6. Collision  — пули vs игроки (с lag-comp)
+    7. Damage     — применение урона, проверка смерти
+    8. Cooldown   — уменьшение всех кулдаунов
+    9. AfkCheck   — если без input 10 сек — техпоражение
+   10. Snapshot   — формирование delta snapshot
+
+11.2. Tick
+
+  setInterval(tickMs, () => world.step(dt));
+  tickRate берётся из Settings (default 30Hz).
+
+11.3. Lag compensation
+
+  Каждый игрок хранит ring-buffer позиций последние 1000мс (по тикам).
+  При проверке попадания пули, выпущенной игроком A:
+    rtt_ms = A.ping
+    target_pos = positionsBuffer[B][nowTick - rtt_ms/2/tickMs]
+    проверяем коллизию пули с target_pos, не текущей.
+  Лимит компенсации: 200мс (любой лаг сверх — игнорируем).
+
+11.4. Server-side валидация input
+
+  - dx, dy ∈ [-1, 1], нормализуем если |v|>1
+  - angle ∈ [0, 2π]
+  - между двумя input одного игрока должно пройти >= tickMs/2 (защита от спама)
+  - input применяется как «желание», все физические значения вычисляет сервер
+
+11.5. Способности (по типу)
+
+  - 'rocket'    — взрывной снаряд, AoE damage, cooldown 10s
+  - 'dash'      — рывок 0.3s неуязвимости + ускорение, cooldown 8s
+  - 'shield'    — поглощение N урона на 3s, cooldown 12s
+  (это базовый набор; новые добавляются как новые системы + Character.abilityType)
+
+11.6. Боты (FREE only)
+
+  В матче с botUser — отдельный AI-controller на сервере, шлёт «виртуальные input»
+  каждый тик. Базовая логика:
+    - двигаться к цели на расстояние X (между min/max);
+    - стрелять в направлении игрока с нормальным шумом;
+    - сложность задаётся через Settings ('easy'|'medium'|'hard').
+
+11.7. Реплеи
+
+  Стартуем gzip-stream при welcome.
+  Пишем: каждый принятый input + каждый отправленный snapshot.
+  При match:end — закрываем, аплоадим/сохраняем, в api передаём replayUrl.
+
+────────────────────────────────────────────────────────────────────────────────
+12. UI / ЭКРАНЫ
+────────────────────────────────────────────────────────────────────────────────
+
+Принципы:
+  - SPA, full-viewport, без скролла.
+  - safe-area-inset на iOS (notch).
+  - Все экраны как «full-screen modals», переходы — fade/slide через framer-motion.
+  - Цветовая схема: dark by default, опция switch.
+  - Tailwind + shadcn/ui.
+
+Экраны игрока:
+  1. Splash + Login/Register (вкладки)
+  2. Home — большая кнопка «Играть», переключатель режимов (FREE/CASUAL/STAKE),
+            список ставок (для STAKE), баланс сверху, аватар → меню профиля
+  3. Queue — анимация поиска, таймер, кнопка отмена; через 10 сек оверлей выбора
+  4. Match — full-screen Pixi canvas, HUD: HP-бары, ability-cd, таймер, score.
+             Контролы: левый виртуальный джойстик, две круглые кнопки FIRE/ABILITY справа.
+             На десктопе: WASD/стрелки + мышь (направление от персонажа к курсору)
+             + Space (fire) + Q (ability).
+  5. Result — победа/поражение/ничья, дельта баланса, MMR change,
+              кнопки «Реванш» / «Главное меню»
+  6. Profile — статы, история матчей (бесконечная лента), кнопка «Реплей»
+  7. Wallet — баланс, locked, депозит, вывод, история операций
+  8. Shop — персонажи + скины, фильтры по rarity/валюте, превью
+  9. Locker — мой инвентарь, выбор loadout (1 character + 1 skin)
+ 10. Leaderboard — daily/weekly/alltime, top по выигрышам и MMR
+ 11. Settings — язык, звук, контролы, тема, выход
+
+Экраны админки (роль=ADMIN):
+  1. Dashboard (DAU, gross, commission, top players, online now, queue size)
+  2. Users (поиск, бан, ручная корректировка баланса)
+  3. Rooms (CRUD)
+  4. Characters (CRUD)
+  5. Skins (CRUD, заливка sprite_set_url через подписанный URL или файл)
+  6. Matches (фильтр по статусу, force-finish, refund, ссылка на реплей)
+  7. Payments (фильтры, апрув/реджект выводов)
+  8. Disputes (список DISPUTED матчей)
+  9. Settings (key-value, со схемами под известные ключи)
+
+PWA:
+  - manifest.json: name, short_name, theme/background, icons 192/512, start_url=/
+  - vite-plugin-pwa: workbox runtime cache (network-first для /api,
+    cache-first для статики), offline-fallback страница
+  - prompt-install после второй сессии (≥ 2 launches)
+  - meta apple-mobile-web-app-capable, theme-color
+
+────────────────────────────────────────────────────────────────────────────────
+13. БЕЗОПАСНОСТЬ
+────────────────────────────────────────────────────────────────────────────────
+
+  - Argon2id для паролей (memoryCost 19MiB, timeCost 2, parallelism 1).
+  - JWT access (15 мин) + refresh (30 дней, ротация).
+  - Cookies: httpOnly, secure, sameSite=strict, path=/.
+  - CSRF: double-submit cookie + X-CSRF-Token заголовок на мутации.
+  - Helmet, CORS allowlist (только домен и subdomain admin).
+  - Rate-limit (nestjs-throttler):
+      auth: 10 req/min/IP
+      mutations: 60 req/min/user
+      WS-сообщения: 60 msg/sec/socket
+  - Idempotency-Key: обязателен на /wallet/* и /shop/buy.
+  - HMAC-подпись на /internal/* (SHA-256 от body+timestamp, окно 30 сек).
+  - geoip middleware (опционально): блок регистрации из стран, перечисленных
+    в Setting.blockedCountries (массив ISO кодов).
+  - Логи: pino JSON, без PII. requestId на каждом запросе.
+  - Никогда не логируем: passwords, JWT, payment secrets, full ledger amounts с user_id
+    (только агрегаты).
+
+────────────────────────────────────────────────────────────────────────────────
+14. ЮРИДИКА (skill-game)
+────────────────────────────────────────────────────────────────────────────────
+
+  При регистрации обязательны чек-боксы:
+    [ ] Мне исполнилось 18 лет
+    [ ] Я согласен с Условиями использования и Политикой конфиденциальности
+    [ ] Я понимаю, что игра skill-based и не является азартной игрой
+
+  В User записать: acceptedTosAt = now(), meta.acceptedFromIp.
+
+  В docs/legal/ положить:
+    - tos.md  (шаблон, лицензированный юристом перед запуском)
+    - privacy.md (GDPR-friendly: цели обработки, retention, контакты DPO)
+    - blocked-countries.md (актуальный список)
+
+  В Settings:
+    legal.blockedCountries: ["US","FR","BE","NL", ...] // редактируется
+    legal.minAge: 18
+    legal.kycRequiredFromUsd: 1000  // лимит, при превышении — KYC (v1.1)
+
+────────────────────────────────────────────────────────────────────────────────
+15. ДЕПЛОЙ
+────────────────────────────────────────────────────────────────────────────────
+
+15.1. .env.example (единственный файл, который правит «непрограммист»)
+
+  DOMAIN=arena1v1.com
+  ADMIN_EMAIL=admin@arena1v1.com
+  ADMIN_PASSWORD_INITIAL=ChangeMeNow!2026
+
+  POSTGRES_USER=app
+  POSTGRES_PASSWORD=changeme_postgres
+  POSTGRES_DB=arena
+  DATABASE_URL=postgresql://app:changeme_postgres@postgres:5432/arena
+
+  REDIS_URL=redis://redis:6379
+
+  JWT_ACCESS_SECRET=<openssl rand -hex 32>
+  JWT_REFRESH_SECRET=<openssl rand -hex 32>
+  INTERNAL_SECRET=<openssl rand -hex 32>
+  CSRF_SECRET=<openssl rand -hex 32>
+
+  BETRA_API_URL=https://betra.biz/api/h2h
+  BETRA_API_KEY=...
+  BETRA_HMAC_SECRET=...
+  BETRA_CALLBACK_PATH=/api/payments/betra/callback
+
+  GAME_INTERNAL_URL=http://api:3000
+  GAME_PUBLIC_WS_URL=wss://${DOMAIN}/ws/match
+  API_PUBLIC_URL=https://${DOMAIN}
+
+  TICK_RATE=30
+  SENTRY_DSN=                           # опционально
+  REPLAY_STORAGE=local                  # local | s3
+  REPLAY_LOCAL_PATH=/var/data/replays
+  S3_ENDPOINT=                          # если REPLAY_STORAGE=s3
+  S3_BUCKET=
+  S3_KEY=
+  S3_SECRET=
+
+15.2. compose.yml (dev)
+
+  Сервисы:
+    postgres   (image: postgres:16-alpine, volume pgdata)
+    redis      (image: redis:7-alpine, --appendonly yes, volume redisdata)
+    api        (build apps/api, volume code, command: pnpm dev:api)
+    game       (build apps/game, volume code, command: pnpm dev:game)
+    web        (build apps/web, volume code, command: pnpm dev:web)
+    caddy      (image caddy:2, volumes code и caddy_data, локальный self-signed)
+
+  В dev — bind mounts для hot reload (tsx watch для api/game, vite для web).
+
+15.3. compose.prod.yml
+
+  Все образы — собранные multi-stage, без bind mounts.
+  api с init-контейнером prisma migrate deploy.
+  Caddy с auto-SSL по DOMAIN.
+  Опционально: backup-сервис (alpine + cron + pg_dump на S3).
+
+15.4. Caddyfile
+
+  {$DOMAIN} {
+      encode gzip zstd
+      handle /api/* { reverse_proxy api:3000 }
+      handle /ws/lobby { reverse_proxy api:3000 }
+      handle /ws/match { reverse_proxy game:3001 }
+      handle { root * /srv/web; try_files {path} /index.html; file_server }
+  }
+  admin.{$DOMAIN} {
+      handle /api/admin/* { reverse_proxy api:3000 }
+      handle { root * /srv/web; try_files {path} /index.html; file_server }
+  }
+
+15.5. CI/CD (.github/workflows/)
+
+  ci.yml:
+    on: pull_request, push
+    matrix: [api, game, web]
+    steps: pnpm install, lint, typecheck, test, build
+
+  deploy.yml:
+    on: push tags v*
+    build & push docker images to ghcr.io
+    ssh deploy to ${SERVER}:
+      cd /opt/arena1v1
+      git pull
+      docker compose -f compose.prod.yml pull
+      docker compose -f compose.prod.yml up -d
+      docker compose exec api pnpm prisma migrate deploy
+
+15.6. Бэкапы
+
+  scripts/backup.sh: pg_dump | gzip > /backups/$(date +%F-%H%M).sql.gz
+  cron: 0 3 * * *
+  Retention: 14 дней локально, опционально — sync в S3.
+  Restore: scripts/restore.sh <file>.
+
+────────────────────────────────────────────────────────────────────────────────
+16. ТЕСТИРОВАНИЕ
+────────────────────────────────────────────────────────────────────────────────
+
+Минимум, что должно быть в v1:
+
+apps/api:
+  - unit: ledger service (lock, unlock, win/loss/commission, idempotency)
+  - unit: payments service (idempotent webhook, status transitions)
+  - e2e: register → login → deposit-callback → join-queue → match-finish-callback
+        → check ledger + balance + stats
+  - покрытие финансовых модулей >= 70%
+
+apps/game:
+  - unit: physics (movement, collision, lag-comp детерминистично с фиксированным seed)
+  - unit: protocol encode/decode roundtrip
+  - integration: match lifecycle с 2 mock-клиентами
+
+apps/web:
+  - unit: критические компоненты (Auth forms, WalletPanel, MatchHud)
+  - playwright e2e: open / → register → home → join free queue (с моком api/game)
+                   → завершение матча → проверка экрана result
+
+────────────────────────────────────────────────────────────────────────────────
+17. DEFINITION OF DONE (приёмка v1)
+────────────────────────────────────────────────────────────────────────────────
+
+[ ] 1.  Регистрация → депозит 1$ через mock Betra → матч за 1$ → корректные
+        проводки в ledger у обоих, комиссия учтена, баланс изменён.
+[ ] 2.  Попытка отправить «телепорт» (поддельный input с позицией) — игнорируется.
+[ ] 3.  Игрок выходит из вкладки в матче → через 10 сек технический проигрыш →
+        ledger корректен, оппоненту начислен приз.
+[ ] 4.  50 параллельных матчей с ботами на одной машине — p95 server tick <= 33мс.
+[ ] 5.  Админ создаёт новую STAKE-комнату 25$ → она появляется у клиентов
+        через ≤ 3 сек без перезагрузки.
+[ ] 6.  Админ создаёт нового персонажа + скин → игрок видит его в магазине,
+        покупает, выбирает в loadout, идёт в матч с этим персонажем/скином.
+[ ] 7.  `docker compose -f compose.prod.yml up -d` на чистой Ubuntu 22.04 —
+        игра работает по HTTPS через 5 минут (с реальным DOMAIN, Caddy выдал SSL).
+[ ] 8.  PWA устанавливается на iOS Safari и Android Chrome, работает full-screen.
+[ ] 9.  Webhook deposit вызван дважды с тем же externalId — ledger не дублируется.
+[ ] 10. Одновременная смерть → ничья → обе ставки возвращены, COMMISSION = 0.
+[ ] 11. Пользователь с balance=0 и Setting.minBalanceRequired=true — НЕ может войти
+        в платный матч (получает API-ошибку с понятным кодом).
+[ ] 12. Реплей матча сохраняется и доступен в /api/matches/:id (URL отдан клиенту,
+        админка видит всегда, игрок — для своих матчей).
+[ ] 13. Отчёт о покрытии тестов финансовых модулей >= 70%.
+[ ] 14. README.md содержит: requirements, quickstart (≤ 5 шагов), env vars,
+        deployment, FAQ.
+[ ] 15. Все строки UI вынесены в i18n (ru, en).
+
+────────────────────────────────────────────────────────────────────────────────
+18. ROADMAP
+────────────────────────────────────────────────────────────────────────────────
+
+M0 — Скелет (1 нед)
+     monorepo, docker compose, auth, wallet (без денег), пустые страницы
+
+M1 — Игра без денег (2 нед)
+     queue, game-server, 1 персонаж, free-режим, реплеи, end-screen
+
+M2 — Деньги (2 нед)
+     ledger, betra deposit/withdraw, casual/stake комнаты, идемпотентность,
+     админ-апрув выводов
+
+M3 — Контент (1 нед)
+     3 персонажа, 6 скинов, инвентарь, магазин, loadout, characters в матче
+
+M4 — Админка (1 нед)
+     все CRUD, dashboard, банхаммер, force-finish, refund
+
+M5 — PWA + полировка (1 нед)
+     SW, install prompt, мобильные контролы, звук, framer-motion переходы
+
+M6 — Хардённинг + soft launch (1 нед)
+     античит-аудит, нагрузочные тесты (k6), бэкапы, мониторинг,
+     юр. документы, KYC-заглушка, soft launch в одной стране
+
+ИТОГО: ~9 недель силами 1 senior fullstack TS-разработчика.
+
+────────────────────────────────────────────────────────────────────────────────
+19. ВНЕ V1 (но архитектура поддерживает)
+────────────────────────────────────────────────────────────────────────────────
+
+  - Турниры и сезоны
+  - Battle Pass
+  - Командные режимы 2v2/3v3
+  - Гильдии/кланы
+  - Чат внутри матча и в лобби
+  - Приватные комнаты по коду
+  - Реферальная программа
+  - Telegram Mini App
+  - ML-античит (постматчевый анализ реплеев)
+  - Multi-region deployment
+
+────────────────────────────────────────────────────────────────────────────────
+20. ПРАВИЛА КОДА И КОММИТОВ
+────────────────────────────────────────────────────────────────────────────────
+
+  - TypeScript strict, noUncheckedIndexedAccess, exactOptionalPropertyTypes.
+  - Никаких any (только unknown с narrowing).
+  - Все DTO — Zod-схемы в packages/shared.
+  - Никаких console.log в production-коде. Только pino logger с ctx.
+  - Никаких прямых SQL-запросов кроме сложных отчётов в админке (через Prisma.$queryRaw).
+  - Магические числа — только в config/constants. Вся настройка геймплея — в Settings.
+  - Файлы < 500 строк. Один класс/сервис — один файл.
+  - Conventional commits: feat:, fix:, chore:, docs:, refactor:, test:, perf:.
+  - Husky pre-commit: lint, typecheck, format.
+  - PR-шаблон: что/зачем/как тестировал.
+
+────────────────────────────────────────────────────────────────────────────────
+21. ИНСТРУКЦИЯ ПО СТАРТУ ДЛЯ AI-АССИСТЕНТА
+────────────────────────────────────────────────────────────────────────────────
+
+Шаг 1. Создай корневой package.json + pnpm-workspace.yaml + tsconfig.base.json.
+Шаг 2. Создай .env.example, .gitignore, .nvmrc, README.md (заглушка).
+Шаг 3. Создай compose.yml (dev) с postgres+redis+caddy. api/game/web — позже.
+Шаг 4. apps/api: NestJS init, Prisma init, schema.prisma полностью из §6,
+        первая миграция, seed.ts (3 персонажа, 6 скинов, 3 STAKE-комнаты,
+        admin user из env), модули auth+users+wallet+ledger.
+Шаг 5. Тесты на ledger.
+Шаг 6. apps/web: vite init, Tailwind, shadcn, роутер, splash+login+home (пустая).
+Шаг 7. apps/game: uWS server, hello-handler, matchToken validation, ECS skeleton.
+Шаг 8. Lobby WS gateway в api, queue logic, matchmaker worker.
+Шаг 9. Полный flow free-матча (M1).
+Шаг 10. Деньги (M2).
+Шаг 11. Контент (M3).
+Шаг 12. Админка (M4).
+Шаг 13. PWA (M5).
+Шаг 14. Тесты + DoD chek (M6).
+
+После каждого шага — коммит, обновление README, прогон тестов.
+
+────────────────────────────────────────────────────────────────────────────────
+КОНЕЦ ТЗ
+────────────────────────────────────────────────────────────────────────────────

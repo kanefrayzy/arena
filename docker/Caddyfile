@@ -1,0 +1,28 @@
+{
+	auto_https off
+	admin off
+}
+
+:80 {
+	encode gzip zstd
+
+	@api path /api/*
+	handle @api {
+		reverse_proxy api:3000
+	}
+
+	@lobby path /ws/lobby /ws/lobby/*
+	handle @lobby {
+		reverse_proxy api:3000
+	}
+
+	@match path /ws/match /ws/match/*
+	handle @match {
+		reverse_proxy game:3001
+	}
+
+	# Vite dev server (HMR via WebSocket)
+	handle {
+		reverse_proxy web:5173
+	}
+}

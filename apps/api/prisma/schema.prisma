@@ -1,0 +1,221 @@
+// Arena1v1 — Prisma schema (matches TZ §6 verbatim).
+// Source of truth for DB structure. Run `pnpm db:migrate` to create migrations.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PLAYER
+  ADMIN
+  MODERATOR
+}
+
+enum RoomMode {
+  FREE
+  CASUAL
+  STAKE
+}
+
+enum WinCondition {
+  KILL
+  BEST_OF_3
+  TIMEOUT_HP
+}
+
+enum MatchStatus {
+  PENDING
+  RUNNING
+  FINISHED
+  DISPUTED
+  CANCELLED
+}
+
+enum LedgerType {
+  DEPOSIT
+  WITHDRAWAL
+  MATCH_STAKE_LOCK
+  MATCH_STAKE_UNLOCK
+  MATCH_WIN
+  MATCH_LOSS
+  COMMISSION
+  ADJUSTMENT
+  BONUS
+  SHOP_PURCHASE
+}
+
+model User {
+  id            Int       @id @default(autoincrement())
+  email         String    @unique
+  passwordHash  String
+  username      String    @unique
+  role          Role      @default(PLAYER)
+  isBanned      Boolean   @default(false)
+  country       String?
+  acceptedTosAt DateTime?
+  createdAt     DateTime  @default(now())
+  meta          Json?
+
+  wallet        Wallet?
+  inventory     UserInventory[]
+  loadout       UserLoadout?
+  ledger        Ledger[]
+  stats         UserStats?
+  matchesAsP1   Match[]   @relation("p1")
+  matchesAsP2   Match[]   @relation("p2")
+}
+
+model Wallet {
+  userId    Int      @id
+  balance   Decimal  @db.Decimal(20, 8) @default(0)
+  locked    Decimal  @db.Decimal(20, 8) @default(0)
+  coins     Int      @default(0)
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Ledger {
+  id             BigInt     @id @default(autoincrement())
+  userId         Int
+  amount         Decimal    @db.Decimal(20, 8)
+  type           LedgerType
+  refType        String?
+  refId          String?
+  idempotencyKey String     @unique
+  meta           Json?
+  createdAt      DateTime   @default(now())
+  user           User       @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([refType, refId])
+}
+
+model Room {
+  id                 Int          @id @default(autoincrement())
+  name               String
+  mode               RoomMode
+  stakeUsd           Decimal?     @db.Decimal(20, 8)
+  commissionPct      Int          @default(20)
+  matchDurationS     Int          @default(120)
+  winCondition       WinCondition @default(KILL)
+  isActive           Boolean      @default(true)
+  minBalanceRequired Boolean      @default(true)
+  createdAt          DateTime     @default(now())
+
+  matches Match[]
+}
+
+model Match {
+  id            String      @id @default(uuid())
+  roomId        Int
+  player1Id     Int
+  player2Id     Int
+  player1CharId Int
+  player1SkinId Int
+  player2CharId Int
+  player2SkinId Int
+  stakeUsd      Decimal     @db.Decimal(20, 8)
+  winnerId      Int?
+  status        MatchStatus @default(PENDING)
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  replayUrl     String?
+  durationMs    Int?
+  meta          Json?
+
+  player1 User @relation("p1", fields: [player1Id], references: [id])
+  player2 User @relation("p2", fields: [player2Id], references: [id])
+  room    Room @relation(fields: [roomId], references: [id])
+
+  @@index([player1Id, finishedAt])
+  @@index([player2Id, finishedAt])
+  @@index([status])
+}
+
+model Character {
+  id               Int     @id @default(autoincrement())
+  slug             String  @unique
+  name             String
+  baseHp           Int
+  baseSpeed        Float
+  baseDamage       Int
+  weaponType       String
+  abilityType      String?
+  abilityCooldownS Int     @default(10)
+  isActive         Boolean @default(true)
+
+  skins Skin[]
+}
+
+model Skin {
+  id            Int      @id @default(autoincrement())
+  characterId   Int
+  name          String
+  rarity        String
+  spriteSetUrl  String
+  tint          String?
+  statModifiers Json?
+  priceCoin     Int?
+  priceUsd      Decimal? @db.Decimal(20, 8)
+  isActive      Boolean  @default(true)
+
+  character Character @relation(fields: [characterId], references: [id])
+}
+
+model UserInventory {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  skinId     Int
+  source     String
+  acquiredAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, skinId])
+}
+
+model UserLoadout {
+  userId      Int  @id
+  characterId Int
+  skinId      Int
+  user        User @relation(fields: [userId], references: [id])
+}
+
+model Payment {
+  id         String    @id @default(uuid())
+  userId     Int
+  type       String
+  status     String
+  amountUsd  Decimal   @db.Decimal(20, 8)
+  provider   String
+  externalId String?
+  meta       Json?
+  createdAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  @@index([userId, createdAt])
+  @@index([externalId])
+}
+
+model UserStats {
+  userId        Int     @id
+  matchesPlayed Int     @default(0)
+  wins          Int     @default(0)
+  losses        Int     @default(0)
+  draws         Int     @default(0)
+  mmr           Int     @default(1000)
+  totalEarned   Decimal @db.Decimal(20, 8) @default(0)
+  totalLost     Decimal @db.Decimal(20, 8) @default(0)
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Setting {
+  key   String @id
+  value Json
+}

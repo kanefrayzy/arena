@@ -1,0 +1,101 @@
+import {
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import argon2 from 'argon2';
+import type { LoginInput, RegisterInput } from '@arena/shared';
+import { PrismaService } from '../common/prisma/prisma.module';
+
+@Injectable()
+export class AuthService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwt: JwtService,
+  ) {}
+
+  async register(input: RegisterInput, ip?: string) {
+    const existing = await this.prisma.user.findFirst({
+      where: { OR: [{ email: input.email }, { username: input.username }] },
+    });
+    if (existing) {
+      throw new ConflictException('email or username already taken');
+    }
+
+    const passwordHash = await argon2.hash(input.password, {
+      type: argon2.argon2id,
+      memoryCost: 19 * 1024,
+      timeCost: 2,
+      parallelism: 1,
+    });
+
+    const user = await this.prisma.user.create({
+      data: {
+        email: input.email,
+        username: input.username,
+        passwordHash,
+        acceptedTosAt: new Date(),
+        meta: { acceptedFromIp: ip ?? null },
+        wallet: { create: {} },
+        stats: { create: {} },
+      },
+    });
+
+    const tokens = await this.issueTokens(user.id, user.role);
+    return { user: this.publicUser(user), tokens };
+  }
+
+  async login(input: LoginInput) {
+    const user = await this.prisma.user.findUnique({ where: { email: input.email } });
+    if (!user || user.isBanned) {
+      throw new UnauthorizedException('invalid credentials');
+    }
+    const ok = await argon2.verify(user.passwordHash, input.password);
+    if (!ok) throw new UnauthorizedException('invalid credentials');
+    const tokens = await this.issueTokens(user.id, user.role);
+    return { user: this.publicUser(user), tokens };
+  }
+
+  async refresh(refreshToken: string) {
+    let payload: { sub: number; role: string };
+    try {
+      payload = await this.jwt.verifyAsync(refreshToken, {
+        secret: process.env.JWT_REFRESH_SECRET ?? 'dev-refresh',
+      });
+    } catch {
+      throw new UnauthorizedException('invalid refresh token');
+    }
+    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    if (!user || user.isBanned) throw new UnauthorizedException();
+    return this.issueTokens(user.id, user.role);
+  }
+
+  async getMe(userId: number) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new UnauthorizedException();
+    return this.publicUser(user);
+  }
+
+  private async issueTokens(userId: number, role: string) {
+    const access = await this.jwt.signAsync(
+      { sub: userId, role },
+      { secret: process.env.JWT_ACCESS_SECRET ?? 'dev-access', expiresIn: '15m' },
+    );
+    const refresh = await this.jwt.signAsync(
+      { sub: userId, role },
+      { secret: process.env.JWT_REFRESH_SECRET ?? 'dev-refresh', expiresIn: '30d' },
+    );
+    return { access, refresh };
+  }
+
+  private publicUser(u: { id: number; email: string; username: string; role: string; createdAt: Date }) {
+    return {
+      id: u.id,
+      email: u.email,
+      username: u.username,
+      role: u.role,
+      createdAt: u.createdAt.toISOString(),
+    };
+  }
+}
