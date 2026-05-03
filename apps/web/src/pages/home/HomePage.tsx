@@ -7,7 +7,6 @@ import { useAuth, type Me } from '../../shared/store/auth';
 interface Wallet {
   balance: string;
   locked: string;
-  coins: number;
 }
 
 type Mode = 'free' | 'casual' | 'stake';
@@ -72,7 +71,7 @@ export function HomePage() {
             onClick={() => nav('/shop')}
             className="rounded px-2 py-1 text-sm text-white/70 hover:bg-white/10"
           >
-            {t('home.shop')} 🪙{wallet?.coins ?? 0}
+            {t('home.shop')}
           </button>
           <button
             type="button"

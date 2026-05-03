@@ -11,7 +11,6 @@ export class WalletService {
     return {
       balance: w.balance.toString(),
       locked: w.locked.toString(),
-      coins: w.coins,
       updatedAt: w.updatedAt.toISOString(),
     };
   }

@@ -13,7 +13,7 @@ export type LobbyEvent =
       opponent: { id: number; username: string };
       room: { id: number; mode: 'FREE' | 'CASUAL' | 'STAKE'; stakeUsd?: string };
     }
-  | { type: 'wallet:update'; balance: string; locked: string; coins: number }
+  | { type: 'wallet:update'; balance: string; locked: string }
   | { type: 'ping'; t: number }
   | { type: 'pong'; t: number };
 

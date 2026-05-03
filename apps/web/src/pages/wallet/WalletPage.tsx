@@ -6,7 +6,6 @@ import { api, ApiError } from '../../shared/api/client';
 interface Wallet {
   balance: string;
   locked: string;
-  coins: number;
   updatedAt: string;
 }
 

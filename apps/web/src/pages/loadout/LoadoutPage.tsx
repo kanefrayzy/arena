@@ -10,7 +10,6 @@ interface Skin {
   rarity: string;
   tint: string | null;
   statModifiers: Record<string, number> | null;
-  priceCoin: number | null;
   priceUsd: string | null;
 }
 

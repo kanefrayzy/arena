@@ -9,7 +9,6 @@ interface Skin {
   name: string;
   rarity: string;
   tint: string | null;
-  priceCoin: number | null;
   priceUsd: string | null;
 }
 
@@ -25,7 +24,6 @@ interface Inventory {
 interface Wallet {
   balance: string;
   locked: string;
-  coins: number;
 }
 
 export function ShopPage() {
@@ -94,8 +92,8 @@ export function ShopPage() {
         </button>
         <h2 className="text-lg font-semibold">{t('shop.title')}</h2>
         <div className="text-sm">
-          <span className="text-white/50">🪙 </span>
-          <span className="font-mono">{wallet?.coins ?? '—'}</span>
+          <span className="text-white/50">$ </span>
+          <span className="font-mono">{wallet?.balance ?? '—'}</span>
         </div>
       </header>
 
@@ -106,7 +104,7 @@ export function ShopPage() {
         {items.map((s) => {
           const owned = ownedSkinIds.has(s.id);
           const charName = charNameById.get(s.characterId) ?? `#${s.characterId}`;
-          const canAfford = (wallet?.coins ?? 0) >= (s.priceCoin ?? Number.POSITIVE_INFINITY);
+          const canAfford = parseFloat(wallet?.balance ?? '0') >= parseFloat(s.priceUsd ?? 'Infinity');
           return (
             <div
               key={s.id}
@@ -124,8 +122,8 @@ export function ShopPage() {
                 <div className="text-xs text-white/50">{s.rarity}</div>
               </div>
               <div className="text-right">
-                {s.priceCoin != null && (
-                  <div className="font-mono text-sm">🪙 {s.priceCoin}</div>
+                {s.priceUsd != null && (
+                  <div className="font-mono text-sm">${s.priceUsd}</div>
                 )}
                 {owned ? (
                   <button

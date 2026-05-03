@@ -144,11 +144,11 @@ async function main() {
   // ---------- Skins (1 base + 1 cosmetic per character = 6) ----------
   const skins = [
     { slug: 'shooter-default', characterSlug: 'shooter', name: 'Default', rarity: 'common', tint: '#ffffff' },
-    { slug: 'shooter-neon', characterSlug: 'shooter', name: 'Neon', rarity: 'rare', tint: '#00e0ff', priceCoin: 500 },
+    { slug: 'shooter-neon', characterSlug: 'shooter', name: 'Neon', rarity: 'rare', tint: '#00e0ff', priceUsd: '5' },
     { slug: 'tank-default', characterSlug: 'tank', name: 'Default', rarity: 'common', tint: '#ffffff' },
-    { slug: 'tank-gold', characterSlug: 'tank', name: 'Gold', rarity: 'epic', tint: '#ffcc33', priceCoin: 1500 },
+    { slug: 'tank-gold', characterSlug: 'tank', name: 'Gold', rarity: 'epic', tint: '#ffcc33', priceUsd: '15' },
     { slug: 'scout-default', characterSlug: 'scout', name: 'Default', rarity: 'common', tint: '#ffffff' },
-    { slug: 'scout-shadow', characterSlug: 'scout', name: 'Shadow', rarity: 'rare', tint: '#444466', priceCoin: 500 },
+    { slug: 'scout-shadow', characterSlug: 'scout', name: 'Shadow', rarity: 'rare', tint: '#444466', priceUsd: '5' },
   ] as const;
 
   for (const s of skins) {
@@ -166,7 +166,7 @@ async function main() {
           rarity: s.rarity,
           spriteSetUrl: `/assets/skins/${s.slug}.json`,
           tint: s.tint,
-          priceCoin: 'priceCoin' in s ? s.priceCoin : null,
+          priceUsd: 'priceUsd' in s ? s.priceUsd : null,
         },
       });
     }
@@ -221,7 +221,7 @@ async function main() {
   // ---------- Backfill: starter skins + loadout for ALL existing users ----------
   const allUsers = await prisma.user.findMany({ select: { id: true } });
   const defaultSkins = await prisma.skin.findMany({
-    where: { isActive: true, name: 'Default', priceCoin: null, priceUsd: null },
+    where: { isActive: true, name: 'Default', priceUsd: null },
     orderBy: { characterId: 'asc' },
   });
   if (defaultSkins.length > 0) {
