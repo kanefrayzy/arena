@@ -165,44 +165,45 @@ export function HomePage() {
           <div className="mt-3 self-center game-chip text-white/80">{t('home.casual_hint')}</div>
         )}
 
-        {/* Hero character — compact, centered */}
-        <div className="relative flex flex-1 items-end justify-center">
+        {/* Hero character — no background, name above, soft shadow only */}
+        <div className="relative flex flex-1 flex-col items-center justify-end">
           {activeChar && (
-            <button
-              type="button"
-              onClick={() => nav('/loadout')}
-              className="group relative flex h-full w-full max-w-[340px] items-center justify-center"
-              title={activeChar.name}
-            >
-              {/* radial glow */}
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,209,59,0.35),transparent_60%)]" />
-              {/* ground shadow */}
-              <div className="pointer-events-none absolute bottom-[10%] left-1/2 h-3 w-[45%] -translate-x-1/2 rounded-full bg-black/55 blur-md" />
-              {activeChar.spriteUrl ? (
-                <img
-                  src={activeChar.spriteUrl}
-                  alt={activeChar.name}
-                  className="relative max-h-[78%] max-w-[78%] animate-float object-contain drop-shadow-[0_10px_10px_rgba(0,0,0,0.6)] transition-transform group-active:scale-95"
-                />
-              ) : (
-                <div className="relative h-40 w-40 animate-float rounded-full bg-white/20" />
-              )}
-              <div className="pointer-events-none absolute bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 font-display text-xs uppercase tracking-wide text-game-yellow backdrop-blur">
+            <>
+              <div className="pointer-events-none mb-1 font-display text-base uppercase tracking-wide text-game-yellow drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]">
                 {activeChar.name}
               </div>
-            </button>
+              <button
+                type="button"
+                onClick={() => nav('/loadout')}
+                className="group relative flex h-full w-full max-w-[340px] items-end justify-center"
+                title={activeChar.name}
+              >
+                {/* soft ground shadow */}
+                <div className="pointer-events-none absolute bottom-[8%] left-1/2 h-2.5 w-[38%] -translate-x-1/2 rounded-full bg-black/45 blur-md" />
+                {activeChar.spriteUrl ? (
+                  <img
+                    src={activeChar.spriteUrl}
+                    alt={activeChar.name}
+                    className="relative max-h-[88%] max-w-[80%] animate-float object-contain drop-shadow-[0_6px_8px_rgba(0,0,0,0.45)] transition-transform group-active:scale-95"
+                  />
+                ) : (
+                  <div className="relative h-40 w-40 animate-float rounded-full bg-white/10" />
+                )}
+              </button>
+            </>
           )}
         </div>
 
-        {/* PLAY (closer to character) */}
-        <div className="-mt-2 flex flex-col items-center gap-2">
+        {/* PLAY */}
+        <div className="-mt-6 flex flex-col items-center gap-2">
           <button
             type="button"
             onClick={() => void play()}
             disabled={!canPlay}
             className="game-btn game-btn-yellow game-btn-xl game-shimmer animate-pulse-glow disabled:animate-none"
           >
-            ▶ {t('home.play')}
+            <span className="mr-2 inline-block">🎯</span>
+            {t('home.play')}
           </button>
           {error && <div className="text-sm font-semibold text-game-red">{error}</div>}
         </div>
@@ -214,6 +215,7 @@ export function HomePage() {
             onClick={() => nav('/loadout')}
             className="game-btn game-btn-purple"
           >
+            <span className="mr-2">🎽</span>
             {t('home.loadout')}
           </button>
           <button
@@ -221,6 +223,7 @@ export function HomePage() {
             onClick={() => nav('/shop')}
             className="game-btn game-btn-pink"
           >
+            <span className="mr-2">🛒</span>
             {t('home.shop')}
           </button>
         </div>
