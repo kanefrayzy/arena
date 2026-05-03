@@ -123,6 +123,22 @@ export function LoadoutPage() {
     }
   }
 
+  async function pickCharacter(characterId: number) {
+    setActiveCharId(characterId);
+    if (loadout?.characterId === characterId) return;
+    setError(null);
+    setSaving(true);
+    try {
+      // Send only characterId; backend auto-selects an appropriate skin.
+      const ld = await api.put<Loadout>('/loadout/me', { characterId });
+      setLoadout(ld);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'save failed');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function pickWeapon(weaponId: number) {
     if (!loadout) return;
     setError(null);
@@ -171,7 +187,8 @@ export function LoadoutPage() {
               <button
                 key={c.id}
                 type="button"
-                onClick={() => setActiveCharId(c.id)}
+                disabled={saving}
+                onClick={() => void pickCharacter(c.id)}
                 className={
                   'shrink-0 rounded-lg px-4 py-2 text-sm transition ' +
                   (isActive

@@ -182,7 +182,29 @@ export class ContentService {
     }
 
     const characterId = patch.characterId ?? baseChar;
-    const skinId = patch.skinId ?? baseSkin;
+    // If character changed but skin not specified, pick a sensible default skin for the new character:
+    // prefer an owned skin of the new character, else the first active skin.
+    let skinId: number;
+    if (patch.skinId != null) {
+      skinId = patch.skinId;
+    } else if (characterId !== baseChar) {
+      const ownedSkin = await this.prisma.userInventory.findFirst({
+        where: { userId, skinId: { in: (await this.prisma.skin.findMany({ where: { characterId, isActive: true }, select: { id: true } })).map((s) => s.id) } },
+        orderBy: { id: 'asc' },
+      });
+      if (ownedSkin) {
+        skinId = ownedSkin.skinId;
+      } else {
+        const firstSkin = await this.prisma.skin.findFirst({
+          where: { characterId, isActive: true },
+          orderBy: { id: 'asc' },
+        });
+        if (!firstSkin) throw new NotFoundException({ code: 'SKIN_NOT_FOUND', message: 'no skin for character' });
+        skinId = firstSkin.id;
+      }
+    } else {
+      skinId = baseSkin;
+    }
     const weaponId = patch.weaponId !== undefined ? patch.weaponId : baseWeapon;
 
     const charChanged = characterId !== baseChar;
