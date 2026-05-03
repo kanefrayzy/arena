@@ -126,8 +126,8 @@ export function HomePage() {
       </header>
 
       <main className="relative z-10 flex flex-1 flex-col overflow-hidden px-6 py-4">
-        {/* Mode selector */}
-        <div className="flex w-full max-w-md flex-wrap justify-center gap-2 self-center">
+        {/* Mode selector (slightly lower) */}
+        <div className="mt-3 flex w-full max-w-md flex-wrap justify-center gap-2 self-center">
           {SELECTABLE_MODES.map((m) => (
             <button
               key={m}
@@ -165,37 +165,37 @@ export function HomePage() {
           <div className="mt-3 self-center game-chip text-white/80">{t('home.casual_hint')}</div>
         )}
 
-        {/* Hero character takes full available space, centered */}
-        <div className="relative flex flex-1 items-center justify-center">
+        {/* Hero character — compact, centered */}
+        <div className="relative flex flex-1 items-end justify-center">
           {activeChar && (
             <button
               type="button"
               onClick={() => nav('/loadout')}
-              className="group relative flex h-full w-full max-w-[520px] items-center justify-center"
+              className="group relative flex h-full w-full max-w-[340px] items-center justify-center"
               title={activeChar.name}
             >
               {/* radial glow */}
               <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,209,59,0.35),transparent_60%)]" />
               {/* ground shadow */}
-              <div className="pointer-events-none absolute bottom-[8%] left-1/2 h-4 w-[55%] -translate-x-1/2 rounded-full bg-black/55 blur-md" />
+              <div className="pointer-events-none absolute bottom-[10%] left-1/2 h-3 w-[45%] -translate-x-1/2 rounded-full bg-black/55 blur-md" />
               {activeChar.spriteUrl ? (
                 <img
                   src={activeChar.spriteUrl}
                   alt={activeChar.name}
-                  className="relative max-h-[95%] max-w-[95%] animate-float object-contain drop-shadow-[0_10px_10px_rgba(0,0,0,0.6)] transition-transform group-active:scale-95"
+                  className="relative max-h-[78%] max-w-[78%] animate-float object-contain drop-shadow-[0_10px_10px_rgba(0,0,0,0.6)] transition-transform group-active:scale-95"
                 />
               ) : (
-                <div className="relative h-48 w-48 animate-float rounded-full bg-white/20" />
+                <div className="relative h-40 w-40 animate-float rounded-full bg-white/20" />
               )}
-              <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-1.5 font-display text-sm uppercase tracking-wide text-game-yellow backdrop-blur">
+              <div className="pointer-events-none absolute bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 font-display text-xs uppercase tracking-wide text-game-yellow backdrop-blur">
                 {activeChar.name}
               </div>
             </button>
           )}
         </div>
 
-        {/* PLAY */}
-        <div className="flex flex-col items-center gap-2 pt-2">
+        {/* PLAY (closer to character) */}
+        <div className="-mt-2 flex flex-col items-center gap-2">
           <button
             type="button"
             onClick={() => void play()}

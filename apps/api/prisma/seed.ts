@@ -124,21 +124,38 @@ async function main() {
     charBySlug.set(c.slug, row.id);
   }
 
-  // Deactivate any pre-existing characters not in the list (legacy seeds: shooter/tank/scout).
-  const keepSlugs = characters.map((c) => c.slug);
-  await prisma.character.updateMany({
-    where: { slug: { notIn: keepSlugs } },
-    data: { isActive: false, isStarter: false },
-  });
-  // And deactivate skins of removed characters.
-  const removed = await prisma.character.findMany({
-    where: { isActive: false },
+  // Deactivate ONLY known legacy seed slugs (shooter/tank/scout).
+  // Do NOT touch admin-created characters — they must persist across redeploys.
+  const legacySlugs = ['shooter', 'tank', 'scout'];
+  const legacy = await prisma.character.findMany({
+    where: { slug: { in: legacySlugs } },
     select: { id: true },
   });
-  if (removed.length > 0) {
+  if (legacy.length > 0) {
+    await prisma.character.updateMany({
+      where: { slug: { in: legacySlugs } },
+      data: { isActive: false, isStarter: false },
+    });
     await prisma.skin.updateMany({
-      where: { characterId: { in: removed.map((r) => r.id) } },
+      where: { characterId: { in: legacy.map((r) => r.id) } },
       data: { isActive: false },
+    });
+  }
+
+  // Recovery: reactivate admin-created characters that were wrongfully
+  // deactivated by previous seed versions (anything not in legacy list).
+  await prisma.character.updateMany({
+    where: { slug: { notIn: legacySlugs }, isActive: false },
+    data: { isActive: true },
+  });
+  const reactivated = await prisma.character.findMany({
+    where: { slug: { notIn: legacySlugs } },
+    select: { id: true },
+  });
+  if (reactivated.length > 0) {
+    await prisma.skin.updateMany({
+      where: { characterId: { in: reactivated.map((r) => r.id) }, isActive: false },
+      data: { isActive: true },
     });
   }
 
