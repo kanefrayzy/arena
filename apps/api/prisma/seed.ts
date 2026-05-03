@@ -256,18 +256,22 @@ async function main() {
   });
 
   // Cleanup: revoke 'starter' inventory entries for skins that no longer belong to a starter character.
-  const cleanup = await prisma.userInventory.deleteMany({
+  const badSkins = await prisma.skin.findMany({
     where: {
-      source: 'starter',
-      skin: {
-        OR: [
-          { isActive: false },
-          { character: { isStarter: false } },
-          { character: { isActive: false } },
-        ],
-      },
+      OR: [
+        { isActive: false },
+        { character: { isStarter: false } },
+        { character: { isActive: false } },
+      ],
     },
+    select: { id: true },
   });
+  const badSkinIds = badSkins.map((s) => s.id);
+  const cleanup = badSkinIds.length === 0
+    ? { count: 0 }
+    : await prisma.userInventory.deleteMany({
+        where: { source: 'starter', skinId: { in: badSkinIds } },
+      });
   if (cleanup.count > 0) console.log(`✓ revoked ${cleanup.count} stale starter skins`);
   if (defaultSkins.length > 0) {
     let granted = 0;
