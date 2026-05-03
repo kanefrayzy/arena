@@ -165,13 +165,13 @@ export function MatchPage() {
       {/* HUD */}
       <div className="pointer-events-none absolute inset-0 p-3">
         <div className="flex items-start justify-between text-sm">
-          <div className="rounded-lg bg-black/60 px-3 py-2 backdrop-blur">
-            <div className="text-white/60">{welcome?.you.username ?? 'YOU'}</div>
-            <div className="font-mono">HP {hp.you}</div>
+          <div className="rounded-2xl border-2 border-game-cyan/40 bg-black/60 px-3 py-2 backdrop-blur shadow-[0_4px_0_rgba(0,0,0,0.5)]">
+            <div className="text-xs uppercase text-game-cyan">{welcome?.you.username ?? 'YOU'}</div>
+            <div className="font-display text-lg text-white">HP {hp.you}</div>
           </div>
-          <div className="rounded-lg bg-black/60 px-3 py-2 backdrop-blur text-center">
-            <div className="text-2xl font-bold tabular-nums">{remainingS}s</div>
-            <div className="text-xs text-white/60">{t('match.timer')}</div>
+          <div className="rounded-2xl border-2 border-game-yellow/60 bg-black/60 px-3 py-2 backdrop-blur text-center shadow-[0_4px_0_rgba(0,0,0,0.5)]">
+            <div className="font-display text-2xl tabular-nums text-game-yellow">{remainingS}s</div>
+            <div className="text-[10px] uppercase text-white/60">{t('match.timer')}</div>
             <button
               type="button"
               onClick={() => {
@@ -185,9 +185,9 @@ export function MatchPage() {
               {muted ? '🔇' : '🔊'}
             </button>
           </div>
-          <div className="rounded-lg bg-black/60 px-3 py-2 text-right backdrop-blur">
-            <div className="text-white/60">{welcome?.opponent.username ?? 'OPP'}</div>
-            <div className="font-mono">HP {hp.opp}</div>
+          <div className="rounded-2xl border-2 border-game-pink/40 bg-black/60 px-3 py-2 text-right backdrop-blur shadow-[0_4px_0_rgba(0,0,0,0.5)]">
+            <div className="text-xs uppercase text-game-pink">{welcome?.opponent.username ?? 'OPP'}</div>
+            <div className="font-display text-lg text-white">HP {hp.opp}</div>
           </div>
         </div>
         <div className="mt-2 text-center text-xs text-white/50">
@@ -217,14 +217,14 @@ export function MatchPage() {
       <button
         ref={fireRef}
         type="button"
-        className="pointer-events-auto absolute bottom-6 right-6 h-24 w-24 select-none rounded-full bg-accent text-bg font-bold shadow-lg active:scale-95"
+        className="pointer-events-auto absolute bottom-6 right-6 h-24 w-24 select-none rounded-full bg-gradient-to-b from-[#ffe066] to-[#f5b800] font-display text-lg uppercase text-[#1a1450] shadow-[0_6px_0_#b88200,0_8px_18px_rgba(255,209,59,0.45)] active:translate-y-[3px] active:shadow-[0_3px_0_#b88200]"
       >
         FIRE
       </button>
       <button
         ref={abRef}
         type="button"
-        className="pointer-events-auto absolute bottom-32 right-12 h-16 w-16 select-none rounded-full bg-surface text-white font-bold shadow-lg active:scale-95"
+        className="pointer-events-auto absolute bottom-32 right-12 h-16 w-16 select-none rounded-full bg-gradient-to-b from-[#a774ff] to-[#7a3eff] font-display text-lg text-white shadow-[0_5px_0_#4d1fb8,0_6px_14px_rgba(138,79,255,0.45)] active:translate-y-[2px] active:shadow-[0_3px_0_#4d1fb8]"
       >
         Q
       </button>

@@ -80,33 +80,35 @@ export function LoadoutPage() {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between border-b border-white/10 px-5 py-3">
+    <div className="relative flex h-full flex-col overflow-hidden">
+      <div className="pointer-events-none absolute -top-32 -right-20 h-72 w-72 rounded-full bg-game-purple/40 blur-3xl" />
+
+      <header className="game-panel relative z-10 flex items-center justify-between px-4 py-3">
         <button
           type="button"
           onClick={() => nav('/home')}
-          className="rounded px-2 py-1 text-sm text-white/70 hover:bg-white/10"
+          className="game-btn game-btn-ghost game-btn-sm"
         >
           ← {t('loadout.back')}
         </button>
-        <h2 className="text-lg font-semibold">{t('loadout.title')}</h2>
+        <h2 className="game-title text-xl text-game-yellow">{t('loadout.title')}</h2>
         <button
           type="button"
           onClick={() => nav('/shop')}
-          className="rounded px-2 py-1 text-sm text-white/70 hover:bg-white/10"
+          className="game-btn game-btn-pink game-btn-sm"
         >
           {t('loadout.shop')}
         </button>
       </header>
 
-      <main className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
+      <main className="relative z-10 flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
         {myCharacters.length === 0 && (
-          <div className="rounded-lg bg-surface px-4 py-8 text-center text-sm text-white/60">
+          <div className="game-card px-4 py-10 text-center font-display text-base text-white/70">
             {t('loadout.empty')}
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
           {myCharacters.map((c) => {
             const equipped = loadout?.characterId === c.id;
             return (
@@ -116,40 +118,32 @@ export function LoadoutPage() {
                 disabled={saving}
                 onClick={() => void pickCharacter(c.id)}
                 className={
-                  'relative flex flex-col items-center gap-2 rounded-lg border-2 p-3 text-sm transition disabled:opacity-60 ' +
-                  (equipped
-                    ? 'border-accent bg-accent/10'
-                    : 'border-white/10 bg-surface hover:border-white/30')
+                  'game-card game-card-hover relative flex flex-col items-center gap-2 p-3 text-sm transition disabled:opacity-60 ' +
+                  (equipped ? 'game-card-active' : '')
                 }
               >
-                <div className="flex h-24 w-24 items-center justify-center rounded-md bg-black/40">
+                <div className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-2xl bg-black/40">
+                  <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/10 to-transparent" />
                   {c.spriteUrl ? (
                     <img
                       src={c.spriteUrl}
                       alt={c.name}
-                      className="max-h-full max-w-full object-contain"
+                      className="relative max-h-full max-w-full object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]"
                     />
                   ) : (
-                    <div className="h-12 w-12 rounded-full bg-white/20" />
+                    <div className="relative h-14 w-14 rounded-full bg-white/20" />
                   )}
                 </div>
-                <div className="text-sm font-semibold">{c.name}</div>
-                <div className="grid w-full grid-cols-3 gap-1 text-[10px] text-white/60">
-                  <div className="text-center">
-                    <div className="text-white/40">HP</div>
-                    <div className="font-mono text-white">{c.baseHp}</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-white/40">{t('loadout.speed')}</div>
-                    <div className="font-mono text-white">{c.baseSpeed}</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-white/40">{t('loadout.damage')}</div>
-                    <div className="font-mono text-white">{c.baseDamage}</div>
-                  </div>
+                <div className="font-display text-base uppercase tracking-wide text-white">
+                  {c.name}
+                </div>
+                <div className="grid w-full grid-cols-3 gap-1 text-[10px]">
+                  <Stat label="HP" value={c.baseHp} color="text-game-red" />
+                  <Stat label={t('loadout.speed')} value={c.baseSpeed} color="text-game-cyan" />
+                  <Stat label={t('loadout.damage')} value={c.baseDamage} color="text-game-yellow" />
                 </div>
                 {equipped && (
-                  <div className="absolute right-2 top-2 rounded bg-accent px-1.5 py-0.5 text-[10px] font-bold text-bg">
+                  <div className="absolute -top-2 right-2 rounded-full bg-game-yellow px-2 py-0.5 text-[10px] font-bold uppercase text-[#1a1450] shadow-[0_2px_0_#b88200]">
                     {t('loadout.equipped')}
                   </div>
                 )}
@@ -158,8 +152,19 @@ export function LoadoutPage() {
           })}
         </div>
 
-        {error && <div className="text-center text-sm text-red-400">{error}</div>}
+        {error && (
+          <div className="text-center text-sm font-semibold text-game-red">{error}</div>
+        )}
       </main>
+    </div>
+  );
+}
+
+function Stat({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className="rounded-lg bg-black/30 px-1 py-1 text-center">
+      <div className="text-[9px] uppercase text-white/50">{label}</div>
+      <div className={`font-display text-sm ${color}`}>{value}</div>
     </div>
   );
 }

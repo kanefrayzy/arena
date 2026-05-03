@@ -57,55 +57,48 @@ export function HomePage() {
   const canPlay = mode !== 'stake' || selectedRoomId != null;
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between border-b border-white/10 px-5 py-3">
-        <div className="text-sm text-white/70">@{me.username}</div>
-        <div className="flex items-center gap-2">
+    <div className="relative flex h-full flex-col overflow-hidden">
+      {/* Decorative blobs */}
+      <div className="pointer-events-none absolute -top-32 -left-20 h-72 w-72 rounded-full bg-game-purple/40 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-0 right-0 h-72 w-72 rounded-full bg-game-pink/25 blur-3xl" />
+
+      <header className="game-panel relative z-10 flex items-center justify-between px-4 py-3">
+        <button
+          type="button"
+          onClick={() => nav('/wallet')}
+          className="game-chip game-chip-yellow text-base"
+          title={t('home.balance')}
+        >
+          <span className="text-[#1a1450]">$</span>
+          <span className="font-mono">
+            {wallet ? Number(wallet.balance).toFixed(2) : '—'}
+          </span>
+        </button>
+        <div className="game-title text-lg text-white/90">@{me.username}</div>
+        <div className="flex items-center gap-1.5">
           {me.role === 'ADMIN' && (
             <button
               type="button"
               onClick={() => nav('/admin')}
-              className="rounded bg-accent/30 px-2 py-1 text-sm text-accent hover:bg-accent/40"
+              className="game-btn game-btn-pink game-btn-sm"
             >
               admin
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => nav('/loadout')}
-            className="rounded px-2 py-1 text-sm text-white/70 hover:bg-white/10"
-            title={t('home.loadout')}
-          >
-            {t('home.loadout')}
-          </button>
-          <button
-            type="button"
-            onClick={() => nav('/shop')}
-            className="rounded px-2 py-1 text-sm text-white/70 hover:bg-white/10"
-          >
-            {t('home.shop')}
-          </button>
-          <button
-            type="button"
-            onClick={() => nav('/wallet')}
-            className="rounded px-2 py-1 text-sm hover:bg-white/10"
-          >
-            <span className="text-white/50">{t('home.balance')}: </span>
-            <span className="font-mono">${wallet ? Number(wallet.balance).toFixed(2) : '—'}</span>
-          </button>
         </div>
       </header>
 
-      <main className="flex flex-1 flex-col items-center justify-center gap-6 px-6">
-        <div className="flex gap-2">
+      <main className="relative z-10 flex flex-1 flex-col items-center gap-6 overflow-y-auto px-6 py-6">
+        {/* Mode selector */}
+        <div className="flex w-full max-w-md flex-wrap justify-center gap-2">
           {(['free', 'casual', 'stake'] as Mode[]).map((m) => (
             <button
               key={m}
               type="button"
               onClick={() => setMode(m)}
               className={
-                'rounded-lg px-4 py-2 text-sm transition ' +
-                (mode === m ? 'bg-accent text-bg' : 'bg-surface text-white/70 hover:bg-white/10')
+                'game-btn game-btn-sm ' +
+                (mode === m ? 'game-btn-yellow' : 'game-btn-ghost')
               }
             >
               {t(`home.mode.${m}`)}
@@ -114,17 +107,15 @@ export function HomePage() {
         </div>
 
         {mode === 'stake' && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-center gap-3">
             {STAKE_ROOMS.map((r) => (
               <button
                 key={r.id}
                 type="button"
                 onClick={() => setSelectedRoomId(r.id)}
                 className={
-                  'rounded-lg px-4 py-2 text-sm transition ' +
-                  (selectedRoomId === r.id
-                    ? 'bg-emerald-500 text-bg'
-                    : 'bg-surface text-white/70 hover:bg-white/10')
+                  'game-btn ' +
+                  (selectedRoomId === r.id ? 'game-btn-green' : 'game-btn-ghost')
                 }
               >
                 ${r.stake}
@@ -134,23 +125,44 @@ export function HomePage() {
         )}
 
         {mode === 'casual' && (
-          <div className="text-xs text-white/50">{t('home.casual_hint')}</div>
+          <div className="game-chip text-white/80">{t('home.casual_hint')}</div>
         )}
 
-        <button
-          type="button"
-          onClick={() => void play()}
-          disabled={!canPlay}
-          className="rounded-2xl bg-accent px-16 py-6 text-2xl font-bold text-bg shadow-2xl shadow-accent/20 disabled:opacity-50"
-        >
-          {t('home.play')}
-        </button>
+        {/* PLAY button — hero */}
+        <div className="flex flex-1 items-center justify-center">
+          <button
+            type="button"
+            onClick={() => void play()}
+            disabled={!canPlay}
+            className="game-btn game-btn-yellow game-btn-xl game-shimmer animate-pulse-glow disabled:animate-none"
+          >
+            ▶ {t('home.play')}
+          </button>
+        </div>
 
-        {error && <div className="text-sm text-red-400">{error}</div>}
+        {error && <div className="text-sm font-semibold text-game-red">{error}</div>}
 
-        <p className="text-xs text-white/40">
-          {mode === 'free' ? t('home.free_hint') : ''}
-        </p>
+        {mode === 'free' && (
+          <p className="text-center text-xs text-white/50">{t('home.free_hint')}</p>
+        )}
+
+        {/* Bottom nav */}
+        <div className="grid w-full max-w-md grid-cols-2 gap-3 pb-2">
+          <button
+            type="button"
+            onClick={() => nav('/loadout')}
+            className="game-btn game-btn-purple"
+          >
+            {t('home.loadout')}
+          </button>
+          <button
+            type="button"
+            onClick={() => nav('/shop')}
+            className="game-btn game-btn-pink"
+          >
+            {t('home.shop')}
+          </button>
+        </div>
       </main>
     </div>
   );

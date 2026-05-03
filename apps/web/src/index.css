@@ -19,8 +19,174 @@ body,
 }
 
 body {
-  font-family:
-    Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: Fredoka, Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 500;
   -webkit-font-smoothing: antialiased;
-  background: #000;
+  background: #1a1450;
+  color: #fff;
 }
+
+#root {
+  background:
+    radial-gradient(ellipse at 30% 0%, rgba(138, 79, 255, 0.35) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 100%, rgba(62, 224, 255, 0.18) 0%, transparent 60%),
+    linear-gradient(180deg, #1a1450 0%, #0d0938 100%);
+}
+
+@layer components {
+  /* Big chunky 3D button with hard bottom shadow (Brawl-style) */
+  .game-btn {
+    @apply relative inline-flex select-none items-center justify-center rounded-2xl px-6 py-3
+      font-display tracking-wide uppercase text-[#1a1450] transition-all
+      active:translate-y-[3px] disabled:cursor-not-allowed disabled:opacity-50
+      focus:outline-none focus:ring-2 focus:ring-white/40;
+  }
+  .game-btn-yellow {
+    background: linear-gradient(180deg, #ffe066 0%, #ffd13b 50%, #f5b800 100%);
+    box-shadow: 0 6px 0 0 #b88200, 0 8px 18px rgba(255, 209, 59, 0.45);
+  }
+  .game-btn-yellow:active {
+    box-shadow: 0 3px 0 0 #b88200, 0 4px 10px rgba(255, 209, 59, 0.4);
+  }
+  .game-btn-purple {
+    color: #fff;
+    background: linear-gradient(180deg, #a472ff 0%, #8a4fff 50%, #6c30e6 100%);
+    box-shadow: 0 6px 0 0 #4a2eb8, 0 8px 18px rgba(138, 79, 255, 0.4);
+  }
+  .game-btn-purple:active {
+    box-shadow: 0 3px 0 0 #4a2eb8, 0 4px 10px rgba(138, 79, 255, 0.35);
+  }
+  .game-btn-pink {
+    color: #fff;
+    background: linear-gradient(180deg, #ff7ab3 0%, #ff4f9d 50%, #e02e7f 100%);
+    box-shadow: 0 6px 0 0 #b8326e, 0 8px 18px rgba(255, 79, 157, 0.4);
+  }
+  .game-btn-pink:active {
+    box-shadow: 0 3px 0 0 #b8326e, 0 4px 10px rgba(255, 79, 157, 0.35);
+  }
+  .game-btn-green {
+    color: #1a1450;
+    background: linear-gradient(180deg, #6effb0 0%, #3eff8b 50%, #1ec56a 100%);
+    box-shadow: 0 6px 0 0 #138a4a, 0 8px 18px rgba(62, 255, 139, 0.4);
+  }
+  .game-btn-green:active {
+    box-shadow: 0 3px 0 0 #138a4a, 0 4px 10px rgba(62, 255, 139, 0.35);
+  }
+  .game-btn-red {
+    color: #fff;
+    background: linear-gradient(180deg, #ff7a8e 0%, #ff3e5c 50%, #d8243f 100%);
+    box-shadow: 0 6px 0 0 #8e1a2c, 0 8px 18px rgba(255, 62, 92, 0.4);
+  }
+  .game-btn-red:active {
+    box-shadow: 0 3px 0 0 #8e1a2c, 0 4px 10px rgba(255, 62, 92, 0.35);
+  }
+  .game-btn-ghost {
+    color: rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.06);
+    border: 2px solid rgba(255, 255, 255, 0.18);
+    box-shadow: 0 4px 0 0 rgba(0, 0, 0, 0.35);
+  }
+  .game-btn-ghost:active {
+    box-shadow: 0 2px 0 0 rgba(0, 0, 0, 0.35);
+  }
+  .game-btn-sm {
+    @apply px-4 py-2 text-sm rounded-xl;
+  }
+  .game-btn-lg {
+    @apply px-10 py-5 text-2xl rounded-3xl;
+  }
+  .game-btn-xl {
+    @apply px-14 py-7 text-3xl rounded-3xl;
+  }
+
+  /* Card container — flat top highlight + dark bottom edge */
+  .game-card {
+    background: linear-gradient(180deg, #322395 0%, #241b66 100%);
+    border: 2px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.15),
+      0 4px 0 0 rgba(0, 0, 0, 0.45),
+      0 12px 24px rgba(0, 0, 0, 0.35);
+    @apply rounded-2xl;
+  }
+  .game-card-hover {
+    transition: transform 160ms ease, box-shadow 160ms ease;
+  }
+  .game-card-hover:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
+      0 6px 0 0 rgba(0, 0, 0, 0.5),
+      0 16px 32px rgba(0, 0, 0, 0.4);
+  }
+  .game-card-active {
+    border-color: #ffd13b;
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
+      0 4px 0 0 #b88200,
+      0 0 24px rgba(255, 209, 59, 0.45);
+  }
+
+  /* Surface panel for headers/footers */
+  .game-panel {
+    background: linear-gradient(180deg, rgba(58, 42, 158, 0.85) 0%, rgba(36, 27, 102, 0.85) 100%);
+    backdrop-filter: blur(8px);
+    border-bottom: 2px solid rgba(0, 0, 0, 0.35);
+  }
+
+  /* Pill / chip */
+  .game-chip {
+    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1.5px solid rgba(255, 255, 255, 0.12);
+  }
+  .game-chip-yellow {
+    color: #1a1450;
+    background: linear-gradient(180deg, #ffe066, #ffd13b);
+    border-color: rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 0 0 #b88200;
+  }
+
+  /* Input */
+  .game-input {
+    @apply w-full rounded-2xl px-4 py-3 font-body text-base text-white outline-none transition;
+    background: rgba(0, 0, 0, 0.35);
+    border: 2px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.35);
+  }
+  .game-input:focus {
+    border-color: #ffd13b;
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.35), 0 0 0 3px rgba(255, 209, 59, 0.2);
+  }
+
+  .game-title {
+    @apply font-display uppercase tracking-wide;
+    text-shadow:
+      0 2px 0 rgba(0, 0, 0, 0.5),
+      0 0 18px rgba(255, 209, 59, 0.25);
+  }
+
+  /* Stripe shimmer overlay (on top of gradient buttons) */
+  .game-shimmer::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(
+      100deg,
+      transparent 30%,
+      rgba(255, 255, 255, 0.35) 50%,
+      transparent 70%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2.5s linear infinite;
+    pointer-events: none;
+    mix-blend-mode: overlay;
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+

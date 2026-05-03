@@ -4,25 +4,31 @@ import { Link } from 'react-router-dom';
 export function SplashPage() {
   const { t } = useTranslation();
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-8 px-6 text-center">
-      <div>
-        <h1 className="text-5xl font-bold tracking-tight text-accent">{t('splash.title')}</h1>
-        <p className="mt-3 text-sm text-white/70">{t('splash.subtitle')}</p>
+    <div className="relative flex h-full flex-col items-center justify-center gap-10 overflow-hidden px-6 text-center">
+      {/* decorative blobs */}
+      <div className="pointer-events-none absolute -top-20 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-game-purple/40 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-10 right-10 h-48 w-48 rounded-full bg-game-pink/30 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-20 left-10 h-40 w-40 rounded-full bg-game-cyan/20 blur-3xl" />
+
+      <div className="relative animate-pop-in">
+        <h1 className="game-title text-7xl text-game-yellow drop-shadow-[0_4px_0_rgba(0,0,0,0.5)]">
+          {t('splash.title')}
+        </h1>
+        <div className="mx-auto mt-2 h-1 w-24 rounded-full bg-game-yellow/60" />
+        <p className="mt-4 font-display text-base uppercase tracking-widest text-white/70">
+          {t('splash.subtitle')}
+        </p>
       </div>
-      <div className="flex w-full max-w-xs flex-col gap-3">
-        <Link
-          to="/login"
-          className="rounded-xl bg-accent px-6 py-3 text-center font-semibold text-bg hover:opacity-90"
-        >
+
+      <div className="relative flex w-full max-w-xs flex-col gap-4">
+        <Link to="/login" className="game-btn game-btn-yellow game-btn-lg game-shimmer">
           {t('splash.login')}
         </Link>
-        <Link
-          to="/register"
-          className="rounded-xl border border-white/20 px-6 py-3 text-center font-semibold text-white hover:bg-white/5"
-        >
+        <Link to="/register" className="game-btn game-btn-purple">
           {t('splash.register')}
         </Link>
       </div>
     </div>
   );
 }
+

@@ -35,28 +35,47 @@ export function ResultPage() {
   const oppHp = data.score[String(data.opponent.id)] ?? 0;
   const outcome: 'win' | 'loss' | 'draw' =
     data.winnerId === null ? 'draw' : data.winnerId === youId ? 'win' : 'loss';
-  const color =
-    outcome === 'win' ? 'text-accent' : outcome === 'loss' ? 'text-red-400' : 'text-white/70';
+  const titleClass =
+    outcome === 'win'
+      ? 'text-game-yellow drop-shadow-[0_4px_0_rgba(0,0,0,0.5)]'
+      : outcome === 'loss'
+        ? 'text-game-red drop-shadow-[0_4px_0_rgba(0,0,0,0.5)]'
+        : 'text-white/80';
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 p-6">
-      <div className={`text-6xl font-extrabold uppercase ${color}`}>{t(`result.${outcome}`)}</div>
-      <div className="text-sm uppercase tracking-widest text-white/50">{t(`result.reason.${data.reason}`)}</div>
+    <div className="relative flex h-full flex-col items-center justify-center gap-6 overflow-hidden p-6">
+      <div className="pointer-events-none absolute -top-32 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-game-purple/40 blur-3xl" />
+      {outcome === 'win' && (
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(255,209,59,0.25),transparent_60%)]" />
+      )}
+
+      <div className={`game-title text-7xl uppercase animate-pop-in ${titleClass}`}>
+        {t(`result.${outcome}`)}
+      </div>
+
+      <div className="game-chip">{t(`result.reason.${data.reason}`)}</div>
+
       <div className="grid w-full max-w-xs grid-cols-2 gap-3 text-center">
-        <div className="rounded-lg bg-surface p-4">
-          <div className="text-xs text-white/50">{t('result.you')}</div>
-          <div className="text-2xl font-mono">{youHp}</div>
+        <div className="game-card p-4">
+          <div className="text-xs uppercase text-white/60">{t('result.you')}</div>
+          <div className="font-display text-3xl text-game-cyan">{youHp}</div>
         </div>
-        <div className="rounded-lg bg-surface p-4">
-          <div className="text-xs text-white/50">{data.opponent.username}</div>
-          <div className="text-2xl font-mono">{oppHp}</div>
+        <div className="game-card p-4">
+          <div className="truncate text-xs uppercase text-white/60">
+            {data.opponent.username}
+          </div>
+          <div className="font-display text-3xl text-game-pink">{oppHp}</div>
         </div>
       </div>
-      <div className="text-sm text-white/50">{t('result.duration')}: {Math.round(data.durationMs / 1000)}s</div>
+
+      <div className="text-sm text-white/60">
+        {t('result.duration')}: {Math.round(data.durationMs / 1000)}s
+      </div>
+
       <button
         type="button"
         onClick={() => nav('/home')}
-        className="rounded-lg bg-accent px-6 py-3 font-bold text-bg"
+        className="game-btn game-btn-yellow game-btn-lg"
       >
         {t('result.back')}
       </button>

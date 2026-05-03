@@ -29,9 +29,15 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex h-full flex-col items-center justify-center px-6">
-      <form onSubmit={onSubmit} className="flex w-full max-w-sm flex-col gap-3">
-        <h2 className="mb-2 text-2xl font-semibold">{t('splash.login')}</h2>
+    <div className="relative flex h-full flex-col items-center justify-center overflow-hidden px-6">
+      <div className="pointer-events-none absolute -top-20 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-game-purple/40 blur-3xl" />
+      <form
+        onSubmit={onSubmit}
+        className="game-card relative flex w-full max-w-sm flex-col gap-3 p-6 animate-pop-in"
+      >
+        <h2 className="game-title mb-2 text-center text-3xl text-game-yellow">
+          {t('splash.login')}
+        </h2>
         <input
           type="email"
           autoComplete="email"
@@ -39,7 +45,7 @@ export function LoginPage() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className="rounded-lg bg-surface px-4 py-3 outline-none ring-1 ring-white/10 focus:ring-accent"
+          className="game-input"
         />
         <input
           type="password"
@@ -48,19 +54,15 @@ export function LoginPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          className="rounded-lg bg-surface px-4 py-3 outline-none ring-1 ring-white/10 focus:ring-accent"
+          className="game-input"
         />
-        {error && <p className="text-sm text-red-400">{error}</p>}
-        <button
-          type="submit"
-          disabled={loading}
-          className="rounded-xl bg-accent px-6 py-3 font-semibold text-bg disabled:opacity-50"
-        >
+        {error && <p className="text-center text-sm font-semibold text-game-red">{error}</p>}
+        <button type="submit" disabled={loading} className="game-btn game-btn-yellow mt-2">
           {t('auth.submit_login')}
         </button>
-        <p className="mt-2 text-center text-sm text-white/60">
+        <p className="mt-1 text-center text-sm text-white/70">
           {t('auth.no_account')}{' '}
-          <Link to="/register" className="text-accent hover:underline">
+          <Link to="/register" className="font-semibold text-game-yellow hover:underline">
             {t('splash.register')}
           </Link>
         </p>

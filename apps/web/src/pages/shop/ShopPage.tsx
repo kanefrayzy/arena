@@ -63,26 +63,32 @@ export function ShopPage() {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between border-b border-white/10 px-5 py-3">
+    <div className="relative flex h-full flex-col overflow-hidden">
+      <div className="pointer-events-none absolute -top-32 left-0 h-72 w-72 rounded-full bg-game-pink/30 blur-3xl" />
+
+      <header className="game-panel relative z-10 flex items-center justify-between px-4 py-3">
         <button
           type="button"
           onClick={() => nav('/home')}
-          className="rounded px-2 py-1 text-sm text-white/70 hover:bg-white/10"
+          className="game-btn game-btn-ghost game-btn-sm"
         >
           ← {t('shop.back')}
         </button>
-        <h2 className="text-lg font-semibold">{t('shop.title')}</h2>
-        <div className="text-sm">
-          <span className="text-white/50">$ </span>
+        <h2 className="game-title text-xl text-game-yellow">{t('shop.title')}</h2>
+        <button
+          type="button"
+          onClick={() => nav('/wallet')}
+          className="game-chip game-chip-yellow text-base"
+        >
+          <span className="text-[#1a1450]">$</span>
           <span className="font-mono">{wallet?.balance ?? '—'}</span>
-        </div>
+        </button>
       </header>
 
-      <main className="flex flex-1 flex-col gap-3 overflow-y-auto px-5 py-4">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <main className="relative z-10 flex flex-1 flex-col gap-3 overflow-y-auto px-5 py-5">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
           {chars.length === 0 && (
-            <div className="col-span-full rounded-lg bg-surface px-4 py-8 text-center text-sm text-white/60">
+            <div className="game-card col-span-full px-4 py-10 text-center font-display text-base text-white/70">
               {t('shop.empty.characters')}
             </div>
           )}
@@ -107,7 +113,9 @@ export function ShopPage() {
             );
           })}
         </div>
-        {error && <div className="text-center text-sm text-red-400">{error}</div>}
+        {error && (
+          <div className="text-center text-sm font-semibold text-game-red">{error}</div>
+        )}
       </main>
     </div>
   );
@@ -129,30 +137,41 @@ function Card(p: CardProps) {
   const priceNum = p.priceUsd != null && p.priceUsd !== '' ? parseFloat(p.priceUsd) : 0;
   const isFree = priceNum <= 0;
   return (
-    <div className="flex flex-col items-center gap-2 rounded-lg bg-surface p-3">
-      <div className="flex h-24 w-24 items-center justify-center rounded-md bg-black/40">
+    <div className="game-card relative flex flex-col items-center gap-2 p-3">
+      <div className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-2xl bg-black/40">
+        <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/10 to-transparent" />
         {p.spriteUrl ? (
-          <img src={p.spriteUrl} alt={p.name} className="max-h-full max-w-full object-contain" />
+          <img
+            src={p.spriteUrl}
+            alt={p.name}
+            className="relative max-h-full max-w-full object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]"
+          />
         ) : (
-          <div className="h-12 w-12 rounded-full bg-white/20" />
+          <div className="relative h-14 w-14 rounded-full bg-white/20" />
+        )}
+        {isFree && !p.owned && (
+          <div className="absolute right-1 top-1 rounded-full bg-game-green px-2 py-0.5 text-[9px] font-bold uppercase text-[#1a1450] shadow-[0_2px_0_#138a4a]">
+            FREE
+          </div>
         )}
       </div>
-      <div className="text-sm font-semibold">{p.name}</div>
-      <div className="font-mono text-sm">{isFree ? 'FREE' : `$${p.priceUsd}`}</div>
+      <div className="font-display text-sm uppercase tracking-wide text-white">{p.name}</div>
+      {!isFree && (
+        <div className="font-display text-base text-game-yellow">${p.priceUsd}</div>
+      )}
       {p.owned ? (
-        <button
-          type="button"
-          disabled
-          className="w-full rounded bg-white/10 px-3 py-1.5 text-xs text-white/50"
-        >
-          {p.ownedLabel}
-        </button>
+        <div className="game-chip mt-1 w-full justify-center text-white/80">
+          ✓ {p.ownedLabel}
+        </div>
       ) : (
         <button
           type="button"
           disabled={p.busy || (!isFree && !p.canAfford)}
           onClick={p.onBuy}
-          className="w-full rounded bg-accent px-3 py-1.5 text-xs font-semibold text-bg disabled:opacity-50"
+          className={
+            'game-btn game-btn-sm w-full ' +
+            (isFree ? 'game-btn-green' : 'game-btn-yellow')
+          }
         >
           {p.busy ? '…' : p.buyLabel}
         </button>

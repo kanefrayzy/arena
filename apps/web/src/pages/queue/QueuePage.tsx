@@ -65,20 +65,30 @@ export function QueuePage() {
   const seconds = Math.floor(waitMs / 1000);
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 p-6">
-      <div className="text-sm uppercase tracking-widest text-white/50">{t(`home.mode.${mode}`)}</div>
-      <div className="relative flex h-32 w-32 items-center justify-center">
-        <div className="absolute inset-0 animate-ping rounded-full bg-accent/20" />
-        <div className="absolute inset-2 animate-pulse rounded-full bg-accent/40" />
-        <div className="relative text-3xl font-bold">{seconds}s</div>
+    <div className="relative flex h-full flex-col items-center justify-center gap-8 overflow-hidden p-6">
+      <div className="pointer-events-none absolute -top-32 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-game-purple/40 blur-3xl" />
+
+      <div className="game-chip game-chip-yellow text-base">
+        {t(`home.mode.${mode}`)}
       </div>
-      <div className="text-lg">{t(longWait ? 'queue.long_wait' : 'queue.searching')}</div>
-      {error && <div className="text-sm text-red-400">{error}</div>}
-      <button
-        type="button"
-        onClick={cancel}
-        className="rounded-lg bg-surface px-6 py-3 text-white/80 hover:bg-white/10"
-      >
+
+      <div className="relative flex h-44 w-44 items-center justify-center">
+        {/* outer rings */}
+        <div className="absolute inset-0 animate-ping rounded-full bg-game-yellow/25" />
+        <div className="absolute inset-3 animate-pulse rounded-full bg-game-yellow/40" />
+        {/* core */}
+        <div className="relative flex h-32 w-32 items-center justify-center rounded-full bg-gradient-to-b from-[#ffe066] to-[#f5b800] shadow-[0_8px_0_#b88200,0_0_40px_rgba(255,209,59,0.6)]">
+          <div className="font-display text-4xl text-[#1a1450]">{seconds}s</div>
+        </div>
+      </div>
+
+      <div className="font-display text-xl uppercase tracking-wide text-white/90">
+        {t(longWait ? 'queue.long_wait' : 'queue.searching')}
+      </div>
+
+      {error && <div className="text-sm font-semibold text-game-red">{error}</div>}
+
+      <button type="button" onClick={cancel} className="game-btn game-btn-red">
         {t('queue.cancel')}
       </button>
     </div>

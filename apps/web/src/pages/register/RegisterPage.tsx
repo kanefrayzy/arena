@@ -48,22 +48,28 @@ export function RegisterPage() {
     label: string,
     key: string,
   ) => (
-    <label className="flex items-start gap-2 text-sm text-white/80" htmlFor={key}>
+    <label className="flex items-start gap-2 text-sm text-white/85" htmlFor={key}>
       <input
         id={key}
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-1 h-4 w-4 accent-[#00e0ff]"
+        className="mt-1 h-4 w-4 accent-game-yellow"
       />
       <span>{label}</span>
     </label>
   );
 
   return (
-    <div className="flex h-full flex-col items-center justify-center overflow-y-auto px-6 py-8">
-      <form onSubmit={onSubmit} className="flex w-full max-w-sm flex-col gap-3">
-        <h2 className="mb-2 text-2xl font-semibold">{t('splash.register')}</h2>
+    <div className="relative flex h-full flex-col items-center justify-center overflow-y-auto px-6 py-8">
+      <div className="pointer-events-none absolute -top-20 right-10 h-64 w-64 rounded-full bg-game-pink/30 blur-3xl" />
+      <form
+        onSubmit={onSubmit}
+        className="game-card relative flex w-full max-w-sm flex-col gap-3 p-6 animate-pop-in"
+      >
+        <h2 className="game-title mb-2 text-center text-3xl text-game-yellow">
+          {t('splash.register')}
+        </h2>
         <input
           type="email"
           autoComplete="email"
@@ -71,7 +77,7 @@ export function RegisterPage() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className="rounded-lg bg-surface px-4 py-3 outline-none ring-1 ring-white/10 focus:ring-accent"
+          className="game-input"
         />
         <input
           type="text"
@@ -83,7 +89,7 @@ export function RegisterPage() {
           minLength={3}
           maxLength={24}
           pattern="[A-Za-z0-9_]+"
-          className="rounded-lg bg-surface px-4 py-3 outline-none ring-1 ring-white/10 focus:ring-accent"
+          className="game-input"
         />
         <input
           type="password"
@@ -93,24 +99,24 @@ export function RegisterPage() {
           onChange={(e) => setPassword(e.target.value)}
           required
           minLength={8}
-          className="rounded-lg bg-surface px-4 py-3 outline-none ring-1 ring-white/10 focus:ring-accent"
+          className="game-input"
         />
-        <div className="mt-2 flex flex-col gap-2">
+        <div className="mt-1 flex flex-col gap-2">
           {checkbox(acceptAge, setAcceptAge, t('auth.age'), 'cb-age')}
           {checkbox(acceptTos, setAcceptTos, t('auth.tos'), 'cb-tos')}
           {checkbox(acceptSkill, setAcceptSkill, t('auth.skill'), 'cb-skill')}
         </div>
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && <p className="text-center text-sm font-semibold text-game-red">{error}</p>}
         <button
           type="submit"
           disabled={!canSubmit}
-          className="mt-2 rounded-xl bg-accent px-6 py-3 font-semibold text-bg disabled:opacity-50"
+          className="game-btn game-btn-yellow mt-2"
         >
           {t('auth.submit_register')}
         </button>
-        <p className="mt-2 text-center text-sm text-white/60">
+        <p className="mt-1 text-center text-sm text-white/70">
           {t('auth.have_account')}{' '}
-          <Link to="/login" className="text-accent hover:underline">
+          <Link to="/login" className="font-semibold text-game-yellow hover:underline">
             {t('splash.login')}
           </Link>
         </p>
