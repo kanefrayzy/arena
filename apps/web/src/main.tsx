@@ -7,8 +7,20 @@ import { InstallPrompt } from './shared/pwa/InstallPrompt';
 import { startSW } from './shared/pwa/registerSW';
 import { ErrorBoundary } from './shared/ui/ErrorBoundary';
 import { ToastViewport, toast } from './shared/ui/toast';
+import { unlockAudio } from './shared/game/audio';
 import './shared/i18n';
 import './index.css';
+
+// Global audio unlock on first user gesture (browsers require this).
+const unlock = () => {
+  unlockAudio();
+  window.removeEventListener('pointerdown', unlock);
+  window.removeEventListener('keydown', unlock);
+  window.removeEventListener('touchstart', unlock);
+};
+window.addEventListener('pointerdown', unlock, { once: false });
+window.addEventListener('keydown', unlock, { once: false });
+window.addEventListener('touchstart', unlock, { once: false });
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },

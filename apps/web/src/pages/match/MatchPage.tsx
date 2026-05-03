@@ -151,6 +151,7 @@ export function MatchPage() {
 
   const remainingS = Math.ceil(remainingMs / 1000);
   const cdS = Math.ceil(cdMs / 1000);
+  const [muted, setMutedState] = useState<boolean>(sfx.isMuted());
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-bg">
@@ -165,6 +166,18 @@ export function MatchPage() {
           <div className="rounded-lg bg-black/60 px-3 py-2 backdrop-blur text-center">
             <div className="text-2xl font-bold tabular-nums">{remainingS}s</div>
             <div className="text-xs text-white/60">{t('match.timer')}</div>
+            <button
+              type="button"
+              onClick={() => {
+                const m = !muted;
+                sfx.setMuted(m);
+                setMutedState(m);
+                if (!m) sfx.unlockAudio();
+              }}
+              className="pointer-events-auto mt-1 rounded bg-white/10 px-2 py-0.5 text-[11px] text-white/70 hover:bg-white/20"
+            >
+              {muted ? '🔇' : '🔊'}
+            </button>
           </div>
           <div className="rounded-lg bg-black/60 px-3 py-2 text-right backdrop-blur">
             <div className="text-white/60">{welcome?.opponent.username ?? 'OPP'}</div>
