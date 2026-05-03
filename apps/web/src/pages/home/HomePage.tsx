@@ -165,44 +165,48 @@ export function HomePage() {
           <div className="mt-3 self-center game-chip text-white/80">{t('home.casual_hint')}</div>
         )}
 
-        {/* Hero character — no background, name above, soft shadow only */}
-        <div className="relative flex flex-1 flex-col items-center justify-end">
+        {/* Hero character — centered, name directly above sprite */}
+        <div className="relative flex flex-1 items-center justify-center">
           {activeChar && (
-            <>
+            <button
+              type="button"
+              onClick={() => nav('/loadout')}
+              className="group relative flex h-full w-full max-w-[340px] flex-col items-center justify-center"
+              title={activeChar.name}
+            >
               <div className="pointer-events-none mb-1 font-display text-base uppercase tracking-wide text-game-yellow drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]">
                 {activeChar.name}
               </div>
-              <button
-                type="button"
-                onClick={() => nav('/loadout')}
-                className="group relative flex h-full w-full max-w-[340px] items-end justify-center"
-                title={activeChar.name}
-              >
+              <div className="relative flex flex-1 w-full items-center justify-center">
                 {/* soft ground shadow */}
-                <div className="pointer-events-none absolute bottom-[8%] left-1/2 h-2.5 w-[38%] -translate-x-1/2 rounded-full bg-black/45 blur-md" />
+                <div className="pointer-events-none absolute bottom-[6%] left-1/2 h-2.5 w-[38%] -translate-x-1/2 rounded-full bg-black/45 blur-md" />
                 {activeChar.spriteUrl ? (
                   <img
                     src={activeChar.spriteUrl}
                     alt={activeChar.name}
-                    className="relative max-h-[88%] max-w-[80%] animate-float object-contain drop-shadow-[0_6px_8px_rgba(0,0,0,0.45)] transition-transform group-active:scale-95"
+                    className="relative max-h-full max-w-[80%] animate-float object-contain drop-shadow-[0_6px_8px_rgba(0,0,0,0.45)] transition-transform group-active:scale-95"
                   />
                 ) : (
                   <div className="relative h-40 w-40 animate-float rounded-full bg-white/10" />
                 )}
-              </button>
-            </>
+              </div>
+            </button>
           )}
         </div>
 
         {/* PLAY */}
-        <div className="-mt-6 flex flex-col items-center gap-2">
+        <div className="-mt-10 flex flex-col items-center gap-2">
           <button
             type="button"
             onClick={() => void play()}
             disabled={!canPlay}
-            className="game-btn game-btn-yellow game-btn-xl game-shimmer animate-pulse-glow disabled:animate-none"
+            className="game-btn game-btn-yellow game-btn-xl game-shimmer animate-pulse-glow disabled:animate-none inline-flex items-center gap-2"
           >
-            <span className="mr-2 inline-block">🎯</span>
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <circle cx="12" cy="12" r="9" />
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3" />
+            </svg>
             {t('home.play')}
           </button>
           {error && <div className="text-sm font-semibold text-game-red">{error}</div>}
@@ -213,17 +217,24 @@ export function HomePage() {
           <button
             type="button"
             onClick={() => nav('/loadout')}
-            className="game-btn game-btn-purple"
+            className="game-btn game-btn-purple inline-flex items-center justify-center gap-2"
           >
-            <span className="mr-2">🎽</span>
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M9 3l3 2 3-2 4 3v5l-3 1v9H8v-9l-3-1V6z" />
+              <path d="M9 3v3M15 3v3" />
+            </svg>
             {t('home.loadout')}
           </button>
           <button
             type="button"
             onClick={() => nav('/shop')}
-            className="game-btn game-btn-pink"
+            className="game-btn game-btn-pink inline-flex items-center justify-center gap-2"
           >
-            <span className="mr-2">🛒</span>
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M3 4h2l2.4 11.2a2 2 0 002 1.6h7.8a2 2 0 002-1.5L21 8H6" />
+              <circle cx="9" cy="20" r="1.5" />
+              <circle cx="17" cy="20" r="1.5" />
+            </svg>
             {t('home.shop')}
           </button>
         </div>
