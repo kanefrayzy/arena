@@ -15,6 +15,7 @@ import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'fs';
 import { join, extname } from 'path';
 import { PrismaService } from '../common/prisma/prisma.module';
 import { AdminGuard } from './admin.guard';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 // Local typing — avoid relying on Express.Multer global namespace.
 type UploadedMulterFile = {
@@ -57,7 +58,7 @@ function extFromMime(mime: string): string {
 }
 
 @Controller('admin/sprites')
-@UseGuards(AdminGuard)
+@UseGuards(JwtAuthGuard, AdminGuard)
 export class SpritesController {
   constructor(private readonly prisma: PrismaService) {}
 

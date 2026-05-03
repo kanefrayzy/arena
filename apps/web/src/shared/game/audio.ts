@@ -21,17 +21,36 @@ try {
 }
 
 function ensure(): AudioContext | null {
-  if (ctx) return ctx;
+  if (ctx) {
+    // Best-effort: resume on every sound call — browsers often suspend after a while.
+    if (ctx.state === 'suspended') void ctx.resume().catch(() => {});
+    return ctx;
+  }
   try {
     type WindowWithWebkit = Window & { webkitAudioContext?: typeof AudioContext };
     const Ctor: typeof AudioContext | undefined =
       window.AudioContext ?? (window as WindowWithWebkit).webkitAudioContext;
-    if (!Ctor) return null;
+    if (!Ctor) {
+      // eslint-disable-next-line no-console
+      console.warn('[audio] AudioContext not supported');
+      return null;
+    }
     ctx = new Ctor();
     masterGain = ctx.createGain();
     masterGain.gain.value = muted ? 0 : volume;
     masterGain.connect(ctx.destination);
-  } catch {
+    // Attach persistent resume on any user gesture (autoplay policy).
+    const resumeOnGesture = () => {
+      if (ctx && ctx.state === 'suspended') void ctx.resume().catch(() => {});
+    };
+    window.addEventListener('pointerdown', resumeOnGesture);
+    window.addEventListener('keydown', resumeOnGesture);
+    window.addEventListener('touchstart', resumeOnGesture, { passive: true });
+    // eslint-disable-next-line no-console
+    console.info('[audio] context created, state=', ctx.state, 'muted=', muted, 'volume=', volume);
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[audio] ensure failed', e);
     ctx = null;
   }
   return ctx;
@@ -40,7 +59,20 @@ function ensure(): AudioContext | null {
 /** Should be wired to first user gesture (click/tap) to satisfy autoplay policies. */
 export function unlockAudio(): void {
   const c = ensure();
-  if (c && c.state === 'suspended') void c.resume().catch(() => {});
+  if (!c) return;
+  if (c.state === 'suspended') {
+    void c.resume()
+      .then(() => {
+        // eslint-disable-next-line no-console
+        console.info('[audio] resumed, state=', c.state);
+      })
+      .catch((e) => {
+        // eslint-disable-next-line no-console
+        console.warn('[audio] resume failed', e);
+      });
+  }
+  // If user is unlocking, override stale persisted mute=true ONLY if explicit click on mute button.
+  // (Don't auto-unmute here; setMuted handles that.)
 }
 
 export function setVolume(v: number): void {
