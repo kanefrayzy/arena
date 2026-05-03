@@ -220,7 +220,7 @@ export class AdminService {
     priceUsd?: string | null;
     isStarter?: boolean;
   }) {
-    return this.prisma.character.create({
+    const character = await this.prisma.character.create({
       data: {
         slug: input.slug,
         name: input.name,
@@ -235,6 +235,18 @@ export class AdminService {
         isStarter: input.isStarter ?? false,
       },
     });
+    // Auto-create a Default skin so the character is immediately usable in loadout.
+    await this.prisma.skin.create({
+      data: {
+        characterId: character.id,
+        name: 'Default',
+        rarity: 'common',
+        spriteSetUrl: input.spriteUrl ?? '',
+        priceUsd: null,
+        isActive: true,
+      },
+    });
+    return character;
   }
 
   async updateCharacter(id: number, patch: Partial<{

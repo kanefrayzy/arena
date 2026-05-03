@@ -182,24 +182,62 @@ export class ContentService {
     }
 
     const characterId = patch.characterId ?? baseChar;
-    // If character changed but skin not specified, pick a sensible default skin for the new character:
-    // prefer an owned skin of the new character, else the first active skin.
+
+    // If character is changing, verify ownership BEFORE any auto-grant side-effects.
+    if (characterId !== baseChar) {
+      const char = await this.prisma.character.findUnique({ where: { id: characterId } });
+      if (!char || !char.isActive) throw new NotFoundException({ code: 'CHARACTER_NOT_FOUND', message: 'character not found' });
+      if (!char.isStarter) {
+        const ownedC = await this.prisma.userCharacter.findUnique({
+          where: { userId_characterId: { userId, characterId } },
+        });
+        if (!ownedC) throw new BadRequestException({ code: 'CHARACTER_NOT_OWNED', message: 'character not owned' });
+      }
+    }
+
+    // If character changed but skin not specified, auto-pick (and auto-grant if missing) a skin
+    // for the new character. Skins are an internal concept; user only picks characters.
     let skinId: number;
     if (patch.skinId != null) {
       skinId = patch.skinId;
     } else if (characterId !== baseChar) {
+      const charSkins = await this.prisma.skin.findMany({
+        where: { characterId, isActive: true },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+      });
+      let firstSkin = charSkins[0] ?? null;
+      if (!firstSkin) {
+        // No skin exists for this character — auto-create a Default one so the character is usable.
+        const char = await this.prisma.character.findUnique({ where: { id: characterId } });
+        const created = await this.prisma.skin.create({
+          data: {
+            characterId,
+            name: 'Default',
+            rarity: 'common',
+            spriteSetUrl: char?.spriteUrl ?? '',
+            priceUsd: null,
+            isActive: true,
+          },
+        });
+        firstSkin = { id: created.id };
+      }
+      const ownedIds = charSkins.length === 0 ? [firstSkin.id] : charSkins.map((s) => s.id);
       const ownedSkin = await this.prisma.userInventory.findFirst({
-        where: { userId, skinId: { in: (await this.prisma.skin.findMany({ where: { characterId, isActive: true }, select: { id: true } })).map((s) => s.id) } },
+        where: { userId, skinId: { in: ownedIds } },
         orderBy: { id: 'asc' },
       });
       if (ownedSkin) {
         skinId = ownedSkin.skinId;
       } else {
-        const firstSkin = await this.prisma.skin.findFirst({
-          where: { characterId, isActive: true },
-          orderBy: { id: 'asc' },
-        });
-        if (!firstSkin) throw new NotFoundException({ code: 'SKIN_NOT_FOUND', message: 'no skin for character' });
+        // Character ownership already validated above — auto-grant the default skin to inventory.
+        try {
+          await this.prisma.userInventory.create({
+            data: { userId, skinId: firstSkin.id, source: 'auto' },
+          });
+        } catch (err) {
+          if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== 'P2002') throw err;
+        }
         skinId = firstSkin.id;
       }
     } else {
