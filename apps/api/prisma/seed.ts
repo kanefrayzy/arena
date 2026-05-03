@@ -218,6 +218,45 @@ async function main() {
     });
   }
 
+  // ---------- Backfill: starter skins + loadout for ALL existing users ----------
+  const allUsers = await prisma.user.findMany({ select: { id: true } });
+  const defaultSkins = await prisma.skin.findMany({
+    where: { isActive: true, name: 'Default', priceCoin: null, priceUsd: null },
+    orderBy: { characterId: 'asc' },
+  });
+  if (defaultSkins.length > 0) {
+    let granted = 0;
+    let loadouts = 0;
+    for (const u of allUsers) {
+      // Skip system + bot users (ids 1, 2 are reserved for SYSTEM/BOT and don't play).
+      if (u.id === 1 || u.id === 2) continue;
+      for (const skin of defaultSkins) {
+        try {
+          await prisma.userInventory.create({
+            data: { userId: u.id, skinId: skin.id, source: 'starter' },
+          });
+          granted++;
+        } catch (err) {
+          // P2002 unique violation = already owned, ignore.
+          if (
+            !(err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002')
+          ) {
+            throw err;
+          }
+        }
+      }
+      const existing = await prisma.userLoadout.findUnique({ where: { userId: u.id } });
+      if (!existing) {
+        const first = defaultSkins[0];
+        await prisma.userLoadout.create({
+          data: { userId: u.id, characterId: first.characterId, skinId: first.id },
+        });
+        loadouts++;
+      }
+    }
+    console.log(`✓ starter backfill: ${granted} skins granted, ${loadouts} loadouts created`);
+  }
+
   console.log('✓ seed completed');
 }
 

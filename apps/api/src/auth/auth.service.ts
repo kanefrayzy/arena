@@ -7,12 +7,14 @@ import { JwtService } from '@nestjs/jwt';
 import argon2 from 'argon2';
 import type { LoginInput, RegisterInput } from '@arena/shared';
 import { PrismaService } from '../common/prisma/prisma.module';
+import { ContentService } from '../content/content.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
+    private readonly content: ContentService,
   ) {}
 
   async register(input: RegisterInput, ip?: string) {
@@ -41,6 +43,14 @@ export class AuthService {
         stats: { create: {} },
       },
     });
+
+    // Grant starter skins (Default per character) + default loadout.
+    try {
+      await this.content.ensureStarterAndLoadout(user.id);
+    } catch (err) {
+      // Non-fatal: account is usable, but log it.
+      console.error(`failed to grant starter content for user ${user.id}:`, err);
+    }
 
     const tokens = await this.issueTokens(user.id, user.role);
     return { user: this.publicUser(user), tokens };

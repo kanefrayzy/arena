@@ -8,7 +8,6 @@ import { MatchTokenService } from './match-token.service';
 import { MatchCreationService } from './match-creation.service';
 import { MatchmakerService } from './matchmaker.service';
 import { LobbyGateway } from './lobby.gateway';
-import { CharactersController } from './characters.controller';
 import { MatchesController } from './matches.controller';
 import { InternalMatchController } from './internal-match.controller';
 import { HmacGuard } from './hmac.guard';
@@ -27,7 +26,7 @@ import { HmacGuard } from './hmac.guard';
     LobbyGateway,
     HmacGuard,
   ],
-  controllers: [QueueController, CharactersController, MatchesController, InternalMatchController],
+  controllers: [QueueController, MatchesController, InternalMatchController],
   exports: [LobbyGateway],
 })
 export class GameModule {}

@@ -25,6 +25,16 @@ export interface MatchPlayerSeed {
   username: string;
   characterId: number;
   skinId: number;
+  stats?: PlayerStatsSeed;
+}
+
+export interface PlayerStatsSeed {
+  hp: number;
+  speed: number;
+  damage: number;
+  weaponType: string;
+  abilityType: string | null;
+  abilityCooldownMs: number;
 }
 
 export interface MatchSeed {
@@ -413,6 +423,11 @@ function round3(v: number): number {
 }
 
 function buildPlayer(seed: MatchPlayerSeed, spawn: { x: number; y: number }): PlayerState {
+  const stats = seed.stats;
+  const maxHp = stats?.hp ?? 100;
+  const speed = stats?.speed ?? 240;
+  const damage = stats?.damage ?? 20;
+  const abilityCooldownMs = stats?.abilityCooldownMs ?? 8000;
   return {
     id: seed.userId,
     characterId: seed.characterId,
@@ -422,11 +437,11 @@ function buildPlayer(seed: MatchPlayerSeed, spawn: { x: number; y: number }): Pl
     x: spawn.x,
     y: spawn.y,
     angle: spawn.x < MAP_WIDTH / 2 ? 0 : Math.PI,
-    hp: 100,
-    maxHp: 100,
-    speed: 240,
-    damage: 20,
-    abilityCooldownMs: 8000,
+    hp: maxHp,
+    maxHp,
+    speed,
+    damage,
+    abilityCooldownMs,
     abilityCdLeftMs: 0,
     fireCooldownLeftMs: 0,
     dashLeftMs: 0,

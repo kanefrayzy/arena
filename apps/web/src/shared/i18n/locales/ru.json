@@ -50,5 +50,19 @@
   "wallet.error": "Ошибка",
   "wallet.tab_ledger": "Журнал",
   "wallet.tab_payments": "Платежи",
-  "wallet.empty": "Пока пусто"
+  "wallet.empty": "Пока пусто",
+  "home.loadout": "Состав",
+  "home.shop": "Магазин",
+  "loadout.title": "Состав",
+  "loadout.back": "Назад",
+  "loadout.shop": "Магазин",
+  "loadout.speed": "Скор.",
+  "loadout.damage": "Урон",
+  "loadout.ability": "Способн.",
+  "loadout.equipped": "В бой",
+  "shop.title": "Магазин скинов",
+  "shop.back": "Назад",
+  "shop.buy": "Купить",
+  "shop.owned": "Куплено",
+  "shop.empty": "Скины скоро появятся"
 }

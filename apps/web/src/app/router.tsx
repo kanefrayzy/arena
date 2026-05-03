@@ -7,6 +7,8 @@ import { QueuePage } from '../pages/queue/QueuePage';
 import { MatchPage } from '../pages/match/MatchPage';
 import { ResultPage } from '../pages/result/ResultPage';
 import { WalletPage } from '../pages/wallet/WalletPage';
+import { LoadoutPage } from '../pages/loadout/LoadoutPage';
+import { ShopPage } from '../pages/shop/ShopPage';
 
 export function AppRouter() {
   return (
@@ -18,6 +20,8 @@ export function AppRouter() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/home" element={<HomePage />} />
           <Route path="/wallet" element={<WalletPage />} />
+          <Route path="/loadout" element={<LoadoutPage />} />
+          <Route path="/shop" element={<ShopPage />} />
           <Route path="/queue" element={<QueuePage />} />
           <Route path="/match/:id" element={<MatchPage />} />
           <Route path="/result/:id" element={<ResultPage />} />

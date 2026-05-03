@@ -58,14 +58,31 @@ export function HomePage() {
     <div className="flex h-full flex-col">
       <header className="flex items-center justify-between border-b border-white/10 px-5 py-3">
         <div className="text-sm text-white/70">@{me.username}</div>
-        <button
-          type="button"
-          onClick={() => nav('/wallet')}
-          className="rounded px-2 py-1 text-sm hover:bg-white/10"
-        >
-          <span className="text-white/50">{t('home.balance')}: </span>
-          <span className="font-mono">${wallet ? Number(wallet.balance).toFixed(2) : '—'}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => nav('/loadout')}
+            className="rounded px-2 py-1 text-sm text-white/70 hover:bg-white/10"
+            title={t('home.loadout')}
+          >
+            {t('home.loadout')}
+          </button>
+          <button
+            type="button"
+            onClick={() => nav('/shop')}
+            className="rounded px-2 py-1 text-sm text-white/70 hover:bg-white/10"
+          >
+            {t('home.shop')} 🪙{wallet?.coins ?? 0}
+          </button>
+          <button
+            type="button"
+            onClick={() => nav('/wallet')}
+            className="rounded px-2 py-1 text-sm hover:bg-white/10"
+          >
+            <span className="text-white/50">{t('home.balance')}: </span>
+            <span className="font-mono">${wallet ? Number(wallet.balance).toFixed(2) : '—'}</span>
+          </button>
+        </div>
       </header>
 
       <main className="flex flex-1 flex-col items-center justify-center gap-6 px-6">

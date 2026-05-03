@@ -39,15 +39,11 @@ export class MatchCreationService {
     const meta: Record<string, unknown> = {};
     if (input.isBotMatch) meta.bot = true;
 
-    // Pick a default character/skin for M1 (single character).
-    const character = await this.prisma.character.findFirst({
-      where: { isActive: true },
-      orderBy: { id: 'asc' },
-      include: { skins: { orderBy: { id: 'asc' }, take: 1 } },
-    });
-    if (!character) throw new Error('no active character');
-    const charId = character.id;
-    const skinId = character.skins[0]?.id ?? 0;
+    // Resolve loadouts (character+skin) for both players. Bot: pick first active char/default skin.
+    const p1Loadout = await this.resolveLoadout(input.player1Id);
+    const p2Loadout = input.isBotMatch
+      ? await this.resolveBotLoadout()
+      : await this.resolveLoadout(input.player2Id);
 
     const match = await this.prisma.match.create({
       data: {
@@ -55,10 +51,10 @@ export class MatchCreationService {
         stakeUsd: input.room.stakeUsd ?? 0,
         player1Id: input.player1Id,
         player2Id: input.player2Id,
-        player1CharId: charId,
-        player1SkinId: skinId,
-        player2CharId: charId,
-        player2SkinId: skinId,
+        player1CharId: p1Loadout.characterId,
+        player1SkinId: p1Loadout.skinId,
+        player2CharId: p2Loadout.characterId,
+        player2SkinId: p2Loadout.skinId,
         status: 'PENDING',
         meta,
       },
@@ -107,14 +103,16 @@ export class MatchCreationService {
       player1: {
         userId: player1.id,
         username: player1.username,
-        characterId: 1,
-        skinId: 1,
+        characterId: p1Loadout.characterId,
+        skinId: p1Loadout.skinId,
+        stats: p1Loadout.stats,
       },
       player2: {
         userId: player2.id,
         username: player2.username,
-        characterId: 1,
-        skinId: 1,
+        characterId: p2Loadout.characterId,
+        skinId: p2Loadout.skinId,
+        stats: p2Loadout.stats,
       },
     };
     await this.redis.client.set(`match:seed:${match.id}`, JSON.stringify(seed), 'EX', 600);
@@ -145,4 +143,75 @@ export class MatchCreationService {
     );
     return { matchId: match.id };
   }
+
+  /**
+   * Resolves the active character/skin and effective stats for a user.
+   * Falls back to first active character + Default skin when no loadout exists.
+   */
+  private async resolveLoadout(userId: number): Promise<ResolvedLoadout> {
+    const loadout = await this.prisma.userLoadout.findUnique({ where: { userId } });
+    if (loadout) {
+      const [char, skin] = await Promise.all([
+        this.prisma.character.findUnique({ where: { id: loadout.characterId } }),
+        this.prisma.skin.findUnique({ where: { id: loadout.skinId } }),
+      ]);
+      if (char && skin) {
+        return {
+          characterId: char.id,
+          skinId: skin.id,
+          stats: this.computeStats(char, skin),
+        };
+      }
+    }
+    return this.resolveBotLoadout();
+  }
+
+  private async resolveBotLoadout(): Promise<ResolvedLoadout> {
+    const char = await this.prisma.character.findFirst({
+      where: { isActive: true },
+      orderBy: { id: 'asc' },
+      include: { skins: { where: { isActive: true }, orderBy: { id: 'asc' }, take: 1 } },
+    });
+    if (!char) throw new Error('no active character seeded');
+    const skin = char.skins[0];
+    if (!skin) throw new Error(`character ${char.id} has no skin`);
+    return {
+      characterId: char.id,
+      skinId: skin.id,
+      stats: this.computeStats(char, skin),
+    };
+  }
+
+  private computeStats(
+    char: { baseHp: number; baseSpeed: number; baseDamage: number; weaponType: string; abilityType: string | null; abilityCooldownS: number },
+    skin: { statModifiers: unknown },
+  ): EffectiveStats {
+    const mods = (skin.statModifiers ?? {}) as { hpPct?: number; speedPct?: number; damagePct?: number };
+    const hp = Math.max(1, Math.round(char.baseHp * (1 + (mods.hpPct ?? 0) / 100)));
+    const speed = Math.max(50, char.baseSpeed * (1 + (mods.speedPct ?? 0) / 100));
+    const damage = Math.max(1, Math.round(char.baseDamage * (1 + (mods.damagePct ?? 0) / 100)));
+    return {
+      hp,
+      speed,
+      damage,
+      weaponType: char.weaponType,
+      abilityType: char.abilityType,
+      abilityCooldownMs: char.abilityCooldownS * 1000,
+    };
+  }
+}
+
+interface EffectiveStats {
+  hp: number;
+  speed: number;
+  damage: number;
+  weaponType: string;
+  abilityType: string | null;
+  abilityCooldownMs: number;
+}
+
+interface ResolvedLoadout {
+  characterId: number;
+  skinId: number;
+  stats: EffectiveStats;
 }

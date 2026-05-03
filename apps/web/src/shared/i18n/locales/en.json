@@ -50,5 +50,19 @@
   "wallet.error": "Error",
   "wallet.tab_ledger": "Ledger",
   "wallet.tab_payments": "Payments",
-  "wallet.empty": "Nothing here yet"
+  "wallet.empty": "Nothing here yet",
+  "home.loadout": "Loadout",
+  "home.shop": "Shop",
+  "loadout.title": "Loadout",
+  "loadout.back": "Back",
+  "loadout.shop": "Shop",
+  "loadout.speed": "Speed",
+  "loadout.damage": "Damage",
+  "loadout.ability": "Ability",
+  "loadout.equipped": "In use",
+  "shop.title": "Skin shop",
+  "shop.back": "Back",
+  "shop.buy": "Buy",
+  "shop.owned": "Owned",
+  "shop.empty": "No skins available"
 }
