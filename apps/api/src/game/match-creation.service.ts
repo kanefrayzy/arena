@@ -92,6 +92,7 @@ export class MatchCreationService {
 
     // Persist seed for game-server to load on first connection.
     const tickRate = Number(process.env.TICK_RATE ?? 30);
+    const obstacles = Array.isArray(input.room.obstacles) ? input.room.obstacles : [];
     const seed = {
       matchId: match.id,
       mode: input.room.mode,
@@ -100,6 +101,7 @@ export class MatchCreationService {
       tickRate,
       durationMs: 90_000,
       isBotMatch: !!input.isBotMatch,
+      obstacles,
       player1: {
         userId: player1.id,
         username: player1.username,

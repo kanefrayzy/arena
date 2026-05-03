@@ -13,7 +13,7 @@ import {
   AFK_TIMEOUT_MS,
   DEFAULT_MATCH_DURATION_MS,
 } from '@arena/shared';
-import type { SnapshotEvent } from '@arena/protocol';
+import type { SnapshotEvent, Obstacle } from '@arena/protocol';
 
 export interface PlayerInput {
   seq: number;
@@ -69,6 +69,7 @@ export interface MatchInitOpts {
   matchId: string;
   durationMs?: number;
   players: [PlayerState, PlayerState];
+  obstacles?: Obstacle[];
 }
 
 export type EndReason = 'kill' | 'timeout' | 'disconnect' | 'draw';
@@ -103,6 +104,7 @@ export class Sim {
   result: MatchResult | null = null;
   /** Players that have already dropped out (disconnect). */
   droppedPlayers: Set<number> = new Set();
+  obstacles: Obstacle[] = [];
 
   constructor(opts: MatchInitOpts) {
     this.matchId = opts.matchId;
@@ -110,6 +112,7 @@ export class Sim {
     for (const p of opts.players) {
       this.players.set(p.id, p);
     }
+    this.obstacles = sanitizeObstacles(opts.obstacles ?? []);
   }
 
   start(now: number): void {
@@ -151,8 +154,7 @@ export class Sim {
       const mag = Math.hypot(input.dx, input.dy);
       const ndx = mag > 1 ? input.dx / mag : input.dx;
       const ndy = mag > 1 ? input.dy / mag : input.dy;
-      p.x += ndx * p.speed * dtS;
-      p.y += ndy * p.speed * dtS;
+      this.movePlayer(p, ndx * p.speed * dtS, ndy * p.speed * dtS);
 
       // Fire
       if (input.fire && p.fireCooldownLeftMs <= 0 && p.hp > 0) {
@@ -177,8 +179,7 @@ export class Sim {
       if (p.fireCooldownLeftMs > 0) p.fireCooldownLeftMs = Math.max(0, p.fireCooldownLeftMs - dt);
       if (p.abilityCdLeftMs > 0) p.abilityCdLeftMs = Math.max(0, p.abilityCdLeftMs - dt);
       if (p.dashLeftMs > 0) {
-        p.x += p.dashVx * dtS;
-        p.y += p.dashVy * dtS;
+        this.movePlayer(p, p.dashVx * dtS, p.dashVy * dtS);
         p.dashLeftMs = Math.max(0, p.dashLeftMs - dt);
         if (p.dashLeftMs === 0) {
           p.buffs = [];
@@ -206,6 +207,17 @@ export class Sim {
         this.bullets.delete(bid);
         continue;
       }
+      // Collision with obstacles → bullet absorbed
+      let absorbed = false;
+      for (const ob of this.obstacles) {
+        if (circleAabbHit(b.x, b.y, BULLET_RADIUS, ob)) {
+          this.events.push({ kind: 'hit', victim: 0, attacker: b.ownerId, dmg: 0, x: b.x, y: b.y, obstacle: true });
+          this.bullets.delete(bid);
+          absorbed = true;
+          break;
+        }
+      }
+      if (absorbed) continue;
       // Collision with players
       for (const target of this.players.values()) {
         if (target.id === b.ownerId) continue;
@@ -276,6 +288,22 @@ export class Sim {
     this.events.push({ kind: 'shoot', who: owner.id, x: b.x, y: b.y });
   }
 
+  /** Move a player by (dx,dy) with axis-separated obstacle resolution. */
+  private movePlayer(p: PlayerState, dx: number, dy: number): void {
+    // X axis
+    p.x += dx;
+    for (const ob of this.obstacles) {
+      const r = circleAabbResolve(p.x, p.y, PLAYER_RADIUS, ob);
+      if (r) p.x += r.x;
+    }
+    // Y axis
+    p.y += dy;
+    for (const ob of this.obstacles) {
+      const r = circleAabbResolve(p.x, p.y, PLAYER_RADIUS, ob);
+      if (r) p.y += r.y;
+    }
+  }
+
   private finish(reason: EndReason, winnerId: number | null, now: number): void {
     this.finished = true;
     const score: Record<string, number> = {};
@@ -291,6 +319,68 @@ export class Sim {
 
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
+}
+
+/** Circle (cx,cy,r) vs AABB hit-test. */
+function circleAabbHit(cx: number, cy: number, r: number, ob: Obstacle): boolean {
+  const nx = clamp(cx, ob.x, ob.x + ob.w);
+  const ny = clamp(cy, ob.y, ob.y + ob.h);
+  const dx = cx - nx;
+  const dy = cy - ny;
+  return dx * dx + dy * dy < r * r;
+}
+
+/** If circle penetrates AABB, return push-out vector (smallest separation). Else null. */
+function circleAabbResolve(
+  cx: number,
+  cy: number,
+  r: number,
+  ob: Obstacle,
+): { x: number; y: number } | null {
+  const nx = clamp(cx, ob.x, ob.x + ob.w);
+  const ny = clamp(cy, ob.y, ob.y + ob.h);
+  const dx = cx - nx;
+  const dy = cy - ny;
+  const d2 = dx * dx + dy * dy;
+  if (d2 >= r * r) return null;
+  if (d2 > 1e-6) {
+    const d = Math.sqrt(d2);
+    const push = r - d;
+    return { x: (dx / d) * push, y: (dy / d) * push };
+  }
+  // Center-inside fallback: push out along nearest edge
+  const left = cx - ob.x;
+  const right = ob.x + ob.w - cx;
+  const top = cy - ob.y;
+  const bottom = ob.y + ob.h - cy;
+  const m = Math.min(left, right, top, bottom);
+  if (m === left) return { x: -(left + r), y: 0 };
+  if (m === right) return { x: right + r, y: 0 };
+  if (m === top) return { x: 0, y: -(top + r) };
+  return { x: 0, y: bottom + r };
+}
+
+/** Validates and clips obstacles to map bounds. Drops degenerate ones. */
+function sanitizeObstacles(list: Obstacle[]): Obstacle[] {
+  const out: Obstacle[] = [];
+  for (const o of list) {
+    if (
+      typeof o?.x !== 'number' ||
+      typeof o?.y !== 'number' ||
+      typeof o?.w !== 'number' ||
+      typeof o?.h !== 'number'
+    )
+      continue;
+    const x = clamp(Math.round(o.x), 0, MAP_WIDTH);
+    const y = clamp(Math.round(o.y), 0, MAP_HEIGHT);
+    const w = clamp(Math.round(o.w), 1, MAP_WIDTH - x);
+    const h = clamp(Math.round(o.h), 1, MAP_HEIGHT - y);
+    if (w < 8 || h < 8) continue;
+    const kind: Obstacle['kind'] =
+      o.kind === 'crate' || o.kind === 'barrel' || o.kind === 'wall' ? o.kind : 'crate';
+    out.push({ x, y, w, h, kind });
+  }
+  return out.slice(0, 32); // hard cap
 }
 
 /** Default spawn positions: portrait map → p1 bottom, p2 top. */

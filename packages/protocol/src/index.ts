@@ -63,6 +63,16 @@ export interface WelcomePlayer {
   spawnY: number;
 }
 
+export interface Obstacle {
+  /** axis-aligned rectangle, world coordinates (top-left origin, Y down) */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** visual variant — affects rendering only */
+  kind?: 'crate' | 'barrel' | 'wall';
+}
+
 export interface SWelcome {
   matchId: string;
   you: WelcomePlayer;
@@ -72,6 +82,7 @@ export interface SWelcome {
   tickRate: number;
   matchDurationMs: number;
   room: { id: number; mode: 'FREE' | 'CASUAL' | 'STAKE'; stakeUsd?: string };
+  obstacles: Obstacle[];
 }
 
 export interface SnapshotPlayer {
@@ -82,7 +93,7 @@ export interface SnapshotPlayer {
   hp: number;
   ammo: number;
   abilityCdMs: number;
-  buffs?: string[];
+  buffs?: string[] | undefined;
 }
 
 export interface SnapshotBullet {

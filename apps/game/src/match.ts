@@ -11,6 +11,7 @@ import {
   type SMatchEnd,
   type SnapshotEvent,
   type WelcomePlayer,
+  type Obstacle,
 } from '@arena/protocol';
 import { MAP_HEIGHT, MAP_WIDTH, DEFAULT_MATCH_DURATION_MS } from '@arena/shared';
 import { Sim, defaultSpawns, type PlayerInput, type PlayerState, type EndReason } from './sim.js';
@@ -48,6 +49,7 @@ export interface MatchSeed {
   player2: MatchPlayerSeed;
   /** When player2.userId equals BOT_USER_ID we drive it locally. */
   isBotMatch: boolean;
+  obstacles?: Obstacle[];
 }
 
 interface ClientSocket {
@@ -89,6 +91,7 @@ export class Match {
       matchId: seed.matchId,
       durationMs: seed.durationMs ?? DEFAULT_MATCH_DURATION_MS,
       players: [p1, p2],
+      ...(seed.obstacles ? { obstacles: seed.obstacles } : {}),
     });
     if (seed.isBotMatch) {
       this.bot = new Bot(this.sim, seed.player2.userId, seed.player1.userId);
@@ -100,6 +103,7 @@ export class Match {
       mapH: MAP_HEIGHT,
       tickRate: seed.tickRate,
       durationMs: this.sim.durationMs,
+      obstacles: this.sim.obstacles,
       players: [
         { id: p1.id, username: p1.username, characterId: p1.characterId, skinId: p1.skinId },
         { id: p2.id, username: p2.username, characterId: p2.characterId, skinId: p2.skinId },
@@ -376,6 +380,7 @@ export class Match {
         mode: this.seed.mode,
         ...(this.seed.stakeUsd ? { stakeUsd: this.seed.stakeUsd } : {}),
       },
+      obstacles: this.sim.obstacles,
     };
     try {
       c.ws.send(encodeMsg(MSG.S_WELCOME, welcome), true);

@@ -151,6 +151,7 @@ export class AdminService {
         winCondition: r.winCondition,
         isActive: r.isActive,
         minBalanceRequired: r.minBalanceRequired,
+        obstacles: Array.isArray(r.obstacles) ? r.obstacles : [],
       })),
     };
   }
@@ -163,6 +164,7 @@ export class AdminService {
     matchDurationS?: number;
     winCondition?: 'KILL' | 'BEST_OF_3' | 'TIMEOUT_HP';
     minBalanceRequired?: boolean;
+    obstacles?: unknown;
   }) {
     return this.prisma.room.create({
       data: {
@@ -173,6 +175,7 @@ export class AdminService {
         matchDurationS: input.matchDurationS ?? 120,
         winCondition: input.winCondition ?? 'KILL',
         minBalanceRequired: input.minBalanceRequired ?? input.mode !== 'FREE',
+        obstacles: (input.obstacles as Prisma.InputJsonValue) ?? [],
       },
     });
   }
@@ -184,6 +187,7 @@ export class AdminService {
     matchDurationS: number;
     isActive: boolean;
     minBalanceRequired: boolean;
+    obstacles: unknown;
   }>) {
     const data: Prisma.RoomUpdateInput = {};
     if (patch.name !== undefined) data.name = patch.name;
@@ -192,6 +196,7 @@ export class AdminService {
     if (patch.matchDurationS !== undefined) data.matchDurationS = patch.matchDurationS;
     if (patch.isActive !== undefined) data.isActive = patch.isActive;
     if (patch.minBalanceRequired !== undefined) data.minBalanceRequired = patch.minBalanceRequired;
+    if (patch.obstacles !== undefined) data.obstacles = patch.obstacles as Prisma.InputJsonValue;
     return this.prisma.room.update({ where: { id }, data });
   }
 

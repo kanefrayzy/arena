@@ -27,6 +27,14 @@ type AdjustInput = z.infer<typeof adjustBalanceSchema>;
 
 const banSchema = z.object({ reason: z.string().max(500).optional() });
 
+const obstacleSchema = z.object({
+  x: z.number().int().min(0).max(2000),
+  y: z.number().int().min(0).max(2000),
+  w: z.number().int().min(8).max(2000),
+  h: z.number().int().min(8).max(2000),
+  kind: z.enum(['crate', 'barrel', 'wall']).optional(),
+});
+
 const roomCreateSchema = z.object({
   name: z.string().min(1).max(100),
   mode: z.enum(['FREE', 'CASUAL', 'STAKE']),
@@ -35,6 +43,7 @@ const roomCreateSchema = z.object({
   matchDurationS: z.number().int().min(30).max(600).optional(),
   winCondition: z.enum(['KILL', 'BEST_OF_3', 'TIMEOUT_HP']).optional(),
   minBalanceRequired: z.boolean().optional(),
+  obstacles: z.array(obstacleSchema).max(32).optional(),
 });
 type RoomCreate = z.infer<typeof roomCreateSchema>;
 

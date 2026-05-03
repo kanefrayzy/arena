@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../../shared/api/client';
 import { Modal, PrimaryButton, GhostButton, Field, inputCls } from '../components/Modal';
 import { Badge } from '../components/Badge';
+import { MapEditor, type Obstacle } from '../components/MapEditor';
 
 interface Room {
   id: number;
@@ -13,6 +14,7 @@ interface Room {
   winCondition: string;
   isActive: boolean;
   minBalanceRequired: boolean;
+  obstacles?: Obstacle[];
 }
 
 const MODES = ['FREE', 'CASUAL', 'STAKE'];
@@ -155,6 +157,7 @@ function RoomFormModal({
   const [stakeUsd, setStakeUsd] = useState('');
   const [commissionPct, setCommissionPct] = useState('15');
   const [matchDurationS, setMatchDurationS] = useState('180');
+  const [obstacles, setObstacles] = useState<Obstacle[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -164,12 +167,14 @@ function RoomFormModal({
       setStakeUsd(room.stakeUsd ?? '');
       setCommissionPct(String(room.commissionPct));
       setMatchDurationS(String(room.matchDurationS));
+      setObstacles(room.obstacles ?? []);
     } else if (creating) {
       setName('');
       setMode('STAKE');
       setStakeUsd('1');
       setCommissionPct('15');
       setMatchDurationS('180');
+      setObstacles([]);
     }
   }, [room, creating]);
 
@@ -183,6 +188,7 @@ function RoomFormModal({
         stakeUsd: stake,
         commissionPct: parseInt(commissionPct, 10),
         matchDurationS: parseInt(matchDurationS, 10),
+        obstacles,
       };
       if (room) {
         await api.patch(`/admin/rooms/${room.id}`, payload);
@@ -202,6 +208,7 @@ function RoomFormModal({
       open={open}
       onClose={onClose}
       title={room ? `Edit room · ${room.name}` : 'New room'}
+      width="max-w-3xl"
       footer={
         <>
           <GhostButton onClick={onClose}>Cancel</GhostButton>
@@ -211,28 +218,36 @@ function RoomFormModal({
         </>
       }
     >
-      <Field label="Name">
-        <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-      </Field>
-      <Field label="Mode">
-        <select className={inputCls} value={mode} onChange={(e) => setMode(e.target.value)}>
-          {MODES.map((m) => (
-            <option key={m} value={m}>{m}</option>
-          ))}
-        </select>
-      </Field>
-      {mode !== 'FREE' && (
-        <Field label="Stake (USD)">
-          <input className={inputCls} value={stakeUsd} onChange={(e) => setStakeUsd(e.target.value)} placeholder="1.00" />
-        </Field>
-      )}
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Commission %">
-          <input className={inputCls} value={commissionPct} onChange={(e) => setCommissionPct(e.target.value)} type="number" min={0} max={50} />
-        </Field>
-        <Field label="Duration (s)">
-          <input className={inputCls} value={matchDurationS} onChange={(e) => setMatchDurationS(e.target.value)} type="number" min={30} />
-        </Field>
+      <div className="grid gap-4 md:grid-cols-[1fr_300px]">
+        <div className="space-y-3">
+          <Field label="Name">
+            <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          </Field>
+          <Field label="Mode">
+            <select className={inputCls} value={mode} onChange={(e) => setMode(e.target.value)}>
+              {MODES.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </Field>
+          {mode !== 'FREE' && (
+            <Field label="Stake (USD)">
+              <input className={inputCls} value={stakeUsd} onChange={(e) => setStakeUsd(e.target.value)} placeholder="1.00" />
+            </Field>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Commission %">
+              <input className={inputCls} value={commissionPct} onChange={(e) => setCommissionPct(e.target.value)} type="number" min={0} max={50} />
+            </Field>
+            <Field label="Duration (s)">
+              <input className={inputCls} value={matchDurationS} onChange={(e) => setMatchDurationS(e.target.value)} type="number" min={30} />
+            </Field>
+          </div>
+        </div>
+        <div className="md:w-full">
+          <div className="mb-1 text-xs font-medium uppercase tracking-wider text-white/50">Карта</div>
+          <MapEditor value={obstacles} onChange={setObstacles} />
+        </div>
       </div>
     </Modal>
   );

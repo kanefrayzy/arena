@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { MatchClient } from '../../shared/ws/match';
 import { Controls } from '../../shared/game/controls';
 import { PixiRenderer } from '../../shared/game/pixi-renderer';
+import * as sfx from '../../shared/game/audio';
 import type { SWelcome, SSnapshot, SMatchEnd } from '@arena/protocol';
 
 interface MatchInfo {
@@ -27,6 +28,8 @@ export function MatchPage() {
   const [cdMs, setCdMs] = useState(0);
   const [remainingMs, setRemainingMs] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState<number | null>(null); // 3,2,1,0(FIGHT) or null
+  const inputBlockedRef = useRef(true);
 
   useEffect(() => {
     if (!matchId) return;
@@ -50,6 +53,14 @@ export function MatchPage() {
       const host = hostRef.current;
       if (!host) return;
       renderer = new PixiRenderer(host);
+      renderer.onEvent = (ev) => {
+        if (ev.kind === 'shoot') sfx.shoot();
+        else if (ev.kind === 'hit') {
+          if (ev.obstacle) sfx.hitObstacle();
+          else sfx.hit();
+        } else if (ev.kind === 'death') sfx.death();
+        else if (ev.kind === 'ability') sfx.dash();
+      };
       await renderer.init();
       if (cancelled) return;
 
@@ -62,6 +73,23 @@ export function MatchPage() {
           setWelcome(msg);
           renderer!.setIdentity(msg);
           youId = msg.you.id;
+          // VS countdown: 3-2-1-FIGHT, then unlock input
+          inputBlockedRef.current = true;
+          setCountdown(3);
+          sfx.unlockAudio();
+          sfx.matchStartTick(3);
+          let n = 3;
+          const tick = window.setInterval(() => {
+            n -= 1;
+            setCountdown(n);
+            if (n > 0) sfx.matchStartTick(n);
+            else {
+              sfx.matchStartTick(0);
+              inputBlockedRef.current = false;
+              window.setTimeout(() => setCountdown(null), 700);
+              window.clearInterval(tick);
+            }
+          }, 1000);
         },
         onSnapshot: (msg: SSnapshot) => {
           renderer!.applySnapshot(msg);
@@ -72,6 +100,8 @@ export function MatchPage() {
           setRemainingMs(msg.remainingMs);
         },
         onMatchEnd: (msg: SMatchEnd) => {
+          const youWon = msg.winnerId === youId;
+          sfx.matchEnd(youWon);
           sessionStorage.setItem(`result:${matchId}`, JSON.stringify({ ...msg, opponent: info.opponent }));
           nav(`/result/${matchId}`);
         },
@@ -97,6 +127,13 @@ export function MatchPage() {
         const W = host.clientWidth;
         const H = host.clientHeight;
         const inp = controls.read(1, W, H);
+        if (inputBlockedRef.current) {
+          // Suppress controls during countdown.
+          inp.dx = 0;
+          inp.dy = 0;
+          inp.fire = false;
+          inp.ability = false;
+        }
         client!.sendInput(inp);
       }, 33);
     };
@@ -139,6 +176,23 @@ export function MatchPage() {
         </div>
         {error && <div className="mt-3 text-center text-red-400">{error}</div>}
       </div>
+      {/* VS countdown overlay */}
+      {countdown !== null && welcome && (
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="flex items-center gap-6 text-2xl md:text-4xl font-bold mb-6">
+            <span className="text-[#4ad29a]">{welcome.you.username}</span>
+            <span className="text-white/60 text-3xl md:text-5xl">VS</span>
+            <span className="text-[#e06c75]">{welcome.opponent.username}</span>
+          </div>
+          <div
+            key={countdown}
+            className="text-7xl md:text-9xl font-black animate-[ping_0.7s_ease-out] tabular-nums"
+            style={{ color: countdown === 0 ? '#f5c518' : '#fff' }}
+          >
+            {countdown === 0 ? 'FIGHT!' : countdown}
+          </div>
+        </div>
+      )}
       {/* Mobile controls */}
       <div className="pointer-events-auto absolute bottom-6 left-6 h-32 w-32 rounded-full bg-white/10 backdrop-blur md:opacity-30" ref={joyRef as never} />
       <button

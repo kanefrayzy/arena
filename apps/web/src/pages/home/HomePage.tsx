@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../../shared/api/client';
 import { useAuth, type Me } from '../../shared/store/auth';
+import * as sfx from '../../shared/game/audio';
 
 interface Wallet {
   balance: string;
@@ -44,6 +45,8 @@ export function HomePage() {
 
   const play = async () => {
     setError(null);
+    sfx.unlockAudio();
+    sfx.uiClick();
     // Balance / stake validation happens server-side on /queue/join (called from QueuePage).
     // We just navigate; QueuePage surfaces INSUFFICIENT_BALANCE.
     const params = new URLSearchParams({ mode });
