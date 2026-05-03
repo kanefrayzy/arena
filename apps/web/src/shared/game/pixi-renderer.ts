@@ -168,10 +168,13 @@ export class PixiRenderer {
   private async loadSprites(): Promise<void> {
     let registry: Record<string, SpriteRegistryRow> = {};
     try {
-      const res = await fetch('/api/sprites', { credentials: 'include' });
+      const res = await fetch('/api/sprites', { credentials: 'include', cache: 'no-store' });
       if (res.ok) registry = (await res.json()) as Record<string, SpriteRegistryRow>;
-    } catch {
-      /* offline / no sprites — use fallbacks */
+      // eslint-disable-next-line no-console
+      console.info('[renderer] /api/sprites →', Object.keys(registry));
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[renderer] failed to fetch /api/sprites', e);
     }
     const tasks: Array<Promise<void>> = [];
     for (const slot of Object.keys(registry) as SpriteSlot[]) {
@@ -181,9 +184,12 @@ export class PixiRenderer {
         Assets.load<Texture>(row.url)
           .then((tex) => {
             this.textures[slot] = tex;
+            // eslint-disable-next-line no-console
+            console.info('[renderer] loaded', slot, '=', tex.width, '×', tex.height, 'from', row.url);
           })
-          .catch(() => {
-            /* ignore */
+          .catch((err) => {
+            // eslint-disable-next-line no-console
+            console.warn('[renderer] FAILED to load', slot, row.url, err);
           }),
       );
     }

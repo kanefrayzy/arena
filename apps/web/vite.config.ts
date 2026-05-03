@@ -36,6 +36,11 @@ export default defineConfig({
             handler: 'NetworkOnly',
           },
           {
+            urlPattern: /\/uploads\//,
+            handler: 'NetworkFirst',
+            options: { cacheName: 'arena-uploads', expiration: { maxEntries: 50, maxAgeSeconds: 24 * 60 * 60 } },
+          },
+          {
             urlPattern: /\.(?:js|css)$/,
             handler: 'StaleWhileRevalidate',
             options: { cacheName: 'arena-static' },
@@ -61,6 +66,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': { target: 'http://localhost:3000', changeOrigin: true },
+      '/uploads': { target: 'http://localhost:3000', changeOrigin: true },
       '/ws/lobby': { target: 'ws://localhost:3000', ws: true },
       '/ws/match': { target: 'ws://localhost:3001', ws: true },
     },

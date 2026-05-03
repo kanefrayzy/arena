@@ -11,6 +11,11 @@
 		reverse_proxy api:3000
 	}
 
+	@uploads path /uploads/*
+	handle @uploads {
+		reverse_proxy api:3000
+	}
+
 	@lobby path /ws/lobby /ws/lobby/*
 	handle @lobby {
 		reverse_proxy api:3000
