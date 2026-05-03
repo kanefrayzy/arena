@@ -35,20 +35,32 @@ export class AllExceptionsFilter implements ExceptionFilter {
     } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       const r = exception.getResponse();
-      const message =
-        typeof r === 'string'
-          ? r
-          : ((r as { message?: string | string[] }).message ?? exception.message);
-      body = {
-        error: {
-          code: this.codeFromStatus(status),
-          message: Array.isArray(message) ? message.join('; ') : message,
-        },
-      };
+
+      // Caller passed a string → use as message.
+      // Caller passed an object → preserve `code`, `message`, `details` if present.
+      let code = this.codeFromStatus(status);
+      let message: string = exception.message;
+      let details: unknown;
+
+      if (typeof r === 'string') {
+        message = r;
+      } else if (r && typeof r === 'object') {
+        const obj = r as { code?: string; message?: string | string[]; details?: unknown };
+        if (typeof obj.code === 'string') code = obj.code;
+        if (obj.message !== undefined) {
+          message = Array.isArray(obj.message) ? obj.message.join('; ') : String(obj.message);
+        }
+        if (obj.details !== undefined) details = obj.details;
+      }
+
+      body = { error: { code, message, ...(details !== undefined ? { details } : {}) } };
     } else if (exception instanceof Error) {
       this.logger.error(`${req.method} ${req.url} :: ${exception.message}`, exception.stack);
     }
 
+    if (status >= 400 && status < 500) {
+      this.logger.warn(`${req.method} ${req.url} → ${status} ${body.error.code}: ${body.error.message}`);
+    }
     res.status(status).json(body);
   }
 
