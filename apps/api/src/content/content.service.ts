@@ -15,7 +15,23 @@ export interface CharacterDto {
   abilityType: string | null;
   abilityCooldownS: number;
   isActive: boolean;
+  spriteUrl: string | null;
+  priceUsd: string | null;
+  isStarter: boolean;
   skins: SkinDto[];
+}
+
+export interface WeaponDto {
+  id: number;
+  slug: string;
+  name: string;
+  spriteUrl: string | null;
+  damage: number;
+  fireRateMs: number;
+  bulletSpeed: number;
+  priceUsd: string | null;
+  isStarter: boolean;
+  isActive: boolean;
 }
 
 export interface SkinDto {
@@ -37,6 +53,7 @@ export interface InventoryDto {
 export interface LoadoutDto {
   characterId: number;
   skinId: number;
+  weaponId: number | null;
 }
 
 @Injectable()
@@ -65,8 +82,27 @@ export class ContentService {
       abilityType: c.abilityType,
       abilityCooldownS: c.abilityCooldownS,
       isActive: c.isActive,
+      spriteUrl: c.spriteUrl ?? null,
+      priceUsd: c.priceUsd ? c.priceUsd.toString() : null,
+      isStarter: c.isStarter,
       skins: c.skins.filter((s) => s.isActive).map((s) => this.toSkinDto(s)),
     }));
+  }
+
+  async listWeapons(): Promise<WeaponDto[]> {
+    const rows = await this.prisma.weapon.findMany({
+      where: { isActive: true },
+      orderBy: { id: 'asc' },
+    });
+    return rows.map((w) => this.toWeaponDto(w));
+  }
+
+  async getWeapon(weaponId: number) {
+    return this.prisma.weapon.findUnique({ where: { id: weaponId } });
+  }
+
+  async getCharacterById(characterId: number) {
+    return this.prisma.character.findUnique({ where: { id: characterId } });
   }
 
   async listShop(): Promise<SkinDto[]> {
@@ -97,30 +133,100 @@ export class ContentService {
     };
   }
 
+  /** Owned characters and weapons. */
+  async getMyShopInventory(userId: number) {
+    const [chars, weapons] = await Promise.all([
+      this.prisma.userCharacter.findMany({ where: { userId } }),
+      this.prisma.userWeapon.findMany({ where: { userId } }),
+    ]);
+    return {
+      characters: chars.map((r) => ({ characterId: r.characterId, acquiredAt: r.acquiredAt.toISOString() })),
+      weapons: weapons.map((r) => ({ weaponId: r.weaponId, acquiredAt: r.acquiredAt.toISOString() })),
+    };
+  }
+
   async getLoadout(userId: number): Promise<LoadoutDto> {
     const row = await this.prisma.userLoadout.findUnique({ where: { userId } });
-    if (row) return { characterId: row.characterId, skinId: row.skinId };
+    if (row) return { characterId: row.characterId, skinId: row.skinId, weaponId: row.weaponId ?? null };
     // Fallback: ensure a starter loadout (first owned default skin).
     const fallback = await this.ensureStarterAndLoadout(userId);
     return fallback;
   }
 
-  async setLoadout(userId: number, characterId: number, skinId: number): Promise<LoadoutDto> {
-    const skin = await this.prisma.skin.findUnique({ where: { id: skinId } });
-    if (!skin || !skin.isActive) throw new NotFoundException({ code: 'SKIN_NOT_FOUND', message: 'skin not found' });
-    if (skin.characterId !== characterId) {
-      throw new BadRequestException({ code: 'SKIN_MISMATCH', message: 'skin does not belong to character' });
+  async setLoadout(userId: number, characterId: number, skinId: number, weaponId?: number): Promise<LoadoutDto> {
+    return this.setLoadoutPartial(userId, { characterId, skinId, weaponId });
+  }
+
+  /**
+   * Partial loadout update: any field omitted is kept from existing loadout.
+   * Only validates fields that change vs current loadout.
+   */
+  async setLoadoutPartial(
+    userId: number,
+    patch: { characterId?: number; skinId?: number; weaponId?: number | null },
+  ): Promise<LoadoutDto> {
+    const current = await this.prisma.userLoadout.findUnique({ where: { userId } });
+    let baseChar: number;
+    let baseSkin: number;
+    let baseWeapon: number | null;
+    if (current) {
+      baseChar = current.characterId;
+      baseSkin = current.skinId;
+      baseWeapon = current.weaponId ?? null;
+    } else {
+      // No loadout yet — bootstrap with starter, then apply patch.
+      const starter = await this.ensureStarterAndLoadout(userId);
+      baseChar = starter.characterId;
+      baseSkin = starter.skinId;
+      baseWeapon = starter.weaponId ?? null;
     }
-    const owned = await this.prisma.userInventory.findUnique({
-      where: { userId_skinId: { userId, skinId } },
-    });
-    if (!owned) throw new BadRequestException({ code: 'NOT_OWNED', message: 'skin not in inventory' });
+
+    const characterId = patch.characterId ?? baseChar;
+    const skinId = patch.skinId ?? baseSkin;
+    const weaponId = patch.weaponId !== undefined ? patch.weaponId : baseWeapon;
+
+    const charChanged = characterId !== baseChar;
+    const skinChanged = skinId !== baseSkin;
+    const weaponChanged = weaponId !== baseWeapon;
+
+    if (charChanged || skinChanged) {
+      const skin = await this.prisma.skin.findUnique({ where: { id: skinId } });
+      if (!skin || !skin.isActive) throw new NotFoundException({ code: 'SKIN_NOT_FOUND', message: 'skin not found' });
+      if (skin.characterId !== characterId) {
+        throw new BadRequestException({ code: 'SKIN_MISMATCH', message: 'skin does not belong to character' });
+      }
+      const owned = await this.prisma.userInventory.findUnique({
+        where: { userId_skinId: { userId, skinId } },
+      });
+      if (!owned) throw new BadRequestException({ code: 'NOT_OWNED', message: 'skin not in inventory' });
+
+      const char = await this.prisma.character.findUnique({ where: { id: characterId } });
+      if (!char || !char.isActive) throw new NotFoundException({ code: 'CHARACTER_NOT_FOUND', message: 'character not found' });
+      if (!char.isStarter) {
+        const ownedC = await this.prisma.userCharacter.findUnique({
+          where: { userId_characterId: { userId, characterId } },
+        });
+        if (!ownedC) throw new BadRequestException({ code: 'CHARACTER_NOT_OWNED', message: 'character not owned' });
+      }
+    }
+
+    if (weaponChanged && weaponId != null) {
+      const weapon = await this.prisma.weapon.findUnique({ where: { id: weaponId } });
+      if (!weapon || !weapon.isActive) throw new NotFoundException({ code: 'WEAPON_NOT_FOUND', message: 'weapon not found' });
+      if (!weapon.isStarter) {
+        const ownedW = await this.prisma.userWeapon.findUnique({
+          where: { userId_weaponId: { userId, weaponId } },
+        });
+        if (!ownedW) throw new BadRequestException({ code: 'WEAPON_NOT_OWNED', message: 'weapon not owned' });
+      }
+    }
+
     await this.prisma.userLoadout.upsert({
       where: { userId },
-      create: { userId, characterId, skinId },
-      update: { characterId, skinId },
+      create: { userId, characterId, skinId, weaponId },
+      update: { characterId, skinId, weaponId },
     });
-    return { characterId, skinId };
+    return { characterId, skinId, weaponId };
   }
 
   /**
@@ -128,10 +234,23 @@ export class ContentService {
    * and sets a default loadout if missing.
    */
   async ensureStarterAndLoadout(userId: number): Promise<LoadoutDto> {
-    const defaults = await this.prisma.skin.findMany({
-      where: { isActive: true, name: 'Default', priceUsd: null },
-      orderBy: { characterId: 'asc' },
+    // Only grant Default skins for STARTER characters.
+    const starterChars = await this.prisma.character.findMany({
+      where: { isActive: true, isStarter: true },
+      select: { id: true },
     });
+    const starterCharIds = starterChars.map((c) => c.id);
+    const defaults = starterCharIds.length === 0
+      ? []
+      : await this.prisma.skin.findMany({
+          where: {
+            isActive: true,
+            name: 'Default',
+            priceUsd: null,
+            characterId: { in: starterCharIds },
+          },
+          orderBy: { characterId: 'asc' },
+        });
     for (const skin of defaults) {
       try {
         await this.prisma.userInventory.create({
@@ -143,14 +262,19 @@ export class ContentService {
       }
     }
     const existing = await this.prisma.userLoadout.findUnique({ where: { userId } });
-    if (existing) return { characterId: existing.characterId, skinId: existing.skinId };
+    if (existing) return { characterId: existing.characterId, skinId: existing.skinId, weaponId: existing.weaponId ?? null };
     const first = defaults[0];
-    if (!first) throw new Error('no default skins seeded');
+    if (!first) throw new Error('no starter character seeded');
+    // Pick a starter weapon if any exists.
+    const starterWeapon = await this.prisma.weapon.findFirst({
+      where: { isActive: true, isStarter: true },
+      orderBy: { id: 'asc' },
+    });
     await this.prisma.userLoadout.create({
-      data: { userId, characterId: first.characterId, skinId: first.id },
+      data: { userId, characterId: first.characterId, skinId: first.id, weaponId: starterWeapon?.id ?? null },
     });
     this.log.log(`granted ${defaults.length} starter skins to user ${userId}`);
-    return { characterId: first.characterId, skinId: first.id };
+    return { characterId: first.characterId, skinId: first.id, weaponId: starterWeapon?.id ?? null };
   }
 
   /** Buy a skin with USD balance. Throws ALREADY_OWNED if duplicate. */
@@ -211,6 +335,156 @@ export class ContentService {
 
     const updated = await this.prisma.wallet.findUnique({ where: { userId } });
     return { skinId, balance: updated ? updated.balance.toString() : '0' };
+  }
+
+  /** List characters available in shop (any active, non-starter). priceUsd may be null = not yet for sale. */
+  async listShopCharacters(): Promise<CharacterDto[]> {
+    const all = await this.listCharacters();
+    return all.filter((c) => !c.isStarter);
+  }
+
+  /** List weapons available in shop (any active, non-starter). */
+  async listShopWeapons(): Promise<WeaponDto[]> {
+    const rows = await this.prisma.weapon.findMany({
+      where: { isActive: true, isStarter: false },
+      orderBy: { id: 'asc' },
+    });
+    return rows.map((w) => this.toWeaponDto(w));
+  }
+
+  async buyCharacter(userId: number, characterId: number): Promise<{ characterId: number; balance: string }> {
+    const char = await this.prisma.character.findUnique({ where: { id: characterId } });
+    if (!char || !char.isActive) throw new NotFoundException({ code: 'CHARACTER_NOT_FOUND', message: 'character not found' });
+    const price = char.priceUsd == null ? new Prisma.Decimal(0) : new Prisma.Decimal(char.priceUsd.toString());
+    const isFree = price.lte(0);
+
+    const owned = await this.prisma.userCharacter.findUnique({
+      where: { userId_characterId: { userId, characterId } },
+    });
+    if (owned) throw new BadRequestException({ code: 'ALREADY_OWNED', message: 'character already owned' });
+
+    if (!isFree) {
+      const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
+      if (!wallet || new Prisma.Decimal(wallet.balance.toString()).lt(price)) {
+        throw new BadRequestException({ code: 'INSUFFICIENT_BALANCE', message: 'not enough balance' });
+      }
+    }
+
+    if (!isFree) {
+      const idemUser = `shop:character:${userId}:${characterId}`;
+      const idemSystem = `shop:character:${userId}:${characterId}:system`;
+      await this.ledger.record({
+        userId,
+        amount: price.negated(),
+        type: 'SHOP_PURCHASE',
+        refType: 'character',
+        refId: String(characterId),
+        idempotencyKey: idemUser,
+        meta: { characterId, name: char.name },
+      });
+      try {
+        await this.ledger.record({
+          userId: SYSTEM_USER_ID,
+          amount: price,
+          type: 'SHOP_PURCHASE',
+          refType: 'character',
+          refId: String(characterId),
+          idempotencyKey: idemSystem,
+          meta: { fromUserId: userId, characterId },
+        });
+      } catch (err) {
+        if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== 'P2002') throw err;
+      }
+    }
+    try {
+      await this.prisma.userCharacter.create({
+        data: { userId, characterId, source: isFree ? 'free' : 'purchase' },
+      });
+    } catch (err) {
+      if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== 'P2002') throw err;
+    }
+
+    const updated = await this.prisma.wallet.findUnique({ where: { userId } });
+    return { characterId, balance: updated ? updated.balance.toString() : '0' };
+  }
+
+  async buyWeapon(userId: number, weaponId: number): Promise<{ weaponId: number; balance: string }> {
+    const weapon = await this.prisma.weapon.findUnique({ where: { id: weaponId } });
+    if (!weapon || !weapon.isActive) throw new NotFoundException({ code: 'WEAPON_NOT_FOUND', message: 'weapon not found' });
+    const price = weapon.priceUsd == null ? new Prisma.Decimal(0) : new Prisma.Decimal(weapon.priceUsd.toString());
+    const isFree = price.lte(0);
+
+    const owned = await this.prisma.userWeapon.findUnique({
+      where: { userId_weaponId: { userId, weaponId } },
+    });
+    if (owned) throw new BadRequestException({ code: 'ALREADY_OWNED', message: 'weapon already owned' });
+
+    if (!isFree) {
+      const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
+      if (!wallet || new Prisma.Decimal(wallet.balance.toString()).lt(price)) {
+        throw new BadRequestException({ code: 'INSUFFICIENT_BALANCE', message: 'not enough balance' });
+      }
+      const idemUser = `shop:weapon:${userId}:${weaponId}`;
+      const idemSystem = `shop:weapon:${userId}:${weaponId}:system`;
+      await this.ledger.record({
+        userId,
+        amount: price.negated(),
+        type: 'SHOP_PURCHASE',
+        refType: 'weapon',
+        refId: String(weaponId),
+        idempotencyKey: idemUser,
+        meta: { weaponId, name: weapon.name },
+      });
+      try {
+        await this.ledger.record({
+          userId: SYSTEM_USER_ID,
+          amount: price,
+          type: 'SHOP_PURCHASE',
+          refType: 'weapon',
+          refId: String(weaponId),
+          idempotencyKey: idemSystem,
+          meta: { fromUserId: userId, weaponId },
+        });
+      } catch (err) {
+        if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== 'P2002') throw err;
+      }
+    }
+    try {
+      await this.prisma.userWeapon.create({
+        data: { userId, weaponId, source: isFree ? 'free' : 'purchase' },
+      });
+    } catch (err) {
+      if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== 'P2002') throw err;
+    }
+
+    const updated = await this.prisma.wallet.findUnique({ where: { userId } });
+    return { weaponId, balance: updated ? updated.balance.toString() : '0' };
+  }
+
+  private toWeaponDto(w: {
+    id: number;
+    slug: string;
+    name: string;
+    spriteUrl: string | null;
+    damage: number;
+    fireRateMs: number;
+    bulletSpeed: number;
+    priceUsd: Prisma.Decimal | null;
+    isStarter: boolean;
+    isActive: boolean;
+  }): WeaponDto {
+    return {
+      id: w.id,
+      slug: w.slug,
+      name: w.name,
+      spriteUrl: w.spriteUrl ?? null,
+      damage: w.damage,
+      fireRateMs: w.fireRateMs,
+      bulletSpeed: w.bulletSpeed,
+      priceUsd: w.priceUsd ? w.priceUsd.toString() : null,
+      isStarter: w.isStarter,
+      isActive: w.isActive,
+    };
   }
 
   private toSkinDto(s: {

@@ -83,6 +83,8 @@ export class PixiRenderer {
   private snapTime = 0;
   private cameraScale = 1;
   private textures: Partial<Record<SpriteSlot, Texture>> = {};
+  private playerCharTex = new Map<number, Texture>();
+  private playerWeaponTex = new Map<number, Texture>();
   private flipY = false;
   private flipDecided = false;
   onEvent: FxCallback | null = null;
@@ -125,6 +127,55 @@ export class PixiRenderer {
     this.oppId = welcome.opponent.id;
     this.obstacles = welcome.obstacles ?? [];
     this.drawObstacles();
+    // Per-player sprites (admin-uploaded, sent via welcome).
+    for (const wp of [welcome.you, welcome.opponent]) {
+      if (wp.characterSpriteUrl) {
+        Assets.load<Texture>(wp.characterSpriteUrl)
+          .then((tex) => {
+            this.playerCharTex.set(wp.id, tex);
+            this.swapInPlayerSprites(wp.id);
+          })
+          .catch(() => undefined);
+      }
+      if (wp.weaponSpriteUrl) {
+        Assets.load<Texture>(wp.weaponSpriteUrl)
+          .then((tex) => {
+            this.playerWeaponTex.set(wp.id, tex);
+            this.swapInPlayerSprites(wp.id);
+          })
+          .catch(() => undefined);
+      }
+    }
+  }
+
+  /** Replace body/weapon sprites of an existing player view with per-player textures. */
+  private swapInPlayerSprites(playerId: number): void {
+    const view = this.players.get(playerId);
+    if (!view) return;
+    const charTex = this.playerCharTex.get(playerId);
+    if (charTex) {
+      if (view.bodySprite) {
+        try { view.bodySprite.destroy(); } catch { /* ignore */ }
+      }
+      const sp = new Sprite(charTex);
+      sp.anchor.set(0.5);
+      const scale = (PLAYER_RADIUS * 2.2) / Math.max(charTex.width, charTex.height);
+      sp.scale.set(scale);
+      view.root.addChildAt(sp, 1); // above bodyG (index 0)
+      view.bodySprite = sp;
+    }
+    const weapTex = this.playerWeaponTex.get(playerId);
+    if (weapTex) {
+      if (view.weaponSprite) {
+        try { view.weaponSprite.destroy(); } catch { /* ignore */ }
+      }
+      const sp = new Sprite(weapTex);
+      sp.anchor.set(0.2, 0.5);
+      const wscale = (PLAYER_RADIUS * 1.4) / Math.max(weapTex.height, 1);
+      sp.scale.set(wscale);
+      view.root.addChild(sp);
+      view.weaponSprite = sp;
+    }
   }
 
   getYouCanvasPos(): { x: number; y: number } | null {
@@ -259,8 +310,8 @@ export class PixiRenderer {
       const weaponG = new Graphics();
       const hpG = new Graphics();
       root.addChild(bodyG);
-      // Optional sprite-based body
-      const bodyTex = this.textures[isYou ? 'player_you' : 'player_opp'];
+      // Optional sprite-based body — prefer per-player texture, fall back to slot.
+      const bodyTex = this.playerCharTex.get(p.id) ?? this.textures[isYou ? 'player_you' : 'player_opp'];
       let bodySprite: Sprite | null = null;
       if (bodyTex) {
         bodySprite = new Sprite(bodyTex);
@@ -272,7 +323,7 @@ export class PixiRenderer {
       }
       // Weapon
       root.addChild(weaponG);
-      const weaponTex = this.textures.weapon;
+      const weaponTex = this.playerWeaponTex.get(p.id) ?? this.textures.weapon;
       let weaponSprite: Sprite | null = null;
       if (weaponTex) {
         weaponSprite = new Sprite(weaponTex);

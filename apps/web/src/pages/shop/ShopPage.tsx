@@ -3,51 +3,52 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../../shared/api/client';
 
-interface Skin {
+interface ShopCharacter {
   id: number;
-  characterId: number;
   name: string;
-  rarity: string;
-  tint: string | null;
+  spriteUrl: string | null;
   priceUsd: string | null;
 }
-
-interface Character {
+interface ShopWeapon {
   id: number;
   name: string;
+  spriteUrl: string | null;
+  priceUsd: string | null;
 }
-
-interface Inventory {
-  skins: Array<{ skinId: number; characterId: number }>;
+interface MyInventory {
+  characters: Array<{ characterId: number }>;
+  weapons: Array<{ weaponId: number }>;
 }
-
 interface Wallet {
   balance: string;
   locked: string;
 }
 
+type Tab = 'characters' | 'weapons';
+
 export function ShopPage() {
   const { t } = useTranslation();
   const nav = useNavigate();
-  const [items, setItems] = useState<Skin[]>([]);
-  const [characters, setCharacters] = useState<Character[]>([]);
-  const [inventory, setInventory] = useState<Inventory | null>(null);
+  const [tab, setTab] = useState<Tab>('characters');
+  const [chars, setChars] = useState<ShopCharacter[]>([]);
+  const [weapons, setWeapons] = useState<ShopWeapon[]>([]);
+  const [inv, setInv] = useState<MyInventory>({ characters: [], weapons: [] });
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<number | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
   async function reload() {
     try {
-      const [shop, chars, inv, w] = await Promise.all([
-        api.get<{ items: Skin[] }>('/shop/skins'),
-        api.get<{ characters: Character[] }>('/characters'),
-        api.get<Inventory>('/inventory/me'),
+      const [c, w, i, walletRes] = await Promise.all([
+        api.get<{ items: ShopCharacter[] }>('/shop/characters'),
+        api.get<{ items: ShopWeapon[] }>('/shop/weapons'),
+        api.get<MyInventory & { skins?: unknown }>('/inventory/me'),
         api.get<Wallet>('/wallet'),
       ]);
-      setItems(shop.items);
-      setCharacters(chars.characters);
-      setInventory(inv);
-      setWallet(w);
+      setChars(c.items);
+      setWeapons(w.items);
+      setInv({ characters: i.characters ?? [], weapons: i.weapons ?? [] });
+      setWallet(walletRes);
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) nav('/');
       else setError(e instanceof Error ? e.message : 'load failed');
@@ -58,25 +59,20 @@ export function ShopPage() {
     void reload();
   }, [nav]);
 
-  const ownedSkinIds = useMemo(
-    () => new Set((inventory?.skins ?? []).map((s) => s.skinId)),
-    [inventory],
-  );
-  const charNameById = useMemo(
-    () => new Map(characters.map((c) => [c.id, c.name])),
-    [characters],
-  );
+  const ownedChars = useMemo(() => new Set(inv.characters.map((c) => c.characterId)), [inv]);
+  const ownedWeapons = useMemo(() => new Set(inv.weapons.map((w) => w.weaponId)), [inv]);
+  const balance = parseFloat(wallet?.balance ?? '0');
 
-  async function buy(skinId: number) {
+  async function buy(kind: 'character' | 'weapon', id: number) {
     setError(null);
-    setBusyId(skinId);
+    setBusy(`${kind}:${id}`);
     try {
-      await api.post(`/shop/skins/${skinId}/buy`);
+      await api.post(`/shop/${kind === 'character' ? 'characters' : 'weapons'}/${id}/buy`);
       await reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'buy failed');
     } finally {
-      setBusyId(null);
+      setBusy(null);
     }
   }
 
@@ -97,59 +93,133 @@ export function ShopPage() {
         </div>
       </header>
 
+      <div className="flex gap-2 border-b border-white/10 px-5 py-2">
+        {(['characters', 'weapons'] as Tab[]).map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setTab(k)}
+            className={
+              'rounded-lg px-4 py-1.5 text-sm transition ' +
+              (tab === k ? 'bg-accent text-bg' : 'bg-surface text-white/70 hover:bg-white/10')
+            }
+          >
+            {t(`shop.tab.${k}`)}
+          </button>
+        ))}
+      </div>
+
       <main className="flex flex-1 flex-col gap-3 overflow-y-auto px-5 py-4">
-        {items.length === 0 && (
-          <div className="text-center text-sm text-white/50">{t('shop.empty')}</div>
+        {tab === 'characters' && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {chars.length === 0 && (
+              <div className="col-span-full rounded-lg bg-surface px-4 py-8 text-center text-sm text-white/60">
+                {t('shop.empty.characters')}
+              </div>
+            )}
+            {chars.map((c) => {
+              const owned = ownedChars.has(c.id);
+              const price = parseFloat(c.priceUsd ?? '0');
+              const canAfford = balance >= price;
+              const k = `character:${c.id}`;
+              return (
+                <Card
+                  key={c.id}
+                  name={c.name}
+                  spriteUrl={c.spriteUrl}
+                  priceUsd={c.priceUsd}
+                  owned={owned}
+                  canAfford={canAfford}
+                  busy={busy === k}
+                  onBuy={() => void buy('character', c.id)}
+                  ownedLabel={t('shop.owned')}
+                  buyLabel={t('shop.buy')}
+                />
+              );
+            })}
+          </div>
         )}
-        {items.map((s) => {
-          const owned = ownedSkinIds.has(s.id);
-          const charName = charNameById.get(s.characterId) ?? `#${s.characterId}`;
-          const canAfford = parseFloat(wallet?.balance ?? '0') >= parseFloat(s.priceUsd ?? 'Infinity');
-          return (
-            <div
-              key={s.id}
-              className="flex items-center gap-3 rounded-lg bg-surface px-3 py-3"
-            >
-              <div
-                className="h-12 w-12 shrink-0 rounded-full"
-                style={{ backgroundColor: s.tint ?? '#888' }}
-              />
-              <div className="flex-1">
-                <div className="text-sm font-semibold">
-                  {s.name}{' '}
-                  <span className="text-xs font-normal text-white/40">— {charName}</span>
-                </div>
-                <div className="text-xs text-white/50">{s.rarity}</div>
+
+        {tab === 'weapons' && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {weapons.length === 0 && (
+              <div className="col-span-full rounded-lg bg-surface px-4 py-8 text-center text-sm text-white/60">
+                {t('shop.empty.weapons')}
               </div>
-              <div className="text-right">
-                {s.priceUsd != null && (
-                  <div className="font-mono text-sm">${s.priceUsd}</div>
-                )}
-                {owned ? (
-                  <button
-                    type="button"
-                    disabled
-                    className="mt-1 rounded bg-white/10 px-3 py-1 text-xs text-white/50"
-                  >
-                    {t('shop.owned')}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={busyId === s.id || !canAfford}
-                    onClick={() => void buy(s.id)}
-                    className="mt-1 rounded bg-accent px-3 py-1 text-xs font-semibold text-bg disabled:opacity-50"
-                  >
-                    {busyId === s.id ? '…' : t('shop.buy')}
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
+            )}
+            {weapons.map((w) => {
+              const owned = ownedWeapons.has(w.id);
+              const price = parseFloat(w.priceUsd ?? '0');
+              const canAfford = balance >= price;
+              const k = `weapon:${w.id}`;
+              return (
+                <Card
+                  key={w.id}
+                  name={w.name}
+                  spriteUrl={w.spriteUrl}
+                  priceUsd={w.priceUsd}
+                  owned={owned}
+                  canAfford={canAfford}
+                  busy={busy === k}
+                  onBuy={() => void buy('weapon', w.id)}
+                  ownedLabel={t('shop.owned')}
+                  buyLabel={t('shop.buy')}
+                />
+              );
+            })}
+          </div>
+        )}
 
         {error && <div className="text-center text-sm text-red-400">{error}</div>}
       </main>
+    </div>
+  );
+}
+
+interface CardProps {
+  name: string;
+  spriteUrl: string | null;
+  priceUsd: string | null;
+  owned: boolean;
+  canAfford: boolean;
+  busy: boolean;
+  onBuy: () => void;
+  ownedLabel: string;
+  buyLabel: string;
+}
+
+function Card(p: CardProps) {
+  const priceNum = p.priceUsd != null && p.priceUsd !== '' ? parseFloat(p.priceUsd) : 0;
+  const isFree = priceNum <= 0;
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-lg bg-surface p-3">
+      <div className="flex h-24 w-24 items-center justify-center rounded-md bg-black/40">
+        {p.spriteUrl ? (
+          <img src={p.spriteUrl} alt={p.name} className="max-h-full max-w-full object-contain" />
+        ) : (
+          <div className="h-12 w-12 rounded-full bg-white/20" />
+        )}
+      </div>
+      <div className="text-sm font-semibold">{p.name}</div>
+      <div className="font-mono text-sm">{isFree ? 'FREE' : `$${p.priceUsd}`}</div>
+      {p.owned ? (
+        <button
+          type="button"
+          disabled
+          className="w-full rounded bg-white/10 px-3 py-1.5 text-xs text-white/50"
+        >
+          {p.ownedLabel}
+        </button>
+      ) : (
+        <button
+          type="button"
+          disabled={p.busy || (!isFree && !p.canAfford)}
+          onClick={p.onBuy}
+          className="w-full rounded bg-accent px-3 py-1.5 text-xs font-semibold text-bg disabled:opacity-50"
+        >
+          {p.busy ? '…' : p.buyLabel}
+        </button>
+      )}
     </div>
   );
 }

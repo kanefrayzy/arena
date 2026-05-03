@@ -98,38 +98,21 @@ async function main() {
   }
 
   // ---------- Characters ----------
+  // Single base character — the only one that's a starter (granted to everyone).
+  // All other content is created via Admin → Content.
   const characters = [
     {
-      slug: 'shooter',
-      name: 'Стрелок',
+      slug: 'default',
+      name: 'Боец',
       baseHp: 100,
       baseSpeed: 220,
       baseDamage: 18,
       weaponType: 'ranged',
       abilityType: 'dash',
       abilityCooldownS: 8,
+      isStarter: true,
     },
-    {
-      slug: 'tank',
-      name: 'Танк',
-      baseHp: 160,
-      baseSpeed: 160,
-      baseDamage: 22,
-      weaponType: 'rocket',
-      abilityType: 'shield',
-      abilityCooldownS: 12,
-    },
-    {
-      slug: 'scout',
-      name: 'Скаут',
-      baseHp: 80,
-      baseSpeed: 270,
-      baseDamage: 14,
-      weaponType: 'shotgun',
-      abilityType: 'dash',
-      abilityCooldownS: 6,
-    },
-  ];
+  ] as const;
 
   const charBySlug = new Map<string, number>();
   for (const c of characters) {
@@ -141,14 +124,27 @@ async function main() {
     charBySlug.set(c.slug, row.id);
   }
 
-  // ---------- Skins (1 base + 1 cosmetic per character = 6) ----------
+  // Deactivate any pre-existing characters not in the list (legacy seeds: shooter/tank/scout).
+  const keepSlugs = characters.map((c) => c.slug);
+  await prisma.character.updateMany({
+    where: { slug: { notIn: keepSlugs } },
+    data: { isActive: false, isStarter: false },
+  });
+  // And deactivate skins of removed characters.
+  const removed = await prisma.character.findMany({
+    where: { isActive: false },
+    select: { id: true },
+  });
+  if (removed.length > 0) {
+    await prisma.skin.updateMany({
+      where: { characterId: { in: removed.map((r) => r.id) } },
+      data: { isActive: false },
+    });
+  }
+
+  // ---------- Skins (only one Default skin for the base character) ----------
   const skins = [
-    { slug: 'shooter-default', characterSlug: 'shooter', name: 'Default', rarity: 'common', tint: '#ffffff' },
-    { slug: 'shooter-neon', characterSlug: 'shooter', name: 'Neon', rarity: 'rare', tint: '#00e0ff', priceUsd: '5' },
-    { slug: 'tank-default', characterSlug: 'tank', name: 'Default', rarity: 'common', tint: '#ffffff' },
-    { slug: 'tank-gold', characterSlug: 'tank', name: 'Gold', rarity: 'epic', tint: '#ffcc33', priceUsd: '15' },
-    { slug: 'scout-default', characterSlug: 'scout', name: 'Default', rarity: 'common', tint: '#ffffff' },
-    { slug: 'scout-shadow', characterSlug: 'scout', name: 'Shadow', rarity: 'rare', tint: '#444466', priceUsd: '5' },
+    { slug: 'default-default', characterSlug: 'default', name: 'Default', rarity: 'common', tint: '#ffffff' },
   ] as const;
 
   for (const s of skins) {
@@ -170,6 +166,35 @@ async function main() {
         },
       });
     }
+  }
+
+  // ---------- Weapons ----------
+  const weapons = [
+    { slug: 'pistol', name: 'Pistol', isStarter: true, damage: 18, fireRateMs: 280, bulletSpeed: 600, priceUsd: null },
+    { slug: 'smg', name: 'SMG', isStarter: false, damage: 12, fireRateMs: 120, bulletSpeed: 720, priceUsd: '5' },
+    { slug: 'rifle', name: 'Rifle', isStarter: false, damage: 28, fireRateMs: 360, bulletSpeed: 800, priceUsd: '10' },
+  ] as const;
+  for (const w of weapons) {
+    await prisma.weapon.upsert({
+      where: { slug: w.slug },
+      update: {
+        name: w.name,
+        isStarter: w.isStarter,
+        damage: w.damage,
+        fireRateMs: w.fireRateMs,
+        bulletSpeed: w.bulletSpeed,
+        priceUsd: w.priceUsd,
+      },
+      create: {
+        slug: w.slug,
+        name: w.name,
+        isStarter: w.isStarter,
+        damage: w.damage,
+        fireRateMs: w.fireRateMs,
+        bulletSpeed: w.bulletSpeed,
+        priceUsd: w.priceUsd,
+      },
+    });
   }
 
   // ---------- Rooms ----------
@@ -221,9 +246,29 @@ async function main() {
   // ---------- Backfill: starter skins + loadout for ALL existing users ----------
   const allUsers = await prisma.user.findMany({ select: { id: true } });
   const defaultSkins = await prisma.skin.findMany({
-    where: { isActive: true, name: 'Default', priceUsd: null },
+    where: {
+      isActive: true,
+      name: 'Default',
+      priceUsd: null,
+      character: { isStarter: true, isActive: true },
+    },
     orderBy: { characterId: 'asc' },
   });
+
+  // Cleanup: revoke 'starter' inventory entries for skins that no longer belong to a starter character.
+  const cleanup = await prisma.userInventory.deleteMany({
+    where: {
+      source: 'starter',
+      skin: {
+        OR: [
+          { isActive: false },
+          { character: { isStarter: false } },
+          { character: { isActive: false } },
+        ],
+      },
+    },
+  });
+  if (cleanup.count > 0) console.log(`✓ revoked ${cleanup.count} stale starter skins`);
   if (defaultSkins.length > 0) {
     let granted = 0;
     let loadouts = 0;
@@ -252,6 +297,18 @@ async function main() {
           data: { userId: u.id, characterId: first.characterId, skinId: first.id },
         });
         loadouts++;
+      } else {
+        // If existing loadout points to a now-inactive skin/char, redirect to the base default.
+        const skin = await prisma.skin.findUnique({ where: { id: existing.skinId } });
+        const char = await prisma.character.findUnique({ where: { id: existing.characterId } });
+        if (!skin?.isActive || !char?.isActive) {
+          const first = defaultSkins[0];
+          await prisma.userLoadout.update({
+            where: { userId: u.id },
+            data: { characterId: first.characterId, skinId: first.id },
+          });
+          loadouts++;
+        }
       }
     }
     console.log(`✓ starter backfill: ${granted} skins granted, ${loadouts} loadouts created`);

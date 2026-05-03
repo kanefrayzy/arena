@@ -52,4 +52,26 @@ export const api = {
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
   delete: <T>(path: string) => request<T>('DELETE', path),
+  postForm: async <T>(path: string, form: FormData): Promise<T> => {
+    const res = await fetch(`${BASE}${path}`, {
+      method: 'POST',
+      credentials: 'include',
+      body: form,
+    });
+    if (res.status === 204) return undefined as T;
+    const json = (await res.json().catch(() => null)) as
+      | { error?: { code: string; message: string; details?: unknown } }
+      | T
+      | null;
+    if (!res.ok) {
+      const err = (json as { error?: { code: string; message: string } })?.error;
+      throw new ApiError(
+        res.status,
+        err?.code ?? 'ERROR',
+        err?.message ?? `HTTP ${res.status}`,
+        (json as { error?: { details?: unknown } })?.error?.details,
+      );
+    }
+    return json as T;
+  },
 };

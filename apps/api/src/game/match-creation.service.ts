@@ -108,6 +108,8 @@ export class MatchCreationService {
         characterId: p1Loadout.characterId,
         skinId: p1Loadout.skinId,
         stats: p1Loadout.stats,
+        characterSpriteUrl: p1Loadout.characterSpriteUrl,
+        weaponSpriteUrl: p1Loadout.weaponSpriteUrl,
       },
       player2: {
         userId: player2.id,
@@ -115,6 +117,8 @@ export class MatchCreationService {
         characterId: p2Loadout.characterId,
         skinId: p2Loadout.skinId,
         stats: p2Loadout.stats,
+        characterSpriteUrl: p2Loadout.characterSpriteUrl,
+        weaponSpriteUrl: p2Loadout.weaponSpriteUrl,
       },
     };
     await this.redis.client.set(`match:seed:${match.id}`, JSON.stringify(seed), 'EX', 600);
@@ -158,10 +162,13 @@ export class MatchCreationService {
         this.prisma.skin.findUnique({ where: { id: loadout.skinId } }),
       ]);
       if (char && skin) {
+        const weapon = await this.resolveWeapon(loadout.weaponId ?? null);
         return {
           characterId: char.id,
           skinId: skin.id,
-          stats: this.computeStats(char, skin),
+          stats: this.computeStats(char, skin, weapon),
+          characterSpriteUrl: char.spriteUrl ?? null,
+          weaponSpriteUrl: weapon?.spriteUrl ?? null,
         };
       }
     }
@@ -177,21 +184,38 @@ export class MatchCreationService {
     if (!char) throw new Error('no active character seeded');
     const skin = char.skins[0];
     if (!skin) throw new Error(`character ${char.id} has no skin`);
+    const weapon = await this.resolveWeapon(null);
     return {
       characterId: char.id,
       skinId: skin.id,
-      stats: this.computeStats(char, skin),
+      stats: this.computeStats(char, skin, weapon),
+      characterSpriteUrl: char.spriteUrl ?? null,
+      weaponSpriteUrl: weapon?.spriteUrl ?? null,
     };
+  }
+
+  private async resolveWeapon(weaponId: number | null) {
+    if (weaponId != null) {
+      const w = await this.prisma.weapon.findUnique({ where: { id: weaponId } });
+      if (w && w.isActive) return w;
+    }
+    return this.prisma.weapon.findFirst({
+      where: { isActive: true, isStarter: true },
+      orderBy: { id: 'asc' },
+    });
   }
 
   private computeStats(
     char: { baseHp: number; baseSpeed: number; baseDamage: number; weaponType: string; abilityType: string | null; abilityCooldownS: number },
     skin: { statModifiers: unknown },
+    weapon: { damage: number; fireRateMs: number; bulletSpeed: number } | null,
   ): EffectiveStats {
     const mods = (skin.statModifiers ?? {}) as { hpPct?: number; speedPct?: number; damagePct?: number };
     const hp = Math.max(1, Math.round(char.baseHp * (1 + (mods.hpPct ?? 0) / 100)));
     const speed = Math.max(50, char.baseSpeed * (1 + (mods.speedPct ?? 0) / 100));
-    const damage = Math.max(1, Math.round(char.baseDamage * (1 + (mods.damagePct ?? 0) / 100)));
+    // Weapon damage takes priority when present.
+    const baseDmg = weapon ? weapon.damage : char.baseDamage;
+    const damage = Math.max(1, Math.round(baseDmg * (1 + (mods.damagePct ?? 0) / 100)));
     return {
       hp,
       speed,
@@ -216,4 +240,6 @@ interface ResolvedLoadout {
   characterId: number;
   skinId: number;
   stats: EffectiveStats;
+  characterSpriteUrl: string | null;
+  weaponSpriteUrl: string | null;
 }

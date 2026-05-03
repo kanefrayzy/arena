@@ -60,9 +60,15 @@
   "loadout.damage": "Damage",
   "loadout.ability": "Ability",
   "loadout.equipped": "In use",
-  "shop.title": "Skin shop",
+  "loadout.weapon": "Weapon",
+  "loadout.no_weapons": "No weapons available — buy one in the Shop",
+  "shop.title": "Shop",
   "shop.back": "Back",
   "shop.buy": "Buy",
   "shop.owned": "Owned",
-  "shop.empty": "No skins available"
+  "shop.empty": "Nothing here yet",
+  "shop.empty.characters": "No characters for sale yet. Admin can add them in Admin → Content.",
+  "shop.empty.weapons": "No weapons for sale yet. Admin can add them in Admin → Content.",
+  "shop.tab.characters": "Characters",
+  "shop.tab.weapons": "Weapons"
 }

@@ -9,8 +9,14 @@ import {
   Post,
   Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { join, extname } from 'path';
 import type { Request } from 'express';
 import { z } from 'zod';
 import { AdminService } from './admin.service';
@@ -18,6 +24,28 @@ import { AdminGuard } from './admin.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { JwtPayload } from '../auth/jwt.strategy';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
+
+type UploadedMulterFile = {
+  buffer: Buffer;
+  mimetype: string;
+  originalname: string;
+  size: number;
+};
+
+const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']);
+const MAX_BYTES = 1024 * 1024;
+function extFromMime(m: string): string {
+  if (m === 'image/png') return '.png';
+  if (m === 'image/jpeg') return '.jpg';
+  if (m === 'image/webp') return '.webp';
+  if (m === 'image/svg+xml') return '.svg';
+  return '.bin';
+}
+function ensureDir(sub: string): string {
+  const dir = join(process.cwd(), 'uploads', sub);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  return dir;
+}
 
 const adjustBalanceSchema = z.object({
   amountUsd: z.string().regex(/^-?\d+(\.\d{1,8})?$/),
@@ -59,11 +87,29 @@ const charCreateSchema = z.object({
   weaponType: z.string().min(1).max(50),
   abilityType: z.string().max(50).nullable().optional(),
   abilityCooldownS: z.number().int().min(0).max(120).optional(),
+  spriteUrl: z.string().max(500).nullable().optional(),
+  priceUsd: z.string().regex(/^\d+(\.\d{1,8})?$/).nullable().optional(),
+  isStarter: z.boolean().optional(),
 });
 type CharCreate = z.infer<typeof charCreateSchema>;
 
 const charPatchSchema = charCreateSchema.partial().extend({ isActive: z.boolean().optional() }).omit({ slug: true });
 type CharPatch = z.infer<typeof charPatchSchema>;
+
+const weaponCreateSchema = z.object({
+  slug: z.string().min(1).max(50),
+  name: z.string().min(1).max(100),
+  spriteUrl: z.string().max(500).nullable().optional(),
+  damage: z.number().int().min(0).max(10000).optional(),
+  fireRateMs: z.number().int().min(50).max(10000).optional(),
+  bulletSpeed: z.number().min(50).max(5000).optional(),
+  priceUsd: z.string().regex(/^\d+(\.\d{1,8})?$/).nullable().optional(),
+  isStarter: z.boolean().optional(),
+});
+type WeaponCreate = z.infer<typeof weaponCreateSchema>;
+
+const weaponPatchSchema = weaponCreateSchema.partial().extend({ isActive: z.boolean().optional() }).omit({ slug: true });
+type WeaponPatch = z.infer<typeof weaponPatchSchema>;
 
 const skinCreateSchema = z.object({
   characterId: z.number().int().positive(),
@@ -162,6 +208,11 @@ export class AdminController {
   }
 
   // Characters CRUD
+  @Get('characters')
+  listCharacters() {
+    return this.admin.listCharacters();
+  }
+
   @Post('characters')
   createCharacter(@Body(new ZodValidationPipe(charCreateSchema)) body: CharCreate) {
     return this.admin.createCharacter(body);
@@ -173,6 +224,64 @@ export class AdminController {
     @Body(new ZodValidationPipe(charPatchSchema)) body: CharPatch,
   ) {
     return this.admin.updateCharacter(id, body);
+  }
+
+  @Post('characters/:id/sprite')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_BYTES } }))
+  async uploadCharacterSprite(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: UploadedMulterFile | undefined,
+  ) {
+    if (!file) throw new BadRequestException('no file');
+    if (!ALLOWED_MIME.has(file.mimetype)) throw new BadRequestException('unsupported mime');
+    if (file.size > MAX_BYTES) throw new BadRequestException('file too large');
+    const ext = extname(file.originalname).toLowerCase() || extFromMime(file.mimetype);
+    const filename = `char_${id}${ext}`;
+    writeFileSync(join(ensureDir('characters'), filename), file.buffer);
+    const url = `/uploads/characters/${filename}?v=${Date.now()}`;
+    await this.admin.updateCharacter(id, { spriteUrl: url });
+    return { ok: true, url };
+  }
+
+  // Weapons CRUD
+  @Get('weapons')
+  listWeapons() {
+    return this.admin.listWeapons();
+  }
+
+  @Post('weapons')
+  createWeapon(@Body(new ZodValidationPipe(weaponCreateSchema)) body: WeaponCreate) {
+    return this.admin.createWeapon(body);
+  }
+
+  @Patch('weapons/:id')
+  patchWeapon(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ZodValidationPipe(weaponPatchSchema)) body: WeaponPatch,
+  ) {
+    return this.admin.updateWeapon(id, body);
+  }
+
+  @Delete('weapons/:id')
+  deleteWeapon(@Param('id', ParseIntPipe) id: number) {
+    return this.admin.deleteWeapon(id);
+  }
+
+  @Post('weapons/:id/sprite')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_BYTES } }))
+  async uploadWeaponSprite(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: UploadedMulterFile | undefined,
+  ) {
+    if (!file) throw new BadRequestException('no file');
+    if (!ALLOWED_MIME.has(file.mimetype)) throw new BadRequestException('unsupported mime');
+    if (file.size > MAX_BYTES) throw new BadRequestException('file too large');
+    const ext = extname(file.originalname).toLowerCase() || extFromMime(file.mimetype);
+    const filename = `weapon_${id}${ext}`;
+    writeFileSync(join(ensureDir('weapons'), filename), file.buffer);
+    const url = `/uploads/weapons/${filename}?v=${Date.now()}`;
+    await this.admin.updateWeapon(id, { spriteUrl: url });
+    return { ok: true, url };
   }
 
   // Skins CRUD

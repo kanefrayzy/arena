@@ -61,6 +61,10 @@ export interface WelcomePlayer {
   stats: PlayerStats;
   spawnX: number;
   spawnY: number;
+  /** Per-character avatar URL (set by admin in CMS), nullable. */
+  characterSpriteUrl?: string | null;
+  /** Per-weapon sprite URL (resolved from loadout/starter), nullable. */
+  weaponSpriteUrl?: string | null;
 }
 
 export interface Obstacle {

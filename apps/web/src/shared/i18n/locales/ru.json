@@ -60,9 +60,15 @@
   "loadout.damage": "Урон",
   "loadout.ability": "Способн.",
   "loadout.equipped": "В бой",
-  "shop.title": "Магазин скинов",
+  "loadout.weapon": "Оружие",
+  "loadout.no_weapons": "Нет доступного оружия — купите в Магазине",
+  "shop.title": "Магазин",
   "shop.back": "Назад",
   "shop.buy": "Купить",
   "shop.owned": "Куплено",
-  "shop.empty": "Скины скоро появятся"
+  "shop.empty": "Пока ничего нет",
+  "shop.empty.characters": "Персонажей в продаже пока нет. Администратор может добавить их в разделе Admin → Content.",
+  "shop.empty.weapons": "Оружия в продаже пока нет. Администратор может добавить его в разделе Admin → Content.",
+  "shop.tab.characters": "Персонажи",
+  "shop.tab.weapons": "Оружие"
 }

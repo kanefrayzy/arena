@@ -63,6 +63,8 @@ model User {
 
   wallet        Wallet?
   inventory     UserInventory[]
+  characters    UserCharacter[]
+  weapons       UserWeapon[]
   loadout       UserLoadout?
   ledger        Ledger[]
   stats         UserStats?
@@ -148,8 +150,32 @@ model Character {
   abilityType      String?
   abilityCooldownS Int     @default(10)
   isActive         Boolean @default(true)
+  // Per-character sprite shown in shop and game (uploaded by admin).
+  spriteUrl        String?
+  // Price in USD; null = free / starter.
+  priceUsd         Decimal? @db.Decimal(20, 8)
+  // Auto-granted to every user (no purchase required).
+  isStarter        Boolean @default(false)
 
   skins Skin[]
+  owners UserCharacter[]
+}
+
+model Weapon {
+  id          Int      @id @default(autoincrement())
+  slug        String   @unique
+  name        String
+  spriteUrl   String?
+  // Gameplay tunables (currently informational; sim uses constants).
+  damage      Int      @default(20)
+  fireRateMs  Int      @default(300)
+  bulletSpeed Float    @default(600)
+  priceUsd    Decimal? @db.Decimal(20, 8)
+  isStarter   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  owners UserWeapon[]
 }
 
 model Skin {
@@ -178,10 +204,38 @@ model UserInventory {
   @@unique([userId, skinId])
 }
 
+model UserCharacter {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  characterId Int
+  source      String   @default("shop")
+  acquiredAt  DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id])
+  character Character @relation(fields: [characterId], references: [id])
+
+  @@unique([userId, characterId])
+}
+
+model UserWeapon {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  weaponId   Int
+  source     String   @default("shop")
+  acquiredAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  weapon Weapon @relation(fields: [weaponId], references: [id])
+
+  @@unique([userId, weaponId])
+}
+
 model UserLoadout {
   userId      Int  @id
   characterId Int
   skinId      Int
+  // Equipped weapon (nullable for legacy users; resolved to a starter at load time).
+  weaponId    Int?
   user        User @relation(fields: [userId], references: [id])
 }
 

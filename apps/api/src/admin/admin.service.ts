@@ -216,6 +216,9 @@ export class AdminService {
     weaponType: string;
     abilityType?: string | null;
     abilityCooldownS?: number;
+    spriteUrl?: string | null;
+    priceUsd?: string | null;
+    isStarter?: boolean;
   }) {
     return this.prisma.character.create({
       data: {
@@ -227,6 +230,9 @@ export class AdminService {
         weaponType: input.weaponType,
         abilityType: input.abilityType ?? null,
         abilityCooldownS: input.abilityCooldownS ?? 10,
+        spriteUrl: input.spriteUrl ?? null,
+        priceUsd: input.priceUsd ? new Prisma.Decimal(input.priceUsd) : null,
+        isStarter: input.isStarter ?? false,
       },
     });
   }
@@ -240,8 +246,82 @@ export class AdminService {
     abilityType: string | null;
     abilityCooldownS: number;
     isActive: boolean;
+    spriteUrl: string | null;
+    priceUsd: string | null;
+    isStarter: boolean;
   }>) {
-    return this.prisma.character.update({ where: { id }, data: patch });
+    const data: Prisma.CharacterUpdateInput = {};
+    if (patch.name !== undefined) data.name = patch.name;
+    if (patch.baseHp !== undefined) data.baseHp = patch.baseHp;
+    if (patch.baseSpeed !== undefined) data.baseSpeed = patch.baseSpeed;
+    if (patch.baseDamage !== undefined) data.baseDamage = patch.baseDamage;
+    if (patch.weaponType !== undefined) data.weaponType = patch.weaponType;
+    if (patch.abilityType !== undefined) data.abilityType = patch.abilityType;
+    if (patch.abilityCooldownS !== undefined) data.abilityCooldownS = patch.abilityCooldownS;
+    if (patch.isActive !== undefined) data.isActive = patch.isActive;
+    if (patch.spriteUrl !== undefined) data.spriteUrl = patch.spriteUrl;
+    if (patch.priceUsd !== undefined) data.priceUsd = patch.priceUsd ? new Prisma.Decimal(patch.priceUsd) : null;
+    if (patch.isStarter !== undefined) data.isStarter = patch.isStarter;
+    return this.prisma.character.update({ where: { id }, data });
+  }
+
+  async listCharacters() {
+    return this.prisma.character.findMany({ orderBy: { id: 'asc' } });
+  }
+
+  // ───────────────────────── Weapons ─────────────────────────
+  async listWeapons() {
+    return this.prisma.weapon.findMany({ orderBy: { id: 'asc' } });
+  }
+
+  async createWeapon(input: {
+    slug: string;
+    name: string;
+    spriteUrl?: string | null;
+    damage?: number;
+    fireRateMs?: number;
+    bulletSpeed?: number;
+    priceUsd?: string | null;
+    isStarter?: boolean;
+  }) {
+    return this.prisma.weapon.create({
+      data: {
+        slug: input.slug,
+        name: input.name,
+        spriteUrl: input.spriteUrl ?? null,
+        damage: input.damage ?? 20,
+        fireRateMs: input.fireRateMs ?? 300,
+        bulletSpeed: input.bulletSpeed ?? 600,
+        priceUsd: input.priceUsd ? new Prisma.Decimal(input.priceUsd) : null,
+        isStarter: input.isStarter ?? false,
+      },
+    });
+  }
+
+  async updateWeapon(id: number, patch: Partial<{
+    name: string;
+    spriteUrl: string | null;
+    damage: number;
+    fireRateMs: number;
+    bulletSpeed: number;
+    priceUsd: string | null;
+    isStarter: boolean;
+    isActive: boolean;
+  }>) {
+    const data: Prisma.WeaponUpdateInput = {};
+    if (patch.name !== undefined) data.name = patch.name;
+    if (patch.spriteUrl !== undefined) data.spriteUrl = patch.spriteUrl;
+    if (patch.damage !== undefined) data.damage = patch.damage;
+    if (patch.fireRateMs !== undefined) data.fireRateMs = patch.fireRateMs;
+    if (patch.bulletSpeed !== undefined) data.bulletSpeed = patch.bulletSpeed;
+    if (patch.priceUsd !== undefined) data.priceUsd = patch.priceUsd ? new Prisma.Decimal(patch.priceUsd) : null;
+    if (patch.isStarter !== undefined) data.isStarter = patch.isStarter;
+    if (patch.isActive !== undefined) data.isActive = patch.isActive;
+    return this.prisma.weapon.update({ where: { id }, data });
+  }
+
+  async deleteWeapon(id: number) {
+    return this.prisma.weapon.update({ where: { id }, data: { isActive: false } });
   }
 
   // ───────────────────────── Skins ─────────────────────────

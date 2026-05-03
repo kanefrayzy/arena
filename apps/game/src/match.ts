@@ -27,6 +27,10 @@ export interface MatchPlayerSeed {
   characterId: number;
   skinId: number;
   stats?: PlayerStatsSeed;
+  /** Per-character sprite URL (uploaded by admin). */
+  characterSpriteUrl?: string | null;
+  /** Per-weapon sprite URL (resolved from loadout/starter). */
+  weaponSpriteUrl?: string | null;
 }
 
 export interface PlayerStatsSeed {
@@ -353,20 +357,30 @@ export class Match {
     if (!me || !opp) return;
     const c = this.clients.get(toUserId);
     if (!c) return;
-    const buildPlayerInfo = (p: PlayerState): WelcomePlayer => ({
-      id: p.id,
-      characterId: p.characterId,
-      skinId: p.skinId,
-      username: p.username,
-      stats: {
-        hp: p.maxHp,
-        speed: p.speed,
-        damage: p.damage,
-        abilityCooldownS: p.abilityCooldownMs / 1000,
-      },
-      spawnX: p.x,
-      spawnY: p.y,
-    });
+    const seedFor = (id: number): MatchPlayerSeed | null => {
+      if (this.seed.player1.userId === id) return this.seed.player1;
+      if (this.seed.player2.userId === id) return this.seed.player2;
+      return null;
+    };
+    const buildPlayerInfo = (p: PlayerState): WelcomePlayer => {
+      const s = seedFor(p.id);
+      return {
+        id: p.id,
+        characterId: p.characterId,
+        skinId: p.skinId,
+        username: p.username,
+        stats: {
+          hp: p.maxHp,
+          speed: p.speed,
+          damage: p.damage,
+          abilityCooldownS: p.abilityCooldownMs / 1000,
+        },
+        spawnX: p.x,
+        spawnY: p.y,
+        characterSpriteUrl: s?.characterSpriteUrl ?? null,
+        weaponSpriteUrl: s?.weaponSpriteUrl ?? null,
+      };
+    };
     const welcome: SWelcome = {
       matchId: this.matchId,
       you: buildPlayerInfo(me),
