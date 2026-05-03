@@ -1,5 +1,8 @@
 import { BadRequestException, Body, Controller, Logger, Post, UseGuards } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { BOT_USER_ID } from '@arena/shared';
 import { PrismaService } from '../common/prisma/prisma.module';
+import { LedgerService } from '../wallet/ledger.service';
 import { HmacGuard } from './hmac.guard';
 
 interface MatchStartBody {
@@ -26,7 +29,10 @@ interface MatchAbortBody {
 @UseGuards(HmacGuard)
 export class InternalMatchController {
   private readonly log = new Logger('InternalMatch');
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ledger: LedgerService,
+  ) {}
 
   @Post('start')
   async start(@Body() body: MatchStartBody): Promise<{ ok: true }> {
@@ -42,6 +48,10 @@ export class InternalMatchController {
   @Post('finish')
   async finish(@Body() body: MatchFinishBody): Promise<{ ok: true }> {
     if (!body.matchId) throw new BadRequestException('matchId required');
+
+    const match = await this.prisma.match.findUnique({ where: { id: body.matchId } });
+    if (!match) throw new BadRequestException('match not found');
+
     await this.prisma.match.update({
       where: { id: body.matchId },
       data: {
@@ -53,6 +63,38 @@ export class InternalMatchController {
         meta: { reason: body.reason, score: body.score },
       },
     });
+
+    // ── Money settlement ──
+    const stake = new Prisma.Decimal(match.stakeUsd.toString());
+    const isBotMatch = match.player1Id === BOT_USER_ID || match.player2Id === BOT_USER_ID;
+
+    if (!isBotMatch && stake.gt(0)) {
+      const room = await this.prisma.room.findUnique({ where: { id: match.roomId } });
+      const commissionPct = room?.commissionPct ?? 0;
+
+      // Always unlock first (refund both sides their locked stake).
+      await this.ledger.unlockStake(body.matchId, match.player1Id, stake);
+      await this.ledger.unlockStake(body.matchId, match.player2Id, stake);
+
+      if (body.winnerId && (body.winnerId === match.player1Id || body.winnerId === match.player2Id)) {
+        const loserId = body.winnerId === match.player1Id ? match.player2Id : match.player1Id;
+        await this.ledger.settleMatch({
+          matchId: body.matchId,
+          winnerId: body.winnerId,
+          loserId,
+          stake,
+          commissionPct,
+        });
+      } else {
+        await this.ledger.settleDraw(body.matchId);
+      }
+
+      const inv = await this.ledger.verifyInvariant(body.matchId);
+      if (!inv.ok) {
+        this.log.error(`INVARIANT VIOLATION match ${body.matchId}: sum=${inv.sum}`);
+      }
+    }
+
     this.log.log(`match ${body.matchId} finished (winner=${body.winnerId}, reason=${body.reason})`);
     return { ok: true };
   }
@@ -60,6 +102,9 @@ export class InternalMatchController {
   @Post('abort')
   async abort(@Body() body: MatchAbortBody): Promise<{ ok: true }> {
     if (!body.matchId) throw new BadRequestException('matchId required');
+
+    const match = await this.prisma.match.findUnique({ where: { id: body.matchId } });
+
     await this.prisma.match.update({
       where: { id: body.matchId },
       data: {
@@ -68,6 +113,18 @@ export class InternalMatchController {
         meta: { reason: body.reason },
       },
     });
+
+    // Full refund on abort.
+    if (match) {
+      const stake = new Prisma.Decimal(match.stakeUsd.toString());
+      const isBotMatch = match.player1Id === BOT_USER_ID || match.player2Id === BOT_USER_ID;
+      if (!isBotMatch && stake.gt(0)) {
+        await this.ledger.unlockStake(body.matchId, match.player1Id, stake);
+        await this.ledger.unlockStake(body.matchId, match.player2Id, stake);
+        await this.ledger.settleCancel(body.matchId);
+      }
+    }
+
     this.log.warn(`match ${body.matchId} aborted: ${body.reason}`);
     return { ok: true };
   }

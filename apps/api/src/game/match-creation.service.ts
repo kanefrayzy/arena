@@ -4,6 +4,7 @@ import { BOT_USER_ID } from '@arena/shared';
 import { PrismaService } from '../common/prisma/prisma.module';
 import { RedisService } from '../common/redis/redis.module';
 import { MatchTokenService } from './match-token.service';
+import { LedgerService } from '../wallet/ledger.service';
 
 export const MATCH_FOUND_CHANNEL = 'lobby:match-found';
 
@@ -31,6 +32,7 @@ export class MatchCreationService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly tokens: MatchTokenService,
+    private readonly ledger: LedgerService,
   ) {}
 
   async createMatch(input: CreateMatchInput): Promise<{ matchId: string }> {
@@ -61,6 +63,25 @@ export class MatchCreationService {
         meta,
       },
     });
+
+    // Lock stakes for paid (non-bot) matches. Bot matches are always free.
+    const stake = input.room.stakeUsd ? String(input.room.stakeUsd) : '0';
+    if (!input.isBotMatch && Number(stake) > 0) {
+      try {
+        await this.ledger.lockStake(match.id, input.player1Id, stake);
+        await this.ledger.lockStake(match.id, input.player2Id, stake);
+      } catch (err) {
+        this.log.error(`stake lock failed for match ${match.id}: ${(err as Error).message}`);
+        // Roll back: try to unlock whichever side already locked, mark match cancelled.
+        await this.ledger.unlockStake(match.id, input.player1Id, stake).catch(() => undefined);
+        await this.ledger.unlockStake(match.id, input.player2Id, stake).catch(() => undefined);
+        await this.prisma.match.update({
+          where: { id: match.id },
+          data: { status: 'CANCELLED', meta: { ...meta, cancelReason: 'insufficient_balance' } },
+        });
+        throw err;
+      }
+    }
 
     const player1 = await this.prisma.user.findUniqueOrThrow({
       where: { id: input.player1Id },

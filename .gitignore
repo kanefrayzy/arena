@@ -44,3 +44,8 @@ replays/
 
 # prisma
 prisma/migrations/dev.db*
+alice.txt
+bob.txt
+nul.json
+*.txt
+

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { api } from '../../shared/api/client';
+import { api, ApiError } from '../../shared/api/client';
 import { lobby, type LobbyEvent } from '../../shared/ws/lobby';
 
 export function QueuePage() {
@@ -9,6 +9,7 @@ export function QueuePage() {
   const nav = useNavigate();
   const [params] = useSearchParams();
   const mode = (params.get('mode') ?? 'free') as 'free' | 'casual' | 'stake';
+  const roomId = params.get('roomId');
   const [waitMs, setWaitMs] = useState(0);
   const [longWait, setLongWait] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,9 +20,15 @@ export function QueuePage() {
       joinedRef.current = true;
       void (async () => {
         try {
-          await api.post('/queue/join', { mode });
+          const body: { mode: string; roomId?: number } = { mode };
+          if (roomId) body.roomId = Number(roomId);
+          await api.post('/queue/join', body);
         } catch (e) {
-          setError((e as Error).message);
+          if (e instanceof ApiError && e.code === 'INSUFFICIENT_BALANCE') {
+            setError(t('queue.insufficient_balance'));
+          } else {
+            setError((e as Error).message);
+          }
         }
       })();
     }

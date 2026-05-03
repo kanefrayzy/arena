@@ -7,6 +7,7 @@ import { HealthController } from './common/health.controller';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { WalletModule } from './wallet/wallet.module';
+import { PaymentsModule } from './payments/payments.module';
 import { GameModule } from './game/game.module';
 
 @Module({
@@ -18,6 +19,7 @@ import { GameModule } from './game/game.module';
     AuthModule,
     UsersModule,
     WalletModule,
+    PaymentsModule,
     GameModule,
   ],
   controllers: [HealthController],
