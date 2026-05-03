@@ -124,14 +124,16 @@ export function LoadoutPage() {
               >
                 <div className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-2xl bg-black/40">
                   <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/10 to-transparent" />
+                  {/* ground shadow */}
+                  <div className="absolute bottom-2 left-1/2 h-2 w-16 -translate-x-1/2 rounded-full bg-black/50 blur-sm" />
                   {c.spriteUrl ? (
                     <img
                       src={c.spriteUrl}
                       alt={c.name}
-                      className="relative max-h-full max-w-full object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]"
+                      className="relative max-h-[88%] max-w-[88%] animate-float object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]"
                     />
                   ) : (
-                    <div className="relative h-14 w-14 rounded-full bg-white/20" />
+                    <div className="relative h-14 w-14 animate-float rounded-full bg-white/20" />
                   )}
                 </div>
                 <div className="font-display text-base uppercase tracking-wide text-white">

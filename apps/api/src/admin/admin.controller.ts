@@ -88,6 +88,7 @@ const charCreateSchema = z.object({
   abilityType: z.string().max(50).nullable().optional(),
   abilityCooldownS: z.number().int().min(0).max(120).optional(),
   spriteUrl: z.string().max(500).nullable().optional(),
+  battleSpriteUrl: z.string().max(500).nullable().optional(),
   priceUsd: z.string().regex(/^\d+(\.\d{1,8})?$/).nullable().optional(),
   isStarter: z.boolean().optional(),
 });
@@ -240,6 +241,23 @@ export class AdminController {
     writeFileSync(join(ensureDir('characters'), filename), file.buffer);
     const url = `/uploads/characters/${filename}?v=${Date.now()}`;
     await this.admin.updateCharacter(id, { spriteUrl: url });
+    return { ok: true, url };
+  }
+
+  @Post('characters/:id/battle-sprite')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_BYTES } }))
+  async uploadCharacterBattleSprite(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: UploadedMulterFile | undefined,
+  ) {
+    if (!file) throw new BadRequestException('no file');
+    if (!ALLOWED_MIME.has(file.mimetype)) throw new BadRequestException('unsupported mime');
+    if (file.size > MAX_BYTES) throw new BadRequestException('file too large');
+    const ext = extname(file.originalname).toLowerCase() || extFromMime(file.mimetype);
+    const filename = `char_${id}_battle${ext}`;
+    writeFileSync(join(ensureDir('characters'), filename), file.buffer);
+    const url = `/uploads/characters/${filename}?v=${Date.now()}`;
+    await this.admin.updateCharacter(id, { battleSpriteUrl: url });
     return { ok: true, url };
   }
 

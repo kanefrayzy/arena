@@ -10,6 +10,16 @@ interface Wallet {
   locked: string;
 }
 
+interface CharSummary {
+  id: number;
+  name: string;
+  spriteUrl: string | null;
+}
+
+interface LoadoutResp {
+  characterId: number;
+}
+
 type Mode = 'free' | 'casual' | 'stake';
 
 const STAKE_ROOMS: { id: number; stake: string }[] = [
@@ -24,6 +34,7 @@ export function HomePage() {
   const me = useAuth((s) => s.me);
   const setMe = useAuth((s) => s.setMe);
   const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [activeChar, setActiveChar] = useState<CharSummary | null>(null);
   const [mode, setMode] = useState<Mode>('free');
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +46,21 @@ export function HomePage() {
         setMe(u);
         const w = await api.get<Wallet>('/wallet');
         setWallet(w);
+        // Resolve equipped character (or fall back to first available).
+        try {
+          const list = await api.get<{ characters: CharSummary[] }>('/characters');
+          let pick: CharSummary | null = list.characters[0] ?? null;
+          try {
+            const lo = await api.get<LoadoutResp>('/loadout/me');
+            const found = list.characters.find((c) => c.id === lo.characterId);
+            if (found) pick = found;
+          } catch {
+            /* no loadout yet */
+          }
+          setActiveChar(pick);
+        } catch {
+          /* ignore character fetch errors */
+        }
       } catch (e) {
         if (e instanceof ApiError && e.status === 401) nav('/');
       }
@@ -128,8 +154,33 @@ export function HomePage() {
           <div className="game-chip text-white/80">{t('home.casual_hint')}</div>
         )}
 
-        {/* PLAY button — hero */}
-        <div className="flex flex-1 items-center justify-center">
+        {/* Hero character + PLAY button */}
+        <div className="flex flex-1 flex-col items-center justify-end gap-4">
+          {activeChar && (
+            <button
+              type="button"
+              onClick={() => nav('/loadout')}
+              className="group relative flex h-56 w-56 items-end justify-center sm:h-64 sm:w-64"
+              title={activeChar.name}
+            >
+              {/* radial glow */}
+              <div className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(circle_at_50%_55%,rgba(255,209,59,0.35),transparent_65%)]" />
+              {/* ground shadow */}
+              <div className="absolute bottom-2 left-1/2 h-3 w-40 -translate-x-1/2 rounded-full bg-black/55 blur-md" />
+              {activeChar.spriteUrl ? (
+                <img
+                  src={activeChar.spriteUrl}
+                  alt={activeChar.name}
+                  className="relative max-h-[92%] max-w-[92%] animate-float object-contain drop-shadow-[0_8px_8px_rgba(0,0,0,0.55)] transition-transform group-active:scale-95"
+                />
+              ) : (
+                <div className="relative h-32 w-32 animate-float rounded-full bg-white/20" />
+              )}
+              <div className="pointer-events-none absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1 font-display text-xs uppercase tracking-wide text-game-yellow backdrop-blur">
+                {activeChar.name}
+              </div>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void play()}

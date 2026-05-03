@@ -140,14 +140,15 @@ function Card(p: CardProps) {
     <div className="game-card relative flex flex-col items-center gap-2 p-3">
       <div className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-2xl bg-black/40">
         <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/10 to-transparent" />
+        <div className="absolute bottom-2 left-1/2 h-2 w-16 -translate-x-1/2 rounded-full bg-black/50 blur-sm" />
         {p.spriteUrl ? (
           <img
             src={p.spriteUrl}
             alt={p.name}
-            className="relative max-h-full max-w-full object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]"
+            className="relative max-h-[88%] max-w-[88%] animate-float object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]"
           />
         ) : (
-          <div className="relative h-14 w-14 rounded-full bg-white/20" />
+          <div className="relative h-14 w-14 animate-float rounded-full bg-white/20" />
         )}
         {isFree && !p.owned && (
           <div className="absolute right-1 top-1 rounded-full bg-game-green px-2 py-0.5 text-[9px] font-bold uppercase text-[#1a1450] shadow-[0_2px_0_#138a4a]">

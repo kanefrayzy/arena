@@ -167,7 +167,7 @@ export class MatchCreationService {
           characterId: char.id,
           skinId: skin.id,
           stats: this.computeStats(char, skin, weapon),
-          characterSpriteUrl: char.spriteUrl ?? null,
+          characterSpriteUrl: char.battleSpriteUrl ?? char.spriteUrl ?? null,
           weaponSpriteUrl: weapon?.spriteUrl ?? null,
         };
       }
@@ -189,7 +189,7 @@ export class MatchCreationService {
       characterId: char.id,
       skinId: skin.id,
       stats: this.computeStats(char, skin, weapon),
-      characterSpriteUrl: char.spriteUrl ?? null,
+      characterSpriteUrl: char.battleSpriteUrl ?? char.spriteUrl ?? null,
       weaponSpriteUrl: weapon?.spriteUrl ?? null,
     };
   }

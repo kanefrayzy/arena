@@ -16,6 +16,7 @@ export interface CharacterDto {
   abilityCooldownS: number;
   isActive: boolean;
   spriteUrl: string | null;
+  battleSpriteUrl: string | null;
   priceUsd: string | null;
   isStarter: boolean;
   skins: SkinDto[];
@@ -83,6 +84,7 @@ export class ContentService {
       abilityCooldownS: c.abilityCooldownS,
       isActive: c.isActive,
       spriteUrl: c.spriteUrl ?? null,
+      battleSpriteUrl: c.battleSpriteUrl ?? null,
       priceUsd: c.priceUsd ? c.priceUsd.toString() : null,
       isStarter: c.isStarter,
       skins: c.skins.filter((s) => s.isActive).map((s) => this.toSkinDto(s)),

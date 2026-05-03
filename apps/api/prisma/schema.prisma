@@ -152,6 +152,9 @@ model Character {
   isActive         Boolean @default(true)
   // Per-character sprite shown in shop and game (uploaded by admin).
   spriteUrl        String?
+  // Optional separate sprite used during the match on the map.
+  // Falls back to spriteUrl when null.
+  battleSpriteUrl  String?
   // Price in USD; null = free / starter.
   priceUsd         Decimal? @db.Decimal(20, 8)
   // Auto-granted to every user (no purchase required).
