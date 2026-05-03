@@ -9,6 +9,7 @@ import { ResultPage } from '../pages/result/ResultPage';
 import { WalletPage } from '../pages/wallet/WalletPage';
 import { LoadoutPage } from '../pages/loadout/LoadoutPage';
 import { ShopPage } from '../pages/shop/ShopPage';
+import { AdminPage } from '../pages/admin/AdminPage';
 
 export function AppRouter() {
   return (
@@ -22,6 +23,7 @@ export function AppRouter() {
           <Route path="/wallet" element={<WalletPage />} />
           <Route path="/loadout" element={<LoadoutPage />} />
           <Route path="/shop" element={<ShopPage />} />
+          <Route path="/admin" element={<AdminPage />} />
           <Route path="/queue" element={<QueuePage />} />
           <Route path="/match/:id" element={<MatchPage />} />
           <Route path="/result/:id" element={<ResultPage />} />

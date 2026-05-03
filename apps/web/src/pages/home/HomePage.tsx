@@ -58,6 +58,15 @@ export function HomePage() {
       <header className="flex items-center justify-between border-b border-white/10 px-5 py-3">
         <div className="text-sm text-white/70">@{me.username}</div>
         <div className="flex items-center gap-2">
+          {me.role === 'ADMIN' && (
+            <button
+              type="button"
+              onClick={() => nav('/admin')}
+              className="rounded bg-accent/30 px-2 py-1 text-sm text-accent hover:bg-accent/40"
+            >
+              admin
+            </button>
+          )}
           <button
             type="button"
             onClick={() => nav('/loadout')}

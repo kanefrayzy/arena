@@ -10,6 +10,7 @@ import { WalletModule } from './wallet/wallet.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ContentModule } from './content/content.module';
 import { GameModule } from './game/game.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { GameModule } from './game/game.module';
     PaymentsModule,
     ContentModule,
     GameModule,
+    AdminModule,
   ],
   controllers: [HealthController],
 })
