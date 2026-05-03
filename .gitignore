@@ -49,3 +49,6 @@ bob.txt
 nul.json
 *.txt
 
+
+# local deploy scripts
+.deploy/
