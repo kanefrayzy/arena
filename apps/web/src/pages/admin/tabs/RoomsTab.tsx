@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../../shared/api/client';
+import { Modal, PrimaryButton, GhostButton, Field, inputCls } from '../components/Modal';
+import { Badge } from '../components/Badge';
 
 interface Room {
   id: number;
@@ -13,10 +15,14 @@ interface Room {
   minBalanceRequired: boolean;
 }
 
+const MODES = ['FREE', 'CASUAL', 'STAKE'];
+
 export function RoomsTab() {
   const [items, setItems] = useState<Room[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
+  const [editing, setEditing] = useState<Room | null>(null);
+  const [creating, setCreating] = useState(false);
 
   async function load() {
     setErr(null);
@@ -44,84 +50,190 @@ export function RoomsTab() {
     }
   }
 
-  async function editStake(r: Room) {
-    const v = window.prompt(`stakeUsd for "${r.name}" (empty for null):`, r.stakeUsd ?? '');
-    if (v === null) return;
-    setBusy(r.id);
-    try {
-      await api.patch(`/admin/rooms/${r.id}`, { stakeUsd: v.trim() === '' ? null : v.trim() });
-      await load();
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'failed');
-    } finally {
-      setBusy(null);
-    }
-  }
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex justify-end">
+        <PrimaryButton onClick={() => setCreating(true)}>+ New room</PrimaryButton>
+      </div>
+      {err && <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</div>}
 
-  async function editCommission(r: Room) {
-    const v = window.prompt(`commissionPct (0-50):`, String(r.commissionPct));
-    if (v === null) return;
-    const n = parseInt(v, 10);
-    if (Number.isNaN(n)) return;
-    setBusy(r.id);
-    try {
-      await api.patch(`/admin/rooms/${r.id}`, { commissionPct: n });
-      await load();
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : 'failed');
-    } finally {
-      setBusy(null);
-    }
-  }
+      <div className="overflow-hidden rounded-lg border border-white/10">
+        <table className="w-full text-sm">
+          <thead className="bg-white/5 text-left text-xs uppercase tracking-wider text-white/50">
+            <tr>
+              <th className="px-3 py-2.5">Name</th>
+              <th className="px-3 py-2.5">Mode</th>
+              <th className="px-3 py-2.5 text-right">Stake</th>
+              <th className="px-3 py-2.5 text-right">Comm.</th>
+              <th className="hidden px-3 py-2.5 text-right md:table-cell">Duration</th>
+              <th className="px-3 py-2.5">Status</th>
+              <th className="px-3 py-2.5 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {items.map((r) => (
+              <tr key={r.id} className="hover:bg-white/[0.02]">
+                <td className="px-3 py-2.5 font-medium">{r.name}</td>
+                <td className="px-3 py-2.5">
+                  <Badge tone={r.mode === 'STAKE' ? 'info' : 'neutral'}>{r.mode}</Badge>
+                </td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                  {r.stakeUsd ? `$${Number(r.stakeUsd).toFixed(2)}` : '—'}
+                </td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{r.commissionPct}%</td>
+                <td className="hidden px-3 py-2.5 text-right tabular-nums md:table-cell">{r.matchDurationS}s</td>
+                <td className="px-3 py-2.5">
+                  {r.isActive ? <Badge tone="success">active</Badge> : <Badge tone="neutral">disabled</Badge>}
+                </td>
+                <td className="px-3 py-2.5">
+                  <div className="flex justify-end gap-1">
+                    <button
+                      type="button"
+                      disabled={busy === r.id}
+                      onClick={() => setEditing(r)}
+                      className="rounded-md bg-white/5 px-2.5 py-1 text-xs hover:bg-white/10 disabled:opacity-40"
+                    >
+                      edit
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy === r.id}
+                      onClick={() => void toggle(r)}
+                      className="rounded-md bg-white/5 px-2.5 py-1 text-xs hover:bg-white/10 disabled:opacity-40"
+                    >
+                      {r.isActive ? 'disable' : 'enable'}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {items.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-3 py-8 text-center text-sm text-white/40">No rooms</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
 
-  async function create() {
-    const name = window.prompt('Room name:');
-    if (!name) return;
-    const mode = window.prompt('Mode (FREE/CASUAL/STAKE):', 'STAKE');
-    if (!mode) return;
-    const stakeUsd = mode === 'FREE' ? null : window.prompt('stakeUsd:', '1');
+      <RoomFormModal
+        room={editing}
+        open={!!editing || creating}
+        creating={creating}
+        onClose={() => {
+          setEditing(null);
+          setCreating(false);
+        }}
+        onDone={async () => {
+          setEditing(null);
+          setCreating(false);
+          await load();
+        }}
+        setErr={setErr}
+      />
+    </div>
+  );
+}
+
+function RoomFormModal({
+  room,
+  open,
+  creating,
+  onClose,
+  onDone,
+  setErr,
+}: {
+  room: Room | null;
+  open: boolean;
+  creating: boolean;
+  onClose: () => void;
+  onDone: () => Promise<void>;
+  setErr: (s: string | null) => void;
+}) {
+  const [name, setName] = useState('');
+  const [mode, setMode] = useState('STAKE');
+  const [stakeUsd, setStakeUsd] = useState('');
+  const [commissionPct, setCommissionPct] = useState('15');
+  const [matchDurationS, setMatchDurationS] = useState('180');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (room) {
+      setName(room.name);
+      setMode(room.mode);
+      setStakeUsd(room.stakeUsd ?? '');
+      setCommissionPct(String(room.commissionPct));
+      setMatchDurationS(String(room.matchDurationS));
+    } else if (creating) {
+      setName('');
+      setMode('STAKE');
+      setStakeUsd('1');
+      setCommissionPct('15');
+      setMatchDurationS('180');
+    }
+  }, [room, creating]);
+
+  async function submit() {
+    setSubmitting(true);
     try {
-      await api.post('/admin/rooms', {
+      const stake = stakeUsd.trim() === '' || mode === 'FREE' ? null : stakeUsd.trim();
+      const payload: Record<string, unknown> = {
         name,
         mode,
-        stakeUsd: stakeUsd && stakeUsd.trim() !== '' ? stakeUsd : null,
-      });
-      await load();
+        stakeUsd: stake,
+        commissionPct: parseInt(commissionPct, 10),
+        matchDurationS: parseInt(matchDurationS, 10),
+      };
+      if (room) {
+        await api.patch(`/admin/rooms/${room.id}`, payload);
+      } else {
+        await api.post('/admin/rooms', payload);
+      }
+      await onDone();
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'failed');
+    } finally {
+      setSubmitting(false);
     }
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <button type="button" onClick={() => void create()} className="rounded bg-accent py-1 text-xs font-semibold text-bg">
-        + new room
-      </button>
-      {err && <div className="text-xs text-red-400">{err}</div>}
-      {items.map((r) => (
-        <div key={r.id} className="rounded bg-surface px-2 py-2 text-xs">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className={!r.isActive ? 'line-through text-white/40' : ''}>{r.name}</span>
-              <span className="ml-2 rounded bg-white/10 px-1 text-[10px]">{r.mode}</span>
-            </div>
-            <div className="font-mono text-[10px]">
-              ${r.stakeUsd ?? '—'} · {r.commissionPct}% · {r.matchDurationS}s
-            </div>
-          </div>
-          <div className="mt-2 flex gap-1">
-            <button type="button" disabled={busy === r.id} onClick={() => void editStake(r)} className="flex-1 rounded bg-white/10 py-1 text-[10px]">
-              stake
-            </button>
-            <button type="button" disabled={busy === r.id} onClick={() => void editCommission(r)} className="flex-1 rounded bg-white/10 py-1 text-[10px]">
-              comm%
-            </button>
-            <button type="button" disabled={busy === r.id} onClick={() => void toggle(r)} className="flex-1 rounded bg-white/10 py-1 text-[10px]">
-              {r.isActive ? 'disable' : 'enable'}
-            </button>
-          </div>
-        </div>
-      ))}
-    </div>
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={room ? `Edit room · ${room.name}` : 'New room'}
+      footer={
+        <>
+          <GhostButton onClick={onClose}>Cancel</GhostButton>
+          <PrimaryButton onClick={submit} disabled={submitting || !name.trim()}>
+            {submitting ? 'saving…' : 'Save'}
+          </PrimaryButton>
+        </>
+      }
+    >
+      <Field label="Name">
+        <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+      </Field>
+      <Field label="Mode">
+        <select className={inputCls} value={mode} onChange={(e) => setMode(e.target.value)}>
+          {MODES.map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
+      </Field>
+      {mode !== 'FREE' && (
+        <Field label="Stake (USD)">
+          <input className={inputCls} value={stakeUsd} onChange={(e) => setStakeUsd(e.target.value)} placeholder="1.00" />
+        </Field>
+      )}
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Commission %">
+          <input className={inputCls} value={commissionPct} onChange={(e) => setCommissionPct(e.target.value)} type="number" min={0} max={50} />
+        </Field>
+        <Field label="Duration (s)">
+          <input className={inputCls} value={matchDurationS} onChange={(e) => setMatchDurationS(e.target.value)} type="number" min={30} />
+        </Field>
+      </div>
+    </Modal>
   );
 }
