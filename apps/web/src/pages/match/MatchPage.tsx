@@ -134,6 +134,12 @@ export function MatchPage() {
           inp.fire = false;
           inp.ability = false;
         }
+        // Camera may mirror world by Y so YOU is always at the bottom — invert
+        // input axes back into world coordinates before sending to server.
+        if (renderer!.isFlipped()) {
+          inp.dy = -inp.dy;
+          inp.angle = -inp.angle;
+        }
         client!.sendInput(inp);
       }, 33);
     };

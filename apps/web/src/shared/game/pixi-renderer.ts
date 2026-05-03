@@ -83,6 +83,8 @@ export class PixiRenderer {
   private snapTime = 0;
   private cameraScale = 1;
   private textures: Partial<Record<SpriteSlot, Texture>> = {};
+  private flipY = false;
+  private flipDecided = false;
   onEvent: FxCallback | null = null;
 
   constructor(private readonly host: HTMLElement) {
@@ -132,13 +134,29 @@ export class PixiRenderer {
     return { x: p.curX * t.a + t.tx, y: p.curY * t.d + t.ty };
   }
 
+  /** True when the camera mirrors the world by Y so YOU is always at the bottom. */
+  isFlipped(): boolean {
+    return this.flipY;
+  }
+
   applySnapshot(snap: SSnapshot): void {
     this.snapTime = performance.now();
+
+    // First snapshot: decide camera flip so YOU are always at the bottom.
+    if (!this.flipDecided) {
+      const you = snap.players.find((p) => p.id === this.youId);
+      if (you) {
+        this.flipY = you.y < MAP_HEIGHT / 2;
+        this.flipDecided = true;
+        // Re-emit obstacles so they get the correct mapped Y.
+        this.drawObstacles();
+      }
+    }
 
     const seen = new Set<number>();
     for (const p of snap.players) {
       seen.add(p.id);
-      this.upsertPlayer(p);
+      this.upsertPlayer(this.mapPlayer(p));
     }
     for (const [id, view] of this.players) {
       if (!seen.has(id)) {
@@ -150,7 +168,7 @@ export class PixiRenderer {
     const seenB = new Set<number>();
     for (const b of snap.bullets) {
       seenB.add(b.id);
-      this.upsertBullet(b);
+      this.upsertBullet(this.mapBullet(b));
     }
     for (const [id, view] of this.bullets) {
       if (!seenB.has(id)) {
@@ -160,9 +178,29 @@ export class PixiRenderer {
     }
 
     for (const ev of snap.events) {
-      this.handleEvent(ev);
-      this.onEvent?.(ev as Parameters<FxCallback>[0]);
+      const mapped = this.mapEvent(ev);
+      this.handleEvent(mapped);
+      this.onEvent?.(mapped as Parameters<FxCallback>[0]);
     }
+  }
+
+  private mapY(y: number): number {
+    return this.flipY ? MAP_HEIGHT - y : y;
+  }
+  private mapAngle(a: number): number {
+    return this.flipY ? -a : a;
+  }
+  private mapPlayer(p: SnapshotPlayer): SnapshotPlayer {
+    if (!this.flipY) return p;
+    return { ...p, y: MAP_HEIGHT - p.y, angle: -p.angle };
+  }
+  private mapBullet(b: SnapshotBullet): SnapshotBullet {
+    if (!this.flipY) return b;
+    return { ...b, y: MAP_HEIGHT - b.y };
+  }
+  private mapEvent(ev: SnapshotEvent): SnapshotEvent {
+    if (!this.flipY || ev.y === undefined) return ev;
+    return { ...ev, y: MAP_HEIGHT - Number(ev.y) };
   }
 
   private async loadSprites(): Promise<void> {
@@ -483,20 +521,22 @@ export class PixiRenderer {
     // place above bg (idx 1) but below players/fx
     this.world.addChildAt(layer, 1);
     for (const ob of this.obstacles) {
+      const ox = ob.x;
+      const oy = this.flipY ? MAP_HEIGHT - ob.y - ob.h : ob.y;
       const kind: SpriteSlot = ob.kind === 'barrel' ? 'barrel' : ob.kind === 'wall' ? 'wall' : 'crate';
       const tex = this.textures[kind];
       if (tex) {
         const s = new Sprite(tex);
-        s.x = ob.x;
-        s.y = ob.y;
+        s.x = ox;
+        s.y = oy;
         s.width = ob.w;
         s.height = ob.h;
         layer.addChild(s);
       } else {
         const g = new Graphics();
         drawObstacleProcedural(g, ob);
-        g.x = ob.x;
-        g.y = ob.y;
+        g.x = ox;
+        g.y = oy;
         layer.addChild(g);
       }
     }

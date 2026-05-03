@@ -13,8 +13,10 @@ const VOLUME_KEY = 'arena.volume';
 const MUTE_KEY = 'arena.muted';
 
 try {
-  const v = Number(localStorage.getItem(VOLUME_KEY));
-  if (Number.isFinite(v) && v >= 0 && v <= 1) volume = v;
+  const raw = localStorage.getItem(VOLUME_KEY);
+  const v = raw === null ? NaN : Number(raw);
+  // Ignore stale volume=0 (otherwise everything is silent and user can't tell why).
+  if (Number.isFinite(v) && v > 0 && v <= 1) volume = v;
   muted = localStorage.getItem(MUTE_KEY) === '1';
 } catch {
   /* ignore */
