@@ -69,5 +69,16 @@
   "shop.empty.characters": "Персонажей в продаже пока нет. Администратор может добавить их в разделе Admin → Content.",
   "shop.empty.weapons": "Оружия в продаже пока нет. Администратор может добавить его в разделе Admin → Content.",
   "shop.tab.characters": "Персонажи",
-  "shop.tab.weapons": "Оружие"
+  "shop.tab.weapons": "Оружие",
+  "settings.title": "Настройки",
+  "settings.back": "Назад",
+  "settings.change_password": "Смена пароля",
+  "settings.current_password": "Текущий пароль",
+  "settings.new_password": "Новый пароль",
+  "settings.new_password_confirm": "Повторите новый пароль",
+  "settings.save": "Сохранить",
+  "settings.password_changed": "Пароль изменён",
+  "settings.password_mismatch": "Пароли не совпадают",
+  "settings.password_too_short": "Пароль должен быть не менее 8 символов",
+  "settings.wrong_password": "Неверный текущий пароль"
 }

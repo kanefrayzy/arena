@@ -69,5 +69,16 @@
   "shop.empty.characters": "No characters for sale yet. Admin can add them in Admin → Content.",
   "shop.empty.weapons": "No weapons for sale yet. Admin can add them in Admin → Content.",
   "shop.tab.characters": "Characters",
-  "shop.tab.weapons": "Weapons"
+  "shop.tab.weapons": "Weapons",
+  "settings.title": "Settings",
+  "settings.back": "Back",
+  "settings.change_password": "Change password",
+  "settings.current_password": "Current password",
+  "settings.new_password": "New password",
+  "settings.new_password_confirm": "Confirm new password",
+  "settings.save": "Save",
+  "settings.password_changed": "Password changed",
+  "settings.password_mismatch": "Passwords don't match",
+  "settings.password_too_short": "Password must be at least 8 characters",
+  "settings.wrong_password": "Current password is incorrect"
 }

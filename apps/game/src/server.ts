@@ -30,6 +30,10 @@ interface SocketUserData {
 }
 
 const matches = new Map<string, Match>();
+// Serializes concurrent getOrCreateMatch calls per matchId to avoid races
+// where two players connect within ms of each other and end up in two
+// different Match instances (resulting in match never starting).
+const matchCreating = new Map<string, Promise<Match | null>>();
 
 async function loadSeed(matchId: string): Promise<MatchSeed | null> {
   const raw = await redis.get(`match:seed:${matchId}`);
@@ -40,11 +44,24 @@ async function loadSeed(matchId: string): Promise<MatchSeed | null> {
 async function getOrCreateMatch(matchId: string): Promise<Match | null> {
   const existing = matches.get(matchId);
   if (existing) return existing;
-  const seed = await loadSeed(matchId);
-  if (!seed) return null;
-  const m = new Match(seed, api);
-  matches.set(matchId, m);
-  return m;
+  const inFlight = matchCreating.get(matchId);
+  if (inFlight) return inFlight;
+  const promise = (async () => {
+    try {
+      const seed = await loadSeed(matchId);
+      if (!seed) return null;
+      // Re-check under the "lock" in case another caller already created it.
+      const already = matches.get(matchId);
+      if (already) return already;
+      const m = new Match(seed, api);
+      matches.set(matchId, m);
+      return m;
+    } finally {
+      matchCreating.delete(matchId);
+    }
+  })();
+  matchCreating.set(matchId, promise);
+  return promise;
 }
 
 const app = uWS.App();

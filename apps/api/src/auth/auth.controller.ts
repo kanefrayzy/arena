@@ -9,6 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { z } from 'zod';
 import { loginSchema, registerSchema } from '@arena/shared';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -16,6 +17,12 @@ import { AuthService } from './auth.service';
 
 const ACCESS_COOKIE = 'arena_access';
 const REFRESH_COOKIE = 'arena_refresh';
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1).max(200),
+  newPassword: z.string().min(8).max(200),
+});
+type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
 const cookieOpts = (maxAgeMs: number) => ({
   httpOnly: true,
@@ -74,6 +81,17 @@ export class AuthController {
   async me(@Req() req: Request) {
     const userId = (req as Request & { user?: { sub: number } }).user?.sub;
     return this.auth.getMe(userId as number);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('change-password')
+  @HttpCode(200)
+  async changePassword(
+    @Req() req: Request,
+    @Body(new ZodValidationPipe(changePasswordSchema)) body: ChangePasswordInput,
+  ) {
+    const userId = (req as Request & { user?: { sub: number } }).user?.sub as number;
+    return this.auth.changePassword(userId, body.currentPassword, body.newPassword);
   }
 
   private setAuthCookies(res: Response, tokens: { access: string; refresh: string }) {

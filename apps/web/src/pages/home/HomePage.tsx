@@ -20,7 +20,9 @@ interface LoadoutResp {
   characterId: number;
 }
 
-type Mode = 'free' | 'casual' | 'stake';
+type Mode = 'casual' | 'stake';
+
+const SELECTABLE_MODES: Mode[] = ['casual', 'stake'];
 
 const STAKE_ROOMS: { id: number; stake: string }[] = [
   { id: 3, stake: '1' },
@@ -35,7 +37,7 @@ export function HomePage() {
   const setMe = useAuth((s) => s.setMe);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [activeChar, setActiveChar] = useState<CharSummary | null>(null);
-  const [mode, setMode] = useState<Mode>('free');
+  const [mode, setMode] = useState<Mode>('casual');
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -102,6 +104,15 @@ export function HomePage() {
         </button>
         <div className="game-title text-lg text-white/90">@{me.username}</div>
         <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => nav('/settings')}
+            className="game-btn game-btn-ghost game-btn-sm"
+            title={t('settings.title')}
+            aria-label={t('settings.title')}
+          >
+            ⚙
+          </button>
           {me.role === 'ADMIN' && (
             <button
               type="button"
@@ -114,10 +125,10 @@ export function HomePage() {
         </div>
       </header>
 
-      <main className="relative z-10 flex flex-1 flex-col items-center gap-6 overflow-y-auto px-6 py-6">
+      <main className="relative z-10 flex flex-1 flex-col overflow-hidden px-6 py-4">
         {/* Mode selector */}
-        <div className="flex w-full max-w-md flex-wrap justify-center gap-2">
-          {(['free', 'casual', 'stake'] as Mode[]).map((m) => (
+        <div className="flex w-full max-w-md flex-wrap justify-center gap-2 self-center">
+          {SELECTABLE_MODES.map((m) => (
             <button
               key={m}
               type="button"
@@ -133,7 +144,7 @@ export function HomePage() {
         </div>
 
         {mode === 'stake' && (
-          <div className="flex flex-wrap justify-center gap-3">
+          <div className="mt-3 flex flex-wrap justify-center gap-3 self-center">
             {STAKE_ROOMS.map((r) => (
               <button
                 key={r.id}
@@ -151,36 +162,40 @@ export function HomePage() {
         )}
 
         {mode === 'casual' && (
-          <div className="game-chip text-white/80">{t('home.casual_hint')}</div>
+          <div className="mt-3 self-center game-chip text-white/80">{t('home.casual_hint')}</div>
         )}
 
-        {/* Hero character + PLAY button */}
-        <div className="flex flex-1 flex-col items-center justify-end gap-4">
+        {/* Hero character takes full available space, centered */}
+        <div className="relative flex flex-1 items-center justify-center">
           {activeChar && (
             <button
               type="button"
               onClick={() => nav('/loadout')}
-              className="group relative flex h-56 w-56 items-end justify-center sm:h-64 sm:w-64"
+              className="group relative flex h-full w-full max-w-[520px] items-center justify-center"
               title={activeChar.name}
             >
               {/* radial glow */}
-              <div className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(circle_at_50%_55%,rgba(255,209,59,0.35),transparent_65%)]" />
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(255,209,59,0.35),transparent_60%)]" />
               {/* ground shadow */}
-              <div className="absolute bottom-2 left-1/2 h-3 w-40 -translate-x-1/2 rounded-full bg-black/55 blur-md" />
+              <div className="pointer-events-none absolute bottom-[8%] left-1/2 h-4 w-[55%] -translate-x-1/2 rounded-full bg-black/55 blur-md" />
               {activeChar.spriteUrl ? (
                 <img
                   src={activeChar.spriteUrl}
                   alt={activeChar.name}
-                  className="relative max-h-[92%] max-w-[92%] animate-float object-contain drop-shadow-[0_8px_8px_rgba(0,0,0,0.55)] transition-transform group-active:scale-95"
+                  className="relative max-h-[95%] max-w-[95%] animate-float object-contain drop-shadow-[0_10px_10px_rgba(0,0,0,0.6)] transition-transform group-active:scale-95"
                 />
               ) : (
-                <div className="relative h-32 w-32 animate-float rounded-full bg-white/20" />
+                <div className="relative h-48 w-48 animate-float rounded-full bg-white/20" />
               )}
-              <div className="pointer-events-none absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-black/55 px-3 py-1 font-display text-xs uppercase tracking-wide text-game-yellow backdrop-blur">
+              <div className="pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-1.5 font-display text-sm uppercase tracking-wide text-game-yellow backdrop-blur">
                 {activeChar.name}
               </div>
             </button>
           )}
+        </div>
+
+        {/* PLAY */}
+        <div className="flex flex-col items-center gap-2 pt-2">
           <button
             type="button"
             onClick={() => void play()}
@@ -189,16 +204,11 @@ export function HomePage() {
           >
             ▶ {t('home.play')}
           </button>
+          {error && <div className="text-sm font-semibold text-game-red">{error}</div>}
         </div>
 
-        {error && <div className="text-sm font-semibold text-game-red">{error}</div>}
-
-        {mode === 'free' && (
-          <p className="text-center text-xs text-white/50">{t('home.free_hint')}</p>
-        )}
-
         {/* Bottom nav */}
-        <div className="grid w-full max-w-md grid-cols-2 gap-3 pb-2">
+        <div className="mt-3 grid w-full max-w-md grid-cols-2 gap-3 self-center pb-2">
           <button
             type="button"
             onClick={() => nav('/loadout')}
