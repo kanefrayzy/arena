@@ -218,3 +218,12 @@ model Setting {
   key   String @id
   value Json
 }
+
+model Sprite {
+  slot      String   @id
+  url       String
+  width     Int
+  height    Int
+  mime      String
+  updatedAt DateTime @updatedAt
+}

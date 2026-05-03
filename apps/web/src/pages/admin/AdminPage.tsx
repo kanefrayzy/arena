@@ -10,14 +10,16 @@ import { ContentTab } from './tabs/ContentTab';
 import { MatchesTab } from './tabs/MatchesTab';
 import { PaymentsTab } from './tabs/PaymentsTab';
 import { SettingsTab } from './tabs/SettingsTab';
+import { SpritesTab } from './tabs/SpritesTab';
 
-type Tab = 'dash' | 'users' | 'rooms' | 'content' | 'matches' | 'payments' | 'settings';
+type Tab = 'dash' | 'users' | 'rooms' | 'content' | 'matches' | 'payments' | 'settings' | 'sprites';
 
 const TABS: { key: Tab; label: string; desc: string; icon: string }[] = [
   { key: 'dash', label: 'Dashboard', desc: 'Key metrics', icon: '▦' },
   { key: 'users', label: 'Users', desc: 'Players & balances', icon: '◉' },
   { key: 'rooms', label: 'Rooms', desc: 'Match rooms', icon: '◫' },
   { key: 'content', label: 'Content', desc: 'Characters & skins', icon: '✦' },
+  { key: 'sprites', label: 'Sprites', desc: 'Game graphics', icon: '◆' },
   { key: 'matches', label: 'Matches', desc: 'Live & history', icon: '⚔' },
   { key: 'payments', label: 'Payments', desc: 'Approvals & queue', icon: '$' },
   { key: 'settings', label: 'Settings', desc: 'Feature flags', icon: '⚙' },
@@ -151,6 +153,7 @@ export function AdminPage() {
             {tab === 'users' && <UsersTab />}
             {tab === 'rooms' && <RoomsTab />}
             {tab === 'content' && <ContentTab />}
+            {tab === 'sprites' && <SpritesTab />}
             {tab === 'matches' && <MatchesTab />}
             {tab === 'payments' && <PaymentsTab />}
             {tab === 'settings' && <SettingsTab />}

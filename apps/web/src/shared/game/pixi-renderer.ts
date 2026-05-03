@@ -1,8 +1,9 @@
 /**
- * PixiJS renderer for match. Receives server snapshots and lerps player + bullet positions.
- * Renders obstacles (crates/barrels/walls) and visual FX (muzzle flash, hit sparks, death burst).
+ * PixiJS renderer for match. Receives server snapshots, lerps player + bullet positions,
+ * renders obstacles and FX. Loads admin-uploaded sprites by slot from /api/sprites; falls
+ * back to procedural Graphics when a slot is empty or fails to load.
  */
-import { Application, Graphics, Container, Text } from 'pixi.js';
+import { Application, Graphics, Container, Text, Sprite, Texture, Assets, TilingSprite } from 'pixi.js';
 import type {
   SSnapshot,
   SnapshotPlayer,
@@ -13,8 +14,29 @@ import type {
 } from '@arena/protocol';
 import { MAP_WIDTH, MAP_HEIGHT, PLAYER_RADIUS, BULLET_RADIUS } from '@arena/shared';
 
+type SpriteSlot =
+  | 'player_you'
+  | 'player_opp'
+  | 'weapon'
+  | 'bullet'
+  | 'crate'
+  | 'barrel'
+  | 'wall'
+  | 'bg_tile';
+
+interface SpriteRegistryRow {
+  url: string;
+  width: number;
+  height: number;
+}
+
 interface PlayerView {
-  gfx: Graphics;
+  root: Container;
+  bodyG: Graphics; // procedural body (also used as sprite tint mask)
+  bodySprite: Sprite | null;
+  weaponG: Graphics;
+  weaponSprite: Sprite | null;
+  hpG: Graphics;
   label: Text;
   prevX: number;
   prevY: number;
@@ -24,18 +46,17 @@ interface PlayerView {
   curAngle: number;
   hp: number;
   isYou: boolean;
-  isOpponent: boolean;
 }
 
 interface BulletView {
-  gfx: Graphics;
+  display: Sprite | Graphics;
 }
 
 interface Particle {
   gfx: Graphics;
   vx: number;
   vy: number;
-  ttl: number; // ms
+  ttl: number;
   maxTtl: number;
   fade: boolean;
 }
@@ -50,6 +71,7 @@ export type FxCallback = (ev: { kind: string; x?: number; y?: number; who?: numb
 export class PixiRenderer {
   private app: Application;
   private world: Container;
+  private bgLayer: Container;
   private fxLayer: Container;
   private players = new Map<number, PlayerView>();
   private bullets = new Map<number, BulletView>();
@@ -60,12 +82,13 @@ export class PixiRenderer {
   private oppId = 0;
   private snapTime = 0;
   private cameraScale = 1;
-  /** Optional FX/sound callback. */
+  private textures: Partial<Record<SpriteSlot, Texture>> = {};
   onEvent: FxCallback | null = null;
 
   constructor(private readonly host: HTMLElement) {
     this.app = new Application();
     this.world = new Container();
+    this.bgLayer = new Container();
     this.fxLayer = new Container();
   }
 
@@ -77,7 +100,9 @@ export class PixiRenderer {
     });
     this.host.appendChild(this.app.canvas);
     this.app.stage.addChild(this.world);
+    this.world.addChild(this.bgLayer);
     this.world.addChild(this.fxLayer);
+    await this.loadSprites();
     this.drawArena();
     this.app.ticker.add(() => this.tick(this.app.ticker.deltaMS));
     window.addEventListener('resize', this.handleResize);
@@ -100,7 +125,6 @@ export class PixiRenderer {
     this.drawObstacles();
   }
 
-  /** Returns canvas-space position of you player (for aim). */
   getYouCanvasPos(): { x: number; y: number } | null {
     const p = this.players.get(this.youId);
     if (!p) return null;
@@ -118,8 +142,7 @@ export class PixiRenderer {
     }
     for (const [id, view] of this.players) {
       if (!seen.has(id)) {
-        view.gfx.destroy();
-        view.label.destroy();
+        view.root.destroy({ children: true });
         this.players.delete(id);
       }
     }
@@ -131,7 +154,7 @@ export class PixiRenderer {
     }
     for (const [id, view] of this.bullets) {
       if (!seenB.has(id)) {
-        view.gfx.destroy();
+        view.display.destroy();
         this.bullets.delete(id);
       }
     }
@@ -142,36 +165,79 @@ export class PixiRenderer {
     }
   }
 
+  private async loadSprites(): Promise<void> {
+    let registry: Record<string, SpriteRegistryRow> = {};
+    try {
+      const res = await fetch('/api/sprites', { credentials: 'include' });
+      if (res.ok) registry = (await res.json()) as Record<string, SpriteRegistryRow>;
+    } catch {
+      /* offline / no sprites — use fallbacks */
+    }
+    const tasks: Array<Promise<void>> = [];
+    for (const slot of Object.keys(registry) as SpriteSlot[]) {
+      const row = registry[slot];
+      if (!row) continue;
+      tasks.push(
+        Assets.load<Texture>(row.url)
+          .then((tex) => {
+            this.textures[slot] = tex;
+          })
+          .catch(() => {
+            /* ignore */
+          }),
+      );
+    }
+    await Promise.all(tasks);
+  }
+
   private handleEvent(ev: SnapshotEvent): void {
     if (ev.kind === 'shoot') {
-      const x = Number(ev.x ?? 0);
-      const y = Number(ev.y ?? 0);
-      this.spawnMuzzleFlash(x, y, Number(ev.who) === this.youId);
+      this.spawnMuzzleFlash(Number(ev.x ?? 0), Number(ev.y ?? 0), Number(ev.who) === this.youId);
     } else if (ev.kind === 'hit') {
-      const x = Number(ev.x ?? 0);
-      const y = Number(ev.y ?? 0);
       const isObstacle = Boolean(ev.obstacle);
-      this.spawnSparks(x, y, isObstacle ? 0xc9a06a : 0xffd166, isObstacle ? 6 : 12);
+      this.spawnSparks(Number(ev.x ?? 0), Number(ev.y ?? 0), isObstacle ? 0xc9a06a : 0xffd166, isObstacle ? 6 : 12);
     } else if (ev.kind === 'death') {
-      const who = Number(ev.who);
-      const view = this.players.get(who);
-      if (view) {
-        this.spawnSparks(view.curX, view.curY, who === this.youId ? COLOR_YOU : COLOR_OPP, 32);
-      }
+      const view = this.players.get(Number(ev.who));
+      if (view) this.spawnSparks(view.curX, view.curY, view.isYou ? COLOR_YOU : COLOR_OPP, 32);
     } else if (ev.kind === 'ability') {
-      const who = Number(ev.who);
-      const view = this.players.get(who);
-      if (view) this.spawnDashTrail(view.curX, view.curY, who === this.youId ? COLOR_YOU : COLOR_OPP);
+      const view = this.players.get(Number(ev.who));
+      if (view) this.spawnDashTrail(view.curX, view.curY, view.isYou ? COLOR_YOU : COLOR_OPP);
     }
   }
 
   private upsertPlayer(p: SnapshotPlayer): void {
     const isYou = p.id === this.youId;
-    const isOpp = p.id === this.oppId;
     let view = this.players.get(p.id);
     if (!view) {
-      const gfx = new Graphics();
-      this.world.addChild(gfx);
+      const root = new Container();
+      this.world.addChild(root);
+      const bodyG = new Graphics();
+      const weaponG = new Graphics();
+      const hpG = new Graphics();
+      root.addChild(bodyG);
+      // Optional sprite-based body
+      const bodyTex = this.textures[isYou ? 'player_you' : 'player_opp'];
+      let bodySprite: Sprite | null = null;
+      if (bodyTex) {
+        bodySprite = new Sprite(bodyTex);
+        bodySprite.anchor.set(0.5);
+        // Scale so longer side ≈ player diameter * 2
+        const scale = (PLAYER_RADIUS * 2.2) / Math.max(bodyTex.width, bodyTex.height);
+        bodySprite.scale.set(scale);
+        root.addChild(bodySprite);
+      }
+      // Weapon
+      root.addChild(weaponG);
+      const weaponTex = this.textures.weapon;
+      let weaponSprite: Sprite | null = null;
+      if (weaponTex) {
+        weaponSprite = new Sprite(weaponTex);
+        weaponSprite.anchor.set(0.2, 0.5); // pivot near grip
+        const wscale = (PLAYER_RADIUS * 1.4) / Math.max(weaponTex.height, 1);
+        weaponSprite.scale.set(wscale);
+        root.addChild(weaponSprite);
+      }
+      root.addChild(hpG);
       const label = new Text({
         text: '',
         style: { fill: 0xffffff, fontSize: 14, fontFamily: 'monospace', stroke: { color: 0x000000, width: 3 } },
@@ -179,7 +245,12 @@ export class PixiRenderer {
       label.anchor.set(0.5, 1);
       this.world.addChild(label);
       view = {
-        gfx,
+        root,
+        bodyG,
+        bodySprite,
+        weaponG,
+        weaponSprite,
+        hpG,
         label,
         prevX: p.x,
         prevY: p.y,
@@ -189,7 +260,6 @@ export class PixiRenderer {
         curAngle: p.angle,
         hp: p.hp,
         isYou,
-        isOpponent: isOpp,
       };
       this.players.set(p.id, view);
     } else {
@@ -208,34 +278,64 @@ export class PixiRenderer {
     const color = view.isYou ? COLOR_YOU : COLOR_OPP;
     const dark = view.isYou ? 0x2d8c66 : 0x9b3d4a;
     const dashing = (p.buffs ?? []).includes('dash');
-    const g = view.gfx;
-    g.clear();
-    // shadow
-    g.ellipse(0, PLAYER_RADIUS - 2, PLAYER_RADIUS, PLAYER_RADIUS * 0.4).fill({ color: 0x000000, alpha: 0.35 });
-    // body
-    g.circle(0, 0, PLAYER_RADIUS).fill({ color, alpha: p.hp > 0 ? 1 : 0.3 }).stroke({ color: dark, width: 2, alignment: 1 });
-    // inner highlight
-    g.circle(-PLAYER_RADIUS * 0.3, -PLAYER_RADIUS * 0.3, PLAYER_RADIUS * 0.35).fill({ color: 0xffffff, alpha: 0.18 });
-    // facing weapon (triangle)
-    const cos = Math.cos(view.curAngle);
-    const sin = Math.sin(view.curAngle);
-    const tipX = cos * (PLAYER_RADIUS + 14);
-    const tipY = sin * (PLAYER_RADIUS + 14);
-    const px = -sin * 6;
-    const py = cos * 6;
-    g.poly([
-      tipX, tipY,
-      cos * PLAYER_RADIUS + px, sin * PLAYER_RADIUS + py,
-      cos * PLAYER_RADIUS - px, sin * PLAYER_RADIUS - py,
-    ]).fill({ color: 0xffffff, alpha: 0.95 });
-    // dash aura
-    if (dashing) {
-      g.circle(0, 0, PLAYER_RADIUS + 8).stroke({ color: 0xffffff, alpha: 0.5, width: 2 });
+
+    view.bodyG.clear();
+    view.weaponG.clear();
+    view.hpG.clear();
+
+    // Shadow always (gives sense of ground)
+    view.bodyG.ellipse(0, PLAYER_RADIUS - 2, PLAYER_RADIUS, PLAYER_RADIUS * 0.4)
+      .fill({ color: 0x000000, alpha: 0.35 });
+
+    if (view.bodySprite) {
+      // Sprite body — keep sprite visible, only add aura/shadow via graphics
+      view.bodySprite.alpha = p.hp > 0 ? 1 : 0.3;
+      view.bodySprite.rotation = view.curAngle; // sprite assumed facing right
+    } else {
+      // Procedural body
+      view.bodyG.circle(0, 0, PLAYER_RADIUS)
+        .fill({ color, alpha: p.hp > 0 ? 1 : 0.3 })
+        .stroke({ color: dark, width: 2, alignment: 1 });
+      view.bodyG.circle(-PLAYER_RADIUS * 0.3, -PLAYER_RADIUS * 0.3, PLAYER_RADIUS * 0.35)
+        .fill({ color: 0xffffff, alpha: 0.18 });
     }
+
+    if (view.weaponSprite) {
+      view.weaponSprite.rotation = view.curAngle;
+      view.weaponSprite.x = Math.cos(view.curAngle) * PLAYER_RADIUS * 0.6;
+      view.weaponSprite.y = Math.sin(view.curAngle) * PLAYER_RADIUS * 0.6;
+      view.weaponSprite.alpha = p.hp > 0 ? 1 : 0.3;
+    } else if (!view.bodySprite) {
+      // procedural facing triangle
+      const cos = Math.cos(view.curAngle);
+      const sin = Math.sin(view.curAngle);
+      const tipX = cos * (PLAYER_RADIUS + 14);
+      const tipY = sin * (PLAYER_RADIUS + 14);
+      const px = -sin * 6;
+      const py = cos * 6;
+      view.weaponG.poly([
+        tipX, tipY,
+        cos * PLAYER_RADIUS + px, sin * PLAYER_RADIUS + py,
+        cos * PLAYER_RADIUS - px, sin * PLAYER_RADIUS - py,
+      ]).fill({ color: 0xffffff, alpha: 0.95 });
+    } else {
+      // Sprite body w/o weapon sprite — small triangle pointer
+      const cos = Math.cos(view.curAngle);
+      const sin = Math.sin(view.curAngle);
+      view.weaponG
+        .moveTo(cos * (PLAYER_RADIUS + 4), sin * (PLAYER_RADIUS + 4))
+        .lineTo(cos * (PLAYER_RADIUS + 12), sin * (PLAYER_RADIUS + 12))
+        .stroke({ color: 0xffffff, width: 3 });
+    }
+
+    if (dashing) {
+      view.weaponG.circle(0, 0, PLAYER_RADIUS + 8).stroke({ color: 0xffffff, alpha: 0.5, width: 2 });
+    }
+
     // HP bar
     const w = 50;
-    g.rect(-w / 2, -PLAYER_RADIUS - 14, w, 5).fill({ color: 0x000000, alpha: 0.5 });
-    g.rect(-w / 2, -PLAYER_RADIUS - 14, (w * Math.max(0, p.hp)) / 100, 5).fill({
+    view.hpG.rect(-w / 2, -PLAYER_RADIUS - 14, w, 5).fill({ color: 0x000000, alpha: 0.5 });
+    view.hpG.rect(-w / 2, -PLAYER_RADIUS - 14, (w * Math.max(0, p.hp)) / 100, 5).fill({
       color: p.hp > 50 ? 0x4ad29a : p.hp > 25 ? 0xf5c518 : 0xe06c75,
     });
 
@@ -247,23 +347,29 @@ export class PixiRenderer {
   private upsertBullet(b: SnapshotBullet): void {
     let view = this.bullets.get(b.id);
     if (!view) {
-      const gfx = new Graphics();
-      this.world.addChild(gfx);
-      view = { gfx };
+      const tex = this.textures.bullet;
+      let display: Sprite | Graphics;
+      if (tex) {
+        const s = new Sprite(tex);
+        s.anchor.set(0.5);
+        const sc = (BULLET_RADIUS * 2.5) / Math.max(tex.width, tex.height);
+        s.scale.set(sc);
+        display = s;
+      } else {
+        const g = new Graphics();
+        const color = b.owner === this.youId ? COLOR_BULLET_YOU : COLOR_BULLET_OPP;
+        g.circle(0, 0, BULLET_RADIUS + 2).fill({ color, alpha: 0.35 })
+          .circle(0, 0, BULLET_RADIUS).fill({ color: 0xffffff });
+        display = g;
+      }
+      this.world.addChild(display);
+      view = { display };
       this.bullets.set(b.id, view);
     }
-    const color = b.owner === this.youId ? COLOR_BULLET_YOU : COLOR_BULLET_OPP;
-    view.gfx
-      .clear()
-      .circle(0, 0, BULLET_RADIUS + 2)
-      .fill({ color, alpha: 0.35 })
-      .circle(0, 0, BULLET_RADIUS)
-      .fill({ color: 0xffffff });
-    view.gfx.x = b.x;
-    view.gfx.y = b.y;
+    view.display.x = b.x;
+    view.display.y = b.y;
   }
 
-  // ───── FX ─────
   private spawnMuzzleFlash(x: number, y: number, isYou: boolean): void {
     const g = new Graphics();
     g.circle(0, 0, 14).fill({ color: isYou ? 0xb6ffe0 : 0xffd2d2, alpha: 0.9 });
@@ -278,20 +384,12 @@ export class PixiRenderer {
       const a = Math.random() * Math.PI * 2;
       const sp = 60 + Math.random() * 220;
       const g = new Graphics();
-      const sz = 1.5 + Math.random() * 2.5;
-      g.circle(0, 0, sz).fill({ color });
+      g.circle(0, 0, 1.5 + Math.random() * 2.5).fill({ color });
       g.x = x;
       g.y = y;
       this.fxLayer.addChild(g);
       const ttl = 250 + Math.random() * 350;
-      this.particles.push({
-        gfx: g,
-        vx: Math.cos(a) * sp,
-        vy: Math.sin(a) * sp,
-        ttl,
-        maxTtl: ttl,
-        fade: true,
-      });
+      this.particles.push({ gfx: g, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, ttl, maxTtl: ttl, fade: true });
     }
   }
 
@@ -310,8 +408,8 @@ export class PixiRenderer {
     for (const v of this.players.values()) {
       const x = v.prevX + (v.curX - v.prevX) * t;
       const y = v.prevY + (v.curY - v.prevY) * t;
-      v.gfx.x = x;
-      v.gfx.y = y;
+      v.root.x = x;
+      v.root.y = y;
     }
     const dt = dtMs;
     for (let i = this.particles.length - 1; i >= 0; i--) {
@@ -348,37 +446,58 @@ export class PixiRenderer {
   };
 
   private drawArena(): void {
-    const bg = new Graphics();
-    bg.rect(0, 0, MAP_WIDTH, MAP_HEIGHT).fill({ color: 0x161b22 }).stroke({ color: 0x30363d, width: 4 });
-    bg.circle(MAP_WIDTH / 2, MAP_HEIGHT / 2, 60).stroke({ color: 0x21262d, width: 2 });
-    bg.circle(MAP_WIDTH / 2, MAP_HEIGHT / 2, 20).stroke({ color: 0x21262d, width: 2 });
-    for (let x = 0; x <= MAP_WIDTH; x += 80) {
-      bg.moveTo(x, 0).lineTo(x, MAP_HEIGHT).stroke({ color: 0x21262d, width: 1 });
+    this.bgLayer.removeChildren();
+    const tile = this.textures.bg_tile;
+    if (tile) {
+      const ts = new TilingSprite({ texture: tile, width: MAP_WIDTH, height: MAP_HEIGHT });
+      this.bgLayer.addChild(ts);
+    } else {
+      const bg = new Graphics();
+      bg.rect(0, 0, MAP_WIDTH, MAP_HEIGHT).fill({ color: 0x161b22 });
+      bg.circle(MAP_WIDTH / 2, MAP_HEIGHT / 2, 60).stroke({ color: 0x21262d, width: 2 });
+      bg.circle(MAP_WIDTH / 2, MAP_HEIGHT / 2, 20).stroke({ color: 0x21262d, width: 2 });
+      for (let x = 0; x <= MAP_WIDTH; x += 80) {
+        bg.moveTo(x, 0).lineTo(x, MAP_HEIGHT).stroke({ color: 0x21262d, width: 1 });
+      }
+      for (let y = 0; y <= MAP_HEIGHT; y += 80) {
+        bg.moveTo(0, y).lineTo(MAP_WIDTH, y).stroke({ color: 0x21262d, width: 1 });
+      }
+      this.bgLayer.addChild(bg);
     }
-    for (let y = 0; y <= MAP_HEIGHT; y += 80) {
-      bg.moveTo(0, y).lineTo(MAP_WIDTH, y).stroke({ color: 0x21262d, width: 1 });
-    }
-    this.world.addChildAt(bg, 0);
+    // Border
+    const border = new Graphics();
+    border.rect(0, 0, MAP_WIDTH, MAP_HEIGHT).stroke({ color: 0x30363d, width: 4 });
+    this.bgLayer.addChild(border);
   }
 
   private drawObstacles(): void {
-    if (this.obstaclesLayer) {
-      this.obstaclesLayer.destroy({ children: true });
-    }
+    if (this.obstaclesLayer) this.obstaclesLayer.destroy({ children: true });
     const layer = new Container();
     this.obstaclesLayer = layer;
+    // place above bg (idx 1) but below players/fx
     this.world.addChildAt(layer, 1);
     for (const ob of this.obstacles) {
-      const g = new Graphics();
-      drawObstacle(g, ob);
-      g.x = ob.x;
-      g.y = ob.y;
-      layer.addChild(g);
+      const kind: SpriteSlot = ob.kind === 'barrel' ? 'barrel' : ob.kind === 'wall' ? 'wall' : 'crate';
+      const tex = this.textures[kind];
+      if (tex) {
+        const s = new Sprite(tex);
+        s.x = ob.x;
+        s.y = ob.y;
+        s.width = ob.w;
+        s.height = ob.h;
+        layer.addChild(s);
+      } else {
+        const g = new Graphics();
+        drawObstacleProcedural(g, ob);
+        g.x = ob.x;
+        g.y = ob.y;
+        layer.addChild(g);
+      }
     }
   }
 }
 
-function drawObstacle(g: Graphics, ob: Obstacle): void {
+function drawObstacleProcedural(g: Graphics, ob: Obstacle): void {
   const { w, h } = ob;
   if (ob.kind === 'barrel') {
     g.rect(2, 4, w - 4, h - 6).fill({ color: 0x4a6bc4 }).stroke({ color: 0x2a3a78, width: 2 });

@@ -2,8 +2,10 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
-import { json } from 'express';
+import { json, static as expressStatic } from 'express';
 import type { Request } from 'express';
+import { existsSync, mkdirSync } from 'fs';
+import { join } from 'path';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { LobbyGateway } from './game/lobby.gateway';
@@ -27,9 +29,14 @@ async function bootstrap() {
     }),
   );
 
-  app.setGlobalPrefix('api', { exclude: ['internal/(.*)'] });
+  app.setGlobalPrefix('api', { exclude: ['internal/(.*)', 'uploads/(.*)'] });
   // Note: Zod-based validation is applied per-route via ZodValidationPipe.
   app.useGlobalFilters(new AllExceptionsFilter());
+
+  // Static serve uploaded sprites at /uploads/...
+  const uploadsRoot = join(process.cwd(), 'uploads');
+  if (!existsSync(uploadsRoot)) mkdirSync(uploadsRoot, { recursive: true });
+  app.use('/uploads', expressStatic(uploadsRoot, { maxAge: '7d', immutable: false }));
 
   app.enableCors({
     origin: true,
