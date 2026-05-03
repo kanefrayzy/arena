@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import { AppRouter } from './app/router';
+import { InstallPrompt } from './shared/pwa/InstallPrompt';
 import './shared/i18n';
 import './index.css';
 
@@ -17,6 +18,7 @@ ReactDOM.createRoot(root).render(
   <QueryClientProvider client={queryClient}>
     <BrowserRouter>
       <AppRouter />
+      <InstallPrompt />
     </BrowserRouter>
   </QueryClientProvider>,
 );
