@@ -315,6 +315,8 @@ model PaymentMethod {
   isWithdraw  Boolean  @default(false)
   isActive    Boolean  @default(true)
   sortOrder   Int      @default(0)
+  // Payout processing mode: manual | semi_auto | instant
+  payoutMode  String   @default("manual")
   meta        Json?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

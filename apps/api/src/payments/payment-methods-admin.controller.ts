@@ -30,6 +30,7 @@ const createSchema = z.object({
   isWithdraw: z.boolean().optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
+  payoutMode: z.enum(['manual', 'semi_auto', 'instant']).optional(),
 });
 type CreateInput = z.infer<typeof createSchema>;
 
@@ -65,7 +66,7 @@ export class PaymentMethodsAdminController {
         maxAmount: m.maxAmount?.toString() ?? null,
         usdRate: m.usdRate?.toString() ?? null,
         isDeposit: m.isDeposit, isWithdraw: m.isWithdraw, isActive: m.isActive,
-        sortOrder: m.sortOrder,
+        sortOrder: m.sortOrder, payoutMode: m.payoutMode,
       })),
     };
   }

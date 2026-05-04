@@ -27,13 +27,32 @@ export class QueueController {
   ): Promise<{ ok: true }> {
     // Balance check for paid modes — actual lock happens at match creation.
     if (body.mode !== 'free') {
-      const stake = await this.computeRequiredStake(body.mode, body.roomId);
-      if (stake.gt(0)) {
-        const wallet = await this.prisma.wallet.findUnique({ where: { userId: req.user.sub } });
-        if (!wallet) throw new BadRequestException('wallet missing');
-        const balance = new Prisma.Decimal(wallet.balance.toString());
-        if (balance.lessThan(stake)) {
-          throw new BadRequestException({ code: 'INSUFFICIENT_BALANCE', required: stake.toString(), have: balance.toString() });
+      // Casual: if rooms.casualEnabled=true, treat as free (no stake required)
+      if (body.mode === 'casual') {
+        const setting = await this.prisma.setting.findUnique({ where: { key: 'rooms.casualEnabled' } });
+        const casualFree = setting && (setting.value === true || (setting.value as unknown) === 'true');
+        if (!casualFree) {
+          // Casual rooms always required a stake in this case; fall through to balance check
+          const stake = await this.computeRequiredStake('casual', body.roomId);
+          if (stake.gt(0)) {
+            const wallet = await this.prisma.wallet.findUnique({ where: { userId: req.user.sub } });
+            if (!wallet) throw new BadRequestException('wallet missing');
+            const balance = new Prisma.Decimal(wallet.balance.toString());
+            if (balance.lessThan(stake)) {
+              throw new BadRequestException({ code: 'INSUFFICIENT_BALANCE', required: stake.toString(), have: balance.toString() });
+            }
+          }
+        }
+        // casualFree=true → no balance check
+      } else {
+        const stake = await this.computeRequiredStake(body.mode, body.roomId);
+        if (stake.gt(0)) {
+          const wallet = await this.prisma.wallet.findUnique({ where: { userId: req.user.sub } });
+          if (!wallet) throw new BadRequestException('wallet missing');
+          const balance = new Prisma.Decimal(wallet.balance.toString());
+          if (balance.lessThan(stake)) {
+            throw new BadRequestException({ code: 'INSUFFICIENT_BALANCE', required: stake.toString(), have: balance.toString() });
+          }
         }
       }
     }

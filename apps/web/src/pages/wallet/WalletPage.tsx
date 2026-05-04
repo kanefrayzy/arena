@@ -69,6 +69,7 @@ export function WalletPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [reqs, setReqs] = useState<DepositResponse | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetMin, setSheetMin] = useState(false);
 
   const reload = async () => {
@@ -88,15 +89,29 @@ export function WalletPage() {
   const filtered = methods.filter((m) => (tab === 'deposit' ? m.isDeposit : tab === 'withdraw' ? m.isWithdraw : false));
   const selected = methods.find((m) => m.slug === methodSlug) ?? null;
   const isCrypto = selected?.kind === 'westwallet';
-  const needsAmount = !(tab === 'deposit' && isCrypto);
+
+  // Auto-fetch crypto address when a crypto deposit method is selected
+  useEffect(() => {
+    if (tab !== 'deposit' || !selected || selected.kind !== 'westwallet') return;
+    setReqs(null); setErr(null); setBusy(true);
+    void (async () => {
+      try {
+        const r = await api.post<{ address: string; destTag?: string | null; currency: string }>(
+          '/payments/crypto-address', { currency: selected.currency },
+        );
+        setReqs({ paymentId: '', status: 'STATIC', crypto: { address: r.address, destTag: r.destTag ?? undefined, currency: r.currency } });
+      } catch (e) {
+        setErr(e instanceof ApiError ? e.code : (e as Error).message);
+      } finally { setBusy(false); }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, methodSlug]);
 
   const submitDeposit = async () => {
     if (!selected) return;
     setBusy(true); setErr(null); setReqs(null);
     try {
-      // crypto: amount field is irrelevant — backend won't use it for static-address deposits, but the API still requires a positive value.
-      const amt = isCrypto ? '0.01' : amount;
-      const r = await api.post<DepositResponse>('/payments/deposit', { method: selected.slug, amount: amt });
+      const r = await api.post<DepositResponse>('/payments/deposit', { method: selected.slug, amount });
       setReqs(r);
       setSheetMin(false);
       await reload();
@@ -165,7 +180,12 @@ export function WalletPage() {
               {filtered.map((m) => (
                 <button
                   key={m.slug}
-                  onClick={() => { setMethodSlug(m.slug); setReqs(null); setErr(null); }}
+                  onClick={() => {
+                    setMethodSlug(m.slug);
+                    setReqs(null); setErr(null);
+                    // Open sheet immediately when selecting deposit method
+                    if (tab === 'deposit') { setSheetOpen(true); setSheetMin(false); }
+                  }}
                   className={
                     'game-card flex flex-col items-center gap-2 p-3 transition ' +
                     (methodSlug === m.slug ? 'ring-2 ring-game-yellow' : 'hover:scale-[1.02]')
@@ -185,23 +205,16 @@ export function WalletPage() {
           </section>
         )}
 
-        {tab !== 'history' && selected && (
+        {tab !== 'history' && selected && tab === 'withdraw' && (
           <section className="flex flex-col gap-3 px-6 pt-4">
-            {needsAmount && (
-              <input
-                inputMode="decimal"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-                className="game-input font-mono text-xl"
-                placeholder={`Amount in ${selected.currency}`}
-              />
-            )}
-            {tab === 'deposit' && isCrypto && (
-              <div className="rounded-xl bg-white/5 px-3 py-2 text-xs text-white/70">
-                {t('wallet.crypto_any_amount', { currency: selected.currency })}
-              </div>
-            )}
-            {tab === 'withdraw' && selected.kind === 'betra_payout' && (
+            <input
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+              className="game-input font-mono text-xl"
+              placeholder={`Amount in ${selected.currency}`}
+            />
+            {selected.kind === 'betra_payout' && (
               <input
                 value={card}
                 onChange={(e) => setCard(e.target.value.replace(/[^0-9]/g, ''))}
@@ -210,7 +223,7 @@ export function WalletPage() {
                 maxLength={20}
               />
             )}
-            {tab === 'withdraw' && selected.kind === 'westwallet' && (
+            {selected.kind === 'westwallet' && (
               <input
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
@@ -220,13 +233,11 @@ export function WalletPage() {
             )}
             <button
               type="button"
-              disabled={busy || (needsAmount && !amount)}
-              onClick={() => (tab === 'deposit' ? void submitDeposit() : void submitWithdraw())}
-              className={'game-btn ' + (tab === 'deposit' ? 'game-btn-green' : 'game-btn-purple')}
+              disabled={busy || !amount}
+              onClick={() => void submitWithdraw()}
+              className="game-btn game-btn-purple"
             >
-              {tab === 'deposit'
-                ? (isCrypto ? t('wallet.get_address') : t('wallet.deposit'))
-                : t('wallet.withdraw')}
+              {t('wallet.withdraw')}
             </button>
             {err && <div className="text-center text-sm font-semibold text-game-red">{err}</div>}
           </section>
@@ -261,12 +272,19 @@ export function WalletPage() {
         )}
       </div>
 
-      {reqs && (
+      {sheetOpen && selected && tab === 'deposit' && (
         <DepositSheet
           reqs={reqs}
+          busy={busy}
+          loadingErr={err}
+          isCrypto={isCrypto}
+          selected={selected}
+          amount={amount}
+          onAmountChange={setAmount}
+          onSubmit={submitDeposit}
           minimized={sheetMin}
           onMinimize={() => setSheetMin((v) => !v)}
-          onClose={() => setReqs(null)}
+          onClose={() => { setSheetOpen(false); setReqs(null); setErr(null); setMethodSlug(null); }}
         />
       )}
     </div>
@@ -274,9 +292,17 @@ export function WalletPage() {
 }
 
 function DepositSheet({
-  reqs, minimized, onMinimize, onClose,
+  reqs, busy, loadingErr, isCrypto, selected, amount, onAmountChange, onSubmit,
+  minimized, onMinimize, onClose,
 }: {
-  reqs: DepositResponse;
+  reqs: DepositResponse | null;
+  busy: boolean;
+  loadingErr: string | null;
+  isCrypto: boolean;
+  selected: PaymentMethod;
+  amount: string;
+  onAmountChange: (v: string) => void;
+  onSubmit: () => void;
   minimized: boolean;
   onMinimize: () => void;
   onClose: () => void;
@@ -294,10 +320,10 @@ function DepositSheet({
     }
   };
 
-  const headerLabel = reqs.betra
+  const headerLabel = reqs?.betra
     ? t('wallet.pay_to_card')
-    : reqs.crypto
-    ? t('wallet.send_to_address') + ` (${reqs.crypto.currency})`
+    : (reqs?.crypto || isCrypto)
+    ? t('wallet.send_to_address') + ` (${selected.currency})`
     : t('wallet.deposit');
 
   // Drag-to-collapse: track pointer Y delta on the handle.
@@ -361,8 +387,39 @@ function DepositSheet({
         {/* Content */}
         <div className={'overflow-y-auto px-5 pb-6 transition-opacity duration-200 ' + (minimized ? 'opacity-0' : 'opacity-100')}
           style={{ maxHeight: '70vh' }}>
-          {reqs.betra && <BetraView b={reqs.betra} onCopy={onCopy} copied={copied} />}
-          {reqs.crypto && <CryptoView c={reqs.crypto} onCopy={onCopy} copied={copied} />}
+          {/* Loading crypto address */}
+          {busy && !reqs && isCrypto && (
+            <div className="py-10 text-center text-sm text-white/50">Получаем адрес…</div>
+          )}
+          {/* Error */}
+          {loadingErr && !reqs && (
+            <div className="rounded-xl bg-rose-500/15 px-4 py-3 text-sm text-rose-300">{loadingErr}</div>
+          )}
+          {/* Amount input for non-crypto betra deposit */}
+          {!reqs && !busy && !isCrypto && (
+            <div className="flex flex-col gap-3 pt-2">
+              <input
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => onAmountChange(e.target.value.replace(/[^0-9.]/g, ''))}
+                className="game-input font-mono text-xl"
+                placeholder={`Сумма в ${selected.currency}`}
+              />
+              {selected.minAmount && (
+                <div className="text-xs text-white/50">Мин: {selected.minAmount} {selected.currency}</div>
+              )}
+              <button
+                type="button"
+                disabled={!amount}
+                onClick={onSubmit}
+                className="game-btn game-btn-green"
+              >
+                {t('wallet.deposit')}
+              </button>
+            </div>
+          )}
+          {reqs?.betra && <BetraView b={reqs.betra} onCopy={onCopy} copied={copied} />}
+          {reqs?.crypto && <CryptoView c={reqs.crypto} onCopy={onCopy} copied={copied} />}
         </div>
       </div>
     </div>
@@ -418,13 +475,22 @@ function CryptoView({ c, onCopy, copied }: { c: { address: string; destTag?: str
   const { t } = useTranslation();
   return (
     <div className="flex flex-col items-center gap-3">
-      <div className="rounded-2xl bg-white p-3">
-        <img src={qrUrl(c.address, 240)} alt="QR" width={240} height={240} className="block" />
+      {/* QR code — large, white background, with a branded border */}
+      <div className="rounded-2xl border-2 border-game-yellow/40 bg-white p-3 shadow-[0_0_24px_rgba(245,197,24,0.2)]">
+        <img
+          src={qrUrl(c.address, 280)}
+          alt={`${c.currency} QR`}
+          width={280}
+          height={280}
+          className="block rounded-xl"
+        />
       </div>
+      <div className="text-xs font-semibold uppercase tracking-widest text-game-yellow">{c.currency}</div>
+
       <div className="w-full rounded-xl bg-black/40 px-4 py-3">
-        <div className="mb-1 text-[10px] uppercase tracking-widest text-white/50">{c.currency} {t('wallet.address')}</div>
+        <div className="mb-1 text-[10px] uppercase tracking-widest text-white/50">{t('wallet.address')}</div>
         <div className="flex items-center gap-2">
-          <span className="break-all font-mono text-sm text-white/90">{c.address}</span>
+          <span className="break-all font-mono text-sm leading-relaxed text-white/90">{c.address}</span>
           <button onClick={() => onCopy(c.address)} className="game-btn game-btn-ghost game-btn-sm shrink-0">
             {copied === c.address ? t('wallet.copied') : t('wallet.copy')}
           </button>

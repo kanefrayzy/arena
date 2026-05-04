@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../../shared/api/client';
 import { useAuth, type Me } from '../../shared/store/auth';
 import * as sfx from '../../shared/game/audio';
+import { MatchHistoryModal } from './MatchHistoryModal';
 
 interface Wallet {
   balance: string;
@@ -40,6 +41,7 @@ export function HomePage() {
   const [mode, setMode] = useState<Mode>('casual');
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -104,6 +106,17 @@ export function HomePage() {
         </button>
         <div className="game-title text-lg text-white/90">@{me.username}</div>
         <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setShowHistory(true)}
+            className="game-btn game-btn-ghost game-btn-sm"
+            title={t('history.title', 'История матчей')}
+            aria-label="Match history"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+            </svg>
+          </button>
           <button
             type="button"
             onClick={() => nav('/settings')}
@@ -239,6 +252,8 @@ export function HomePage() {
           </button>
         </div>
       </main>
+
+      {showHistory && <MatchHistoryModal onClose={() => setShowHistory(false)} />}
     </div>
   );
 }

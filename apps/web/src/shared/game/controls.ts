@@ -28,10 +28,18 @@ export class Controls {
   private joystick: JoystickState = { active: false, cx: 0, cy: 0, dx: 0, dy: 0 };
   private fireTouch = false;
   private abilityTouch = false;
+  /** Manual tap-to-aim: set when user taps canvas area outside joystick/buttons. */
+  private tapAngle: number | null = null;
+  private tapAngleFrame = 0;
 
   /** Player position in canvas (CSS) pixels — used to compute aim angle. */
   playerCanvasX = 0;
   playerCanvasY = 0;
+  /** Opponent position in canvas pixels — used for FIRE-button auto-aim on mobile. */
+  oppCanvasX = 0;
+  oppCanvasY = 0;
+  /** Callback fired when joystick moves — receives (dx, dy) normalised -1..1. */
+  onJoystickMove?: (dx: number, dy: number) => void;
 
   attach(canvas: HTMLElement, joystickEl: HTMLElement, fireBtn: HTMLElement, abilityBtn: HTMLElement): () => void {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -92,12 +100,14 @@ export class Controls {
       const k = m > max ? max / m : 1;
       this.joystick.dx = (dx * k) / max;
       this.joystick.dy = (dy * k) / max;
+      this.onJoystickMove?.(this.joystick.dx, this.joystick.dy);
       e.preventDefault();
     };
     const joyTouchEnd = (e: TouchEvent) => {
       this.joystick.active = false;
       this.joystick.dx = 0;
       this.joystick.dy = 0;
+      this.onJoystickMove?.(0, 0);
       e.preventDefault();
     };
     joystickEl.addEventListener('touchstart', joyTouchStart, { passive: false });
@@ -131,6 +141,27 @@ export class Controls {
     abilityBtn.addEventListener('mousedown', abilityDown);
     abilityBtn.addEventListener('mouseup', abilityUp);
 
+    // Tap-to-aim: touch on canvas area that's NOT joystick/fire/ability
+    const canvasTapStart = (e: TouchEvent) => {
+      // Only handle touches that started in the canvas area (upper half roughly)
+      const t = e.changedTouches[0];
+      if (!t) return;
+      const joyRect = joystickEl.getBoundingClientRect();
+      const fireRect = fireBtn.getBoundingClientRect();
+      const abilRect = abilityBtn.getBoundingClientRect();
+      const hitJoy = t.clientX >= joyRect.left && t.clientX <= joyRect.right && t.clientY >= joyRect.top && t.clientY <= joyRect.bottom;
+      const hitFire = t.clientX >= fireRect.left && t.clientX <= fireRect.right && t.clientY >= fireRect.top && t.clientY <= fireRect.bottom;
+      const hitAbil = t.clientX >= abilRect.left && t.clientX <= abilRect.right && t.clientY >= abilRect.top && t.clientY <= abilRect.bottom;
+      if (hitJoy || hitFire || hitAbil) return;
+      // Aim toward tap
+      const rect = canvas.getBoundingClientRect();
+      const ax = t.clientX - rect.left - this.playerCanvasX;
+      const ay = t.clientY - rect.top - this.playerCanvasY;
+      this.tapAngle = Math.atan2(ay, ax);
+      this.tapAngleFrame = 0;
+    };
+    canvas.addEventListener('touchstart', canvasTapStart, { passive: true });
+
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
@@ -138,6 +169,7 @@ export class Controls {
       canvas.removeEventListener('mousedown', onMouseDown);
       canvas.removeEventListener('mouseup', onMouseUp);
       canvas.removeEventListener('contextmenu', onContextMenu);
+      canvas.removeEventListener('touchstart', canvasTapStart);
     };
   }
 
@@ -165,6 +197,20 @@ export class Controls {
       const ax = this.mouseX - this.playerCanvasX;
       const ay = this.mouseY - this.playerCanvasY;
       angle = Math.atan2(ay, ax);
+    } else if (this.fireTouch) {
+      // Auto-aim toward opponent when FIRE button held on mobile
+      const ax = this.oppCanvasX - this.playerCanvasX;
+      const ay = this.oppCanvasY - this.playerCanvasY;
+      if (Math.hypot(ax, ay) > 10) {
+        angle = Math.atan2(ay, ax);
+      } else if (m > 0) {
+        angle = Math.atan2(dy, dx);
+      }
+    } else if (this.tapAngle !== null) {
+      angle = this.tapAngle;
+      // Keep tap angle for ~6 frames then reset
+      this.tapAngleFrame++;
+      if (this.tapAngleFrame > 6) this.tapAngle = null;
     } else if (m > 0) {
       angle = Math.atan2(dy, dx);
     }

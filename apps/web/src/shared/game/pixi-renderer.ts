@@ -185,6 +185,16 @@ export class PixiRenderer {
     return { x: p.curX * t.a + t.tx, y: p.curY * t.d + t.ty };
   }
 
+  getOppCanvasPos(): { x: number; y: number } | null {
+    for (const [id, p] of this.players) {
+      if (id !== this.youId) {
+        const t = this.world.worldTransform;
+        return { x: p.curX * t.a + t.tx, y: p.curY * t.d + t.ty };
+      }
+    }
+    return null;
+  }
+
   /** True when the camera mirrors the world by Y so YOU is always at the bottom. */
   isFlipped(): boolean {
     return this.flipY;

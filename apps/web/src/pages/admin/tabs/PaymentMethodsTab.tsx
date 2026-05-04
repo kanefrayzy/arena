@@ -15,6 +15,7 @@ interface Method {
   isWithdraw: boolean;
   isActive: boolean;
   sortOrder: number;
+  payoutMode: 'manual' | 'semi_auto' | 'instant';
 }
 
 const KINDS: Method['kind'][] = ['betra_card', 'betra_payout', 'westwallet'];
@@ -119,7 +120,7 @@ function MethodCard({ m, busy, onPatch, onRemove, onUpload }: {
       label: draft.label, kind: draft.kind, currency: draft.currency,
       minAmount: draft.minAmount, maxAmount: draft.maxAmount, usdRate: draft.usdRate,
       isDeposit: draft.isDeposit, isWithdraw: draft.isWithdraw, isActive: draft.isActive,
-      sortOrder: Number(draft.sortOrder),
+      sortOrder: Number(draft.sortOrder), payoutMode: draft.payoutMode,
     });
     setEdit(false);
   };
@@ -198,6 +199,13 @@ function MethodCard({ m, busy, onPatch, onRemove, onUpload }: {
               <label className="flex items-center gap-1"><input type="checkbox" checked={draft.isDeposit} onChange={(e) => setDraft({ ...draft, isDeposit: e.target.checked })} /> deposit</label>
               <label className="flex items-center gap-1"><input type="checkbox" checked={draft.isWithdraw} onChange={(e) => setDraft({ ...draft, isWithdraw: e.target.checked })} /> withdraw</label>
             </div>
+          </Lab>
+          <Lab label="Режим вывода">
+            <select className={inp} value={draft.payoutMode} onChange={(e) => setDraft({ ...draft, payoutMode: e.target.value as Method['payoutMode'] })}>
+              <option value="manual">Ручной (manual)</option>
+              <option value="semi_auto">Полуавтомат (semi_auto)</option>
+              <option value="instant">Автоматический (instant)</option>
+            </select>
           </Lab>
           <div className="col-span-2 flex justify-between pt-2">
             <button onClick={() => void onRemove()} disabled={busy} className="rounded bg-rose-500/30 px-3 py-1 text-rose-100">delete</button>

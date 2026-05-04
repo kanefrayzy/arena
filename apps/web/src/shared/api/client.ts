@@ -35,6 +35,13 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     | null;
 
   if (!res.ok) {
+    if (res.status === 401) {
+      // Redirect to login if not already there
+      const p = window.location.pathname;
+      if (p !== '/' && p !== '/login' && p !== '/register') {
+        window.location.replace('/');
+      }
+    }
     const err = (json as { error?: { code: string; message: string } })?.error;
     throw new ApiError(
       res.status,

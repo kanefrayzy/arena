@@ -133,6 +133,7 @@ export class PaymentsService {
     }
 
     const orderId = randomUUID();
+    const payoutMode = (method as any).payoutMode ?? 'manual';
 
     if (method.kind === 'betra_payout') {
       if (!opts.card) throw new BadRequestException({ code: 'CARD_REQUIRED' });
@@ -148,15 +149,18 @@ export class PaymentsService {
         userId, amount: usdAmount.negated(), type: 'WITHDRAWAL',
         refType: 'payment', refId: payment.id, idempotencyKey: `payment:${payment.id}:lock`,
       });
-      try {
-        const r = await this.betra.createPayout({
-          orderId, amount: amount.toFixed(2), currency: method.currency, card: opts.card,
-          receiverName: opts.receiverName, receiverPhone: opts.receiverPhone, callbackUrl,
-        });
-        await this.prisma.payment.update({ where: { id: payment.id }, data: { externalId: String(r.id), status: this.mapBetraPayoutStatus(r.status) } });
-      } catch (err) {
-        await this.refund(payment.id, payment.userId, usdAmount, 'betra_payout_failed');
-        throw err;
+      // instant: auto-submit to provider. manual/semi_auto: hold for admin approval.
+      if (payoutMode === 'instant') {
+        try {
+          const r = await this.betra.createPayout({
+            orderId, amount: amount.toFixed(2), currency: method.currency, card: opts.card,
+            receiverName: opts.receiverName, receiverPhone: opts.receiverPhone, callbackUrl,
+          });
+          await this.prisma.payment.update({ where: { id: payment.id }, data: { externalId: String(r.id), status: this.mapBetraPayoutStatus(r.status) } });
+        } catch (err) {
+          await this.refund(payment.id, payment.userId, usdAmount, 'betra_payout_failed');
+          throw err;
+        }
       }
       const after = await this.prisma.wallet.findUnique({ where: { userId } });
       return { paymentId: payment.id, status: 'PENDING', balance: after?.balance.toString() ?? '0' };
@@ -175,16 +179,18 @@ export class PaymentsService {
         userId, amount: usdAmount.negated(), type: 'WITHDRAWAL',
         refType: 'payment', refId: payment.id, idempotencyKey: `payment:${payment.id}:lock`,
       });
-      try {
-        const r = await this.west.createWithdrawal({
-          currency: method.currency, amount: amount.toFixed(8),
-          address: opts.address, destTag: opts.destTag, description: payment.id,
-          ipnUrl: `${PUBLIC_BASE_URL}/internal/payments/westwallet/payout-ipn?paymentId=${payment.id}`,
-        });
-        await this.prisma.payment.update({ where: { id: payment.id }, data: { externalId: String(r.id), status: r.status === 'completed' ? 'COMPLETED' : 'PENDING' } });
-      } catch (err) {
-        await this.refund(payment.id, payment.userId, usdAmount, 'west_withdraw_failed');
-        throw err;
+      if (payoutMode === 'instant') {
+        try {
+          const r = await this.west.createWithdrawal({
+            currency: method.currency, amount: amount.toFixed(8),
+            address: opts.address, destTag: opts.destTag, description: payment.id,
+            ipnUrl: `${PUBLIC_BASE_URL}/internal/payments/westwallet/payout-ipn?paymentId=${payment.id}`,
+          });
+          await this.prisma.payment.update({ where: { id: payment.id }, data: { externalId: String(r.id), status: r.status === 'completed' ? 'COMPLETED' : 'PENDING' } });
+        } catch (err) {
+          await this.refund(payment.id, payment.userId, usdAmount, 'west_withdraw_failed');
+          throw err;
+        }
       }
       const after = await this.prisma.wallet.findUnique({ where: { userId } });
       return { paymentId: payment.id, status: 'PENDING', balance: after?.balance.toString() ?? '0' };

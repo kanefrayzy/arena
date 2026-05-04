@@ -23,6 +23,11 @@ export class MatchesController {
       where: { OR: [{ player1Id: userId }, { player2Id: userId }] },
       orderBy: { createdAt: 'desc' },
       take,
+      include: {
+        player1: { select: { id: true, username: true } },
+        player2: { select: { id: true, username: true } },
+        room:    { select: { mode: true } },
+      },
     });
     return { items };
   }

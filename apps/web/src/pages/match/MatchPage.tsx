@@ -21,6 +21,7 @@ export function MatchPage() {
   const matchId = id ?? '';
   const hostRef = useRef<HTMLDivElement | null>(null);
   const joyRef = useRef<HTMLDivElement | null>(null);
+  const joyDotRef = useRef<HTMLDivElement | null>(null);
   const fireRef = useRef<HTMLButtonElement | null>(null);
   const abRef = useRef<HTMLButtonElement | null>(null);
   const [welcome, setWelcome] = useState<SWelcome | null>(null);
@@ -117,12 +118,25 @@ export function MatchPage() {
       });
       client.connect();
 
+      // Wire joystick indicator
+      controls.onJoystickMove = (dx, dy) => {
+        if (joyDotRef.current) {
+          const max = 40; // half of inner dot travel
+          joyDotRef.current.style.transform = `translate(${dx * max}px, ${dy * max}px)`;
+        }
+      };
+
       // Send input at 30 Hz
       inputTimer = window.setInterval(() => {
         const pos = renderer!.getYouCanvasPos();
         if (pos) {
           controls.playerCanvasX = pos.x;
           controls.playerCanvasY = pos.y;
+        }
+        const oppPos = renderer!.getOppCanvasPos();
+        if (oppPos) {
+          controls.oppCanvasX = oppPos.x;
+          controls.oppCanvasY = oppPos.y;
         }
         const W = host.clientWidth;
         const H = host.clientHeight;
@@ -213,7 +227,17 @@ export function MatchPage() {
         </div>
       )}
       {/* Mobile controls */}
-      <div className="pointer-events-auto absolute bottom-6 left-6 h-32 w-32 rounded-full bg-white/10 backdrop-blur md:opacity-30" ref={joyRef as never} />
+      <div
+        className="pointer-events-auto absolute bottom-6 left-6 h-32 w-32 rounded-full bg-white/15 backdrop-blur border border-white/20 md:opacity-30 flex items-center justify-center"
+        ref={joyRef as never}
+      >
+        {/* Inner direction dot */}
+        <div
+          ref={joyDotRef}
+          style={{ transition: 'transform 0.05s linear' }}
+          className="h-10 w-10 rounded-full bg-white/60 shadow-[0_0_8px_rgba(255,255,255,0.4)] pointer-events-none"
+        />
+      </div>
       <button
         ref={fireRef}
         type="button"
