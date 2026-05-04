@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
-import { json, static as expressStatic } from 'express';
+import { json, urlencoded, static as expressStatic } from 'express';
 import type { Request } from 'express';
 import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
@@ -21,6 +21,17 @@ async function bootstrap() {
   // Capture raw body on /internal/* for HMAC verification.
   app.use(
     json({
+      verify: (req: Request & { rawBody?: Buffer }, _res, buf: Buffer) => {
+        if (req.url?.startsWith('/internal/')) {
+          req.rawBody = Buffer.from(buf);
+        }
+      },
+    }),
+  );
+  // WestWallet IPN posts as application/x-www-form-urlencoded; capture raw too for any HMAC needs.
+  app.use(
+    urlencoded({
+      extended: false,
       verify: (req: Request & { rawBody?: Buffer }, _res, buf: Buffer) => {
         if (req.url?.startsWith('/internal/')) {
           req.rawBody = Buffer.from(buf);

@@ -335,6 +335,27 @@ async function main() {
     console.log(`✓ starter backfill: ${granted} skins granted, ${loadouts} loadouts created`);
   }
 
+  // ---------- Payment methods (idempotent) ----------
+  const paymentMethods = [
+    { slug: 'betra_card_azn', label: 'Карта (AZN)', kind: 'betra_card', currency: 'AZN', isDeposit: true, isWithdraw: false, sortOrder: 10 },
+    { slug: 'betra_card_rub', label: 'Карта (RUB)', kind: 'betra_card', currency: 'RUB', isDeposit: true, isWithdraw: false, sortOrder: 11 },
+    { slug: 'betra_card_kzt', label: 'Карта (KZT)', kind: 'betra_card', currency: 'KZT', isDeposit: true, isWithdraw: false, sortOrder: 12 },
+    { slug: 'betra_payout_azn', label: 'Выплата на карту (AZN)', kind: 'betra_payout', currency: 'AZN', isDeposit: false, isWithdraw: true, sortOrder: 20 },
+    { slug: 'betra_payout_kzt', label: 'Выплата на карту (KZT)', kind: 'betra_payout', currency: 'KZT', isDeposit: false, isWithdraw: true, sortOrder: 21 },
+    { slug: 'betra_payout_usdt', label: 'Выплата USDT (TRC20)', kind: 'betra_payout', currency: 'USDT', isDeposit: false, isWithdraw: true, sortOrder: 22 },
+    { slug: 'west_btc', label: 'Bitcoin', kind: 'westwallet', currency: 'BTC', isDeposit: true, isWithdraw: true, sortOrder: 30 },
+    { slug: 'west_usdt_trc', label: 'USDT TRC-20', kind: 'westwallet', currency: 'USDTTRC', isDeposit: true, isWithdraw: true, sortOrder: 31 },
+    { slug: 'west_eth', label: 'Ethereum', kind: 'westwallet', currency: 'ETH', isDeposit: true, isWithdraw: true, sortOrder: 32 },
+    { slug: 'west_ltc', label: 'Litecoin', kind: 'westwallet', currency: 'LTC', isDeposit: true, isWithdraw: true, sortOrder: 33 },
+  ] as const;
+  for (const pm of paymentMethods) {
+    await prisma.paymentMethod.upsert({
+      where: { slug: pm.slug },
+      update: {}, // do not overwrite admin edits
+      create: pm,
+    });
+  }
+
   console.log('✓ seed completed');
 }
 

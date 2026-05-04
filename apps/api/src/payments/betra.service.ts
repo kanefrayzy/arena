@@ -1,0 +1,162 @@
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
+const API_URL = (process.env.BETRA_API_URL ?? 'https://betra1.com/api/h2h').replace(/\/$/, '');
+const API_KEY = process.env.BETRA_API_KEY ?? '';
+const SECRET = process.env.BETRA_SECRET ?? '';
+
+interface CreateDepositInput {
+  orderId: string;
+  amount: string;
+  currency: string;
+  callbackUrl: string;
+  userId: number;
+  email?: string;
+  aggregators?: string[];
+}
+
+export interface BetraDepositReqs {
+  id: number;
+  status: string;
+  card: string | null;
+  cardHolder: string | null;
+  bank: string | null;
+  qrLink: string | null;
+  expiredAt: string | null;
+  amount: number;
+  currency: string;
+}
+
+interface CreatePayoutInput {
+  orderId: string;
+  amount: string;
+  currency: string;
+  card: string;
+  receiverName?: string;
+  receiverPhone?: string;
+  callbackUrl: string;
+}
+
+@Injectable()
+export class BetraService {
+  private readonly log = new Logger('Betra');
+
+  isConfigured(): boolean {
+    return Boolean(API_KEY && SECRET);
+  }
+
+  private async req(method: 'GET' | 'POST', path: string, body?: unknown): Promise<{ ok: boolean; data: any; status: number }> {
+    if (!API_KEY) throw new ServiceUnavailableException({ code: 'BETRA_NOT_CONFIGURED' });
+    const init: RequestInit = {
+      method,
+      headers: {
+        'X-Api-Key': API_KEY,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+    };
+    if (body !== undefined) init.body = JSON.stringify(body);
+    const r = await fetch(`${API_URL}${path}`, init);
+    let data: any = null;
+    try {
+      data = await r.json();
+    } catch {
+      data = null;
+    }
+    if (!r.ok) {
+      this.log.warn(`Betra ${method} ${path} -> ${r.status} ${JSON.stringify(data)}`);
+    }
+    return { ok: r.ok && data?.success !== false, data, status: r.status };
+  }
+
+  async createDeposit(input: CreateDepositInput): Promise<BetraDepositReqs> {
+    const body = {
+      order_id: input.orderId,
+      amount: Number(input.amount),
+      currency: input.currency,
+      callback_url: input.callbackUrl,
+      aggregators: input.aggregators,
+      customer: {
+        user_id: String(input.userId),
+        email: input.email,
+      },
+    };
+    const r = await this.req('POST', '/create', body);
+    if (!r.ok) {
+      throw new ServiceUnavailableException({
+        code: 'BETRA_CREATE_FAILED',
+        status: r.status,
+        error: r.data?.error ?? r.data,
+      });
+    }
+    const d = r.data?.data ?? r.data;
+    return {
+      id: d.id,
+      status: d.status,
+      card: d.card ?? null,
+      cardHolder: d.card_holder ?? null,
+      bank: d.bank ?? null,
+      qrLink: d.qr_link ?? null,
+      expiredAt: d.expired_at ?? null,
+      amount: Number(d.amount ?? input.amount),
+      currency: d.currency ?? input.currency,
+    };
+  }
+
+  async getDepositStatus(id: number): Promise<{ status: string; raw: any }> {
+    const r = await this.req('GET', `/status/${id}`);
+    if (!r.ok) throw new ServiceUnavailableException({ code: 'BETRA_STATUS_FAILED' });
+    return { status: r.data?.data?.status ?? 'unknown', raw: r.data?.data };
+  }
+
+  async cancelDeposit(id: number): Promise<void> {
+    await this.req('POST', `/cancel/${id}`);
+  }
+
+  async createPayout(input: CreatePayoutInput): Promise<{ id: number; status: string }> {
+    const body = {
+      order_id: input.orderId,
+      amount: Number(input.amount),
+      currency: input.currency,
+      card: input.card,
+      receiver_name: input.receiverName,
+      receiver_phone: input.receiverPhone,
+      callback_url: input.callbackUrl,
+    };
+    const r = await this.req('POST', '/payout/create', body);
+    if (!r.ok) {
+      throw new ServiceUnavailableException({
+        code: 'BETRA_PAYOUT_FAILED',
+        error: r.data?.error ?? r.data,
+      });
+    }
+    const d = r.data?.data ?? r.data;
+    return { id: d.id, status: d.status };
+  }
+
+  /** Verify deposit-callback signature: HMAC_SHA256(id+order_id+status+timestamp, secret). */
+  verifyDepositSignature(payload: { id: number | string; order_id: string; status: string; timestamp: number | string; signature?: string }): boolean {
+    if (!SECRET) return false;
+    const sigData = `${payload.id}${payload.order_id}${payload.status}${payload.timestamp}`;
+    const expected = createHmac('sha256', SECRET).update(sigData).digest('hex');
+    const received = String(payload.signature ?? '');
+    if (expected.length !== received.length) return false;
+    try {
+      return timingSafeEqual(Buffer.from(expected), Buffer.from(received));
+    } catch {
+      return false;
+    }
+  }
+
+  /** Verify payout-callback or any X-Signature header against raw body. */
+  verifyHeaderSignature(rawBody: Buffer | string, signature: string | undefined): boolean {
+    if (!SECRET || !signature) return false;
+    const expected = createHmac('sha256', SECRET).update(rawBody).digest('hex');
+    if (expected.length !== signature.length) return false;
+    try {
+      return timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+    } catch {
+      return false;
+    }
+  }
+}

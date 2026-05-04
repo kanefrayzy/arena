@@ -243,19 +243,25 @@ model UserLoadout {
 }
 
 model Payment {
-  id         String    @id @default(uuid())
-  userId     Int
-  type       String
-  status     String
-  amountUsd  Decimal   @db.Decimal(20, 8)
-  provider   String
-  externalId String?
-  meta       Json?
-  createdAt  DateTime  @default(now())
-  finishedAt DateTime?
+  id          String    @id @default(uuid())
+  userId      Int
+  type        String
+  status      String
+  amountUsd   Decimal   @db.Decimal(20, 8)
+  // Original amount in user-facing currency (for fiat/crypto via providers).
+  amountRaw   Decimal?  @db.Decimal(20, 8)
+  currency    String?
+  provider    String
+  // Slug of PaymentMethod used.
+  methodSlug  String?
+  externalId  String?
+  meta        Json?
+  createdAt   DateTime  @default(now())
+  finishedAt  DateTime?
 
   @@index([userId, createdAt])
   @@index([externalId])
+  @@index([methodSlug])
 }
 
 model UserStats {
@@ -283,4 +289,48 @@ model Sprite {
   height    Int
   mime      String
   updatedAt DateTime @updatedAt
+}
+
+// --- Payments ---
+
+// Admin-managed list of payment methods shown in the wallet UI.
+// "kind" controls which provider service handles deposit/withdraw flows.
+//   - betra_card: Betra H2H deposit returning card requisites
+//   - betra_payout: Betra H2H payout (withdraw to user's card / USDT)
+//   - westwallet: WestWallet static crypto address (per user) + payout
+model PaymentMethod {
+  id          Int      @id @default(autoincrement())
+  slug        String   @unique
+  label       String
+  kind        String   // betra_card | betra_payout | westwallet
+  currency    String   // AZN, RUB, KZT, USDT, BTC, USDTTRC, ETH, ...
+  iconUrl     String?
+  // For Betra: minimum/maximum in fiat currency. For West: in crypto units.
+  minAmount   Decimal? @db.Decimal(20, 8)
+  maxAmount   Decimal? @db.Decimal(20, 8)
+  // USD conversion rate used for ledger bookkeeping when currency != USD.
+  // null  means already-USD or stored verbatim.
+  usdRate     Decimal? @db.Decimal(20, 8)
+  isDeposit   Boolean  @default(true)
+  isWithdraw  Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  meta        Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Static WestWallet address pinned to a (user, currency) pair.
+model CryptoAddress {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  currency   String
+  address    String
+  destTag    String?
+  label      String   @unique
+  provider   String   @default("westwallet")
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, currency, provider])
+  @@index([address])
 }
