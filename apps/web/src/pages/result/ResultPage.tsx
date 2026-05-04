@@ -43,8 +43,8 @@ export function ResultPage() {
         ? 'text-game-red drop-shadow-[0_4px_0_rgba(0,0,0,0.5)]'
         : 'text-white/80';
 
-  // Payout badge
-  const stake = data.room?.mode === 'STAKE' ? Number(data.room.stakeUsd ?? 0) : 0;
+  // Payout badge — show for any match with a stake (STAKE or CASUAL with stakeUsd > 0)
+  const stake = Number(data.room?.stakeUsd ?? 0);
   const payoutLine =
     stake > 0
       ? outcome === 'win'

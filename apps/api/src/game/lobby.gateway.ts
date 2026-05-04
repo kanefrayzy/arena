@@ -159,6 +159,9 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
 
     // Send initial idle status
     this.send(sock, { type: 'queue:status', state: 'idle' });
+
+    // Deliver any missed match:found event (race condition: WS was not connected when matchmaker ran)
+    this.deliverPendingMatch(sock).catch(() => undefined);
   }
 
   private onMessage(sock: AuthedSocket, raw: string): void {
@@ -226,5 +229,28 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
       opponent: ev.opponent,
       room: ev.room,
     });
+    // Clear the per-user fallback key now that it was delivered
+    this.sub?.del(`lobby:pending-match:${ev.userId}`).catch(() => undefined);
+  }
+
+  private async deliverPendingMatch(sock: AuthedSocket): Promise<void> {
+    if (!this.sub) return;
+    const raw = await this.sub.get(`lobby:pending-match:${sock.userId}`);
+    if (!raw) return;
+    try {
+      const ev = JSON.parse(raw) as MatchFoundEvent;
+      this.send(sock, {
+        type: 'match:found',
+        matchId: ev.matchId,
+        matchToken: ev.matchToken,
+        gameWsUrl: ev.gameWsUrl,
+        opponent: ev.opponent,
+        room: ev.room,
+      });
+      await this.sub.del(`lobby:pending-match:${sock.userId}`);
+      this.log.log(`delivered pending match ${ev.matchId} to user ${sock.userId} on reconnect`);
+    } catch {
+      // ignore parse errors
+    }
   }
 }

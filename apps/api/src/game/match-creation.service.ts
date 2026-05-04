@@ -141,6 +141,14 @@ export class MatchCreationService {
           ...(input.room.stakeUsd ? { stakeUsd: String(input.room.stakeUsd) } : {}),
         },
       };
+      // Store as fallback for players whose lobby WS was not connected at this exact moment.
+      // The lobby gateway reads this on (re)connect and delivers it, then deletes the key.
+      await this.redis.client.set(
+        `lobby:pending-match:${self.id}`,
+        JSON.stringify(ev),
+        'EX',
+        60,
+      );
       await this.redis.client.publish(MATCH_FOUND_CHANNEL, JSON.stringify(ev));
     }
 
