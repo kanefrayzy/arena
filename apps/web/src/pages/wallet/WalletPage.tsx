@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../../shared/api/client';
+import { toast } from '../../shared/ui/toast';
 
 interface Wallet { balance: string; locked: string; updatedAt: string }
 interface PaymentMethod {
@@ -114,6 +115,7 @@ export function WalletPage() {
       const r = await api.post<DepositResponse>('/payments/deposit', { method: selected.slug, amount });
       setReqs(r);
       setSheetMin(false);
+      toast.info('Реквизиты получены', 'Оплатите по указанным реквизитам и средства зачислятся автоматически');
       await reload();
     } catch (e) {
       setErr(e instanceof ApiError ? `${e.code}` : (e as Error).message);
@@ -129,6 +131,7 @@ export function WalletPage() {
       else if (selected.kind === 'westwallet') body.address = address;
       await api.post('/payments/withdraw', body);
       setErr(null);
+      toast.success('Заявка отправлена', `Вывод ${amount} ${selected.currency} принят в обработку`);
       await reload();
     } catch (e) {
       setErr(e instanceof ApiError ? `${e.code}` : (e as Error).message);

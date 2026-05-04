@@ -12,7 +12,8 @@ interface MatchItem {
   winnerId: number | null;
   status: string;
   durationMs: number | null;
-  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
 }
 
 function formatDuration(ms: number | null): string {
@@ -96,13 +97,26 @@ export function MatchHistoryModal({ onClose }: { onClose: () => void }) {
             } else if (lost) {
               resultLabel = t('history.loss', 'Поражение');
               resultColor = 'text-game-red';
+            } else if (m.status === 'PENDING') {
+              resultLabel = 'В очереди';
+              resultColor = 'text-white/40';
+            } else if (m.status === 'RUNNING') {
+              resultLabel = 'Идёт';
+              resultColor = 'text-game-yellow';
+            } else if (m.status === 'CANCELLED') {
+              resultLabel = 'Отменён';
+              resultColor = 'text-white/30';
+            } else if (m.status === 'DISPUTED') {
+              resultLabel = 'Спор';
+              resultColor = 'text-amber-400';
             } else {
               resultLabel = m.status;
               resultColor = 'text-white/40';
             }
 
             const stake = Number(m.stakeUsd);
-            const date = new Date(m.createdAt).toLocaleDateString();
+            const dateStr = m.finishedAt ?? m.startedAt;
+            const date = dateStr ? new Date(dateStr).toLocaleDateString('ru-RU') : '—';
 
             return (
               <div key={m.id} className="flex items-center gap-3 border-b border-white/5 px-5 py-3">
