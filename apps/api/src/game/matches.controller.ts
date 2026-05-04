@@ -20,7 +20,10 @@ export class MatchesController {
     const take = Math.min(50, Math.max(1, Number(limit ?? 20)));
     const userId = req.user.sub;
     const items = await this.prisma.match.findMany({
-      where: { OR: [{ player1Id: userId }, { player2Id: userId }] },
+      where: {
+        OR: [{ player1Id: userId }, { player2Id: userId }],
+        status: { in: ['FINISHED', 'CANCELLED'] },
+      },
       orderBy: { startedAt: 'desc' },
       take,
       include: {

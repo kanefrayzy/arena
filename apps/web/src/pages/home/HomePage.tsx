@@ -175,41 +175,8 @@ export function HomePage() {
           <div className="mt-3 self-center game-chip text-white/80">{t('home.casual_hint')}</div>
         )}
 
-        {/* Hero character — centered, with history/notif side buttons like Clash Royale */}
+        {/* Hero character */}
         <div className="relative flex flex-1 items-center justify-center">
-          {/* LEFT: Match history */}
-          <button
-            type="button"
-            onClick={() => setShowHistory(true)}
-            className="absolute left-0 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 rounded-2xl border border-white/10 bg-black/30 px-2 py-3 text-white/70 backdrop-blur hover:bg-black/50 active:scale-95"
-            title={t('history.title', 'История матчей')}
-          >
-            <svg viewBox="0 0 24 24" className="h-5 w-5 text-game-yellow" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-            </svg>
-            <span className="text-[10px] font-semibold text-white/50">Итоги</span>
-          </button>
-
-          {/* RIGHT: Notifications */}
-          <button
-            type="button"
-            onClick={() => setShowNotifs(true)}
-            className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col items-center gap-1 rounded-2xl border border-white/10 bg-black/30 px-2 py-3 text-white/70 backdrop-blur hover:bg-black/50 active:scale-95"
-            title="Уведомления"
-          >
-            <span className="relative">
-              <svg viewBox="0 0 24 24" className="h-5 w-5 text-game-cyan" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-              </svg>
-              {unreadNotifs > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-rose-500 text-[9px] font-bold text-white flex items-center justify-center">
-                  {unreadNotifs > 9 ? '9+' : unreadNotifs}
-                </span>
-              )}
-            </span>
-            <span className="text-[10px] font-semibold text-white/50">Новости</span>
-          </button>
           {activeChar && (
             <button
               type="button"
@@ -235,6 +202,36 @@ export function HomePage() {
               </div>
             </button>
           )}
+        </div>
+
+        {/* Quick-access strip: History + Notifications */}
+        <div className="flex justify-center gap-3 mb-2">
+          <button
+            type="button"
+            onClick={() => setShowHistory(true)}
+            className="flex items-center gap-2 rounded-2xl border border-game-yellow/30 bg-game-yellow/10 px-4 py-2 text-game-yellow active:scale-95 hover:bg-game-yellow/20 transition-all"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+            </svg>
+            <span className="text-xs font-bold tracking-wide">История</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowNotifs(true)}
+            className="relative flex items-center gap-2 rounded-2xl border border-game-cyan/30 bg-game-cyan/10 px-4 py-2 text-game-cyan active:scale-95 hover:bg-game-cyan/20 transition-all"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            <span className="text-xs font-bold tracking-wide">Новости</span>
+            {unreadNotifs > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white">
+                {unreadNotifs > 9 ? '9+' : unreadNotifs}
+              </span>
+            )}
+          </button>
         </div>
 
         {/* PLAY */}

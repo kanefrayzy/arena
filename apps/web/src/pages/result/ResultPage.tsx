@@ -9,6 +9,7 @@ interface ResultData {
   durationMs: number;
   score: Record<string, number>;
   opponent: { id: number; username: string };
+  room?: { id: number; mode: 'FREE' | 'CASUAL' | 'STAKE'; stakeUsd?: string };
 }
 
 export function ResultPage() {
@@ -42,6 +43,17 @@ export function ResultPage() {
         ? 'text-game-red drop-shadow-[0_4px_0_rgba(0,0,0,0.5)]'
         : 'text-white/80';
 
+  // Payout badge
+  const stake = data.room?.mode === 'STAKE' ? Number(data.room.stakeUsd ?? 0) : 0;
+  const payoutLine =
+    stake > 0
+      ? outcome === 'win'
+        ? { text: `+$${stake.toFixed(2)}`, cls: 'text-game-cyan' }
+        : outcome === 'loss'
+          ? { text: `-$${stake.toFixed(2)}`, cls: 'text-game-red' }
+          : { text: `$0.00`, cls: 'text-white/50' }
+      : null;
+
   return (
     <div className="relative flex h-full flex-col items-center justify-center gap-6 overflow-hidden p-6">
       <div className="pointer-events-none absolute -top-32 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-game-purple/40 blur-3xl" />
@@ -52,6 +64,12 @@ export function ResultPage() {
       <div className={`game-title text-7xl uppercase animate-pop-in ${titleClass}`}>
         {t(`result.${outcome}`)}
       </div>
+
+      {payoutLine && (
+        <div className={`font-display text-4xl font-bold ${payoutLine.cls} drop-shadow-[0_2px_0_rgba(0,0,0,0.6)]`}>
+          {payoutLine.text}
+        </div>
+      )}
 
       <div className="game-chip">{t(`result.reason.${data.reason}`)}</div>
 

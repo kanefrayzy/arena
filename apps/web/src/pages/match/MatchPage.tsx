@@ -109,11 +109,11 @@ export function MatchPage() {
           if (msg.reason === 'disconnect') {
             setDisconnectMsg('Противник отключился');
             window.setTimeout(() => {
-              sessionStorage.setItem(`result:${matchId}`, JSON.stringify({ ...msg, opponent: info.opponent }));
+              sessionStorage.setItem(`result:${matchId}`, JSON.stringify({ ...msg, opponent: info.opponent, room: info.room }));
               nav(`/result/${matchId}`);
             }, 2000);
           } else {
-            sessionStorage.setItem(`result:${matchId}`, JSON.stringify({ ...msg, opponent: info.opponent }));
+            sessionStorage.setItem(`result:${matchId}`, JSON.stringify({ ...msg, opponent: info.opponent, room: info.room }));
             nav(`/result/${matchId}`);
           }
         },
