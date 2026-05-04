@@ -77,23 +77,29 @@ export function MatchPage() {
           setWelcome(msg);
           renderer!.setIdentity(msg);
           youId = msg.you.id;
-          // VS countdown: 3-2-1-FIGHT, then unlock input
-          inputBlockedRef.current = true;
-          setCountdown(3);
-          sfx.unlockAudio();
-          sfx.matchStartTick(3);
-          let n = 3;
-          const tick = window.setInterval(() => {
-            n -= 1;
-            setCountdown(n);
-            if (n > 0) sfx.matchStartTick(n);
-            else {
-              sfx.matchStartTick(0);
-              inputBlockedRef.current = false;
-              window.setTimeout(() => setCountdown(null), 700);
-              window.clearInterval(tick);
-            }
-          }, 1000);
+          if (msg.started) {
+            // Reconnecting to already-running match — skip countdown, unlock immediately.
+            inputBlockedRef.current = false;
+            setCountdown(null);
+          } else {
+            // Fresh match start: VS countdown 3-2-1-FIGHT then unlock input.
+            inputBlockedRef.current = true;
+            setCountdown(3);
+            sfx.unlockAudio();
+            sfx.matchStartTick(3);
+            let n = 3;
+            const tick = window.setInterval(() => {
+              n -= 1;
+              setCountdown(n);
+              if (n > 0) sfx.matchStartTick(n);
+              else {
+                sfx.matchStartTick(0);
+                inputBlockedRef.current = false;
+                window.setTimeout(() => setCountdown(null), 700);
+                window.clearInterval(tick);
+              }
+            }, 1000);
+          }
         },
         onSnapshot: (msg: SSnapshot) => {
           renderer!.applySnapshot(msg);

@@ -136,6 +136,12 @@ export class Sim {
     this.finish('disconnect', winner?.id ?? null, now);
   }
 
+  /** Reset the AFK timer for a player (e.g. on reconnect). */
+  refreshInputAt(playerId: number, now: number): void {
+    const p = this.players.get(playerId);
+    if (p) p.lastInputAt = now;
+  }
+
   /** Advance simulation by `dt` ms. Mutates state, populates `events`. */
   step(dt: number, now: number): void {
     if (this.finished) return;

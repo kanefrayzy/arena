@@ -144,17 +144,31 @@ export class Match {
     }
     this.clients.set(userId, { userId, ws, alive: true });
     log.info({ matchId: this.matchId, userId }, 'client attached');
+    // Reset AFK timer so a reconnecting player doesn't get kicked
+    // before they have a chance to send their first input.
+    this.sim.refreshInputAt(userId, Date.now());
     this.sendWelcome(userId);
     this.maybeStart();
   }
 
-  detachClient(userId: number, now: number): void {
+  /**
+   * Remove a client socket.
+   * @param explicit - true when the player deliberately quit (C_LEAVE).
+   *   When false (unexpected close / page refresh) the AFK timer in the sim
+   *   acts as the 10-second reconnect grace period before ending the match.
+   */
+  detachClient(userId: number, now: number, explicit = false): void {
     const c = this.clients.get(userId);
     if (!c) return;
     this.clients.delete(userId);
-    log.info({ matchId: this.matchId, userId }, 'client detached');
+    log.info({ matchId: this.matchId, userId, explicit }, 'client detached');
     if (!this.sim.finished) {
-      this.sim.markDisconnect(userId, now);
+      if (explicit || !this.timer) {
+        // Explicit leave, or match never started → end immediately.
+        this.sim.markDisconnect(userId, now);
+      }
+      // Else: match is running, unexpected disconnect → let AFK detection
+      // (10 s) handle it, giving the player time to reconnect.
     }
   }
 
@@ -395,6 +409,8 @@ export class Match {
         ...(this.seed.stakeUsd ? { stakeUsd: this.seed.stakeUsd } : {}),
       },
       obstacles: this.sim.obstacles,
+      // Tell the client whether the match is already running (reconnect scenario).
+      started: this.timer !== null,
     };
     try {
       c.ws.send(encodeMsg(MSG.S_WELCOME, welcome), true);

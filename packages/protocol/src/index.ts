@@ -87,6 +87,8 @@ export interface SWelcome {
   matchDurationMs: number;
   room: { id: number; mode: 'FREE' | 'CASUAL' | 'STAKE'; stakeUsd?: string };
   obstacles: Obstacle[];
+  /** True when reconnecting to an already-running match; client should skip the pre-game countdown. */
+  started?: boolean;
 }
 
 export interface SnapshotPlayer {

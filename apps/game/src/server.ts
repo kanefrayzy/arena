@@ -197,7 +197,7 @@ app.ws<SocketUserData>('/ws/match', {
         match.handlePing(ud.userId, frame.payload as CPing);
         break;
       case MSG.C_LEAVE:
-        match.detachClient(ud.userId, Date.now());
+        match.detachClient(ud.userId, Date.now(), true);
         try {
           ws.end(1000, 'bye');
         } catch {
