@@ -65,22 +65,29 @@ export function MatchPage() {
         } else if (ev.kind === 'death') sfx.death();
         else if (ev.kind === 'ability') sfx.dash();
       };
-      await renderer.init();
-      if (cancelled) return;
-
-      cleanupControls = controls.attach(host, joyRef.current!, fireRef.current!, abRef.current!);
 
       let youId = 0;
+      // Buffer the welcome message if it arrives before the renderer is ready.
+      let pendingWelcome: SWelcome | null = null;
+      let rendererReady = false;
 
+      // ── Connect to game server IMMEDIATELY (before renderer finishes loading).
+      //    This cancels the server-side 10-second reconnect timer right away so the
+      //    match isn't ended while the renderer is still initialising.
       client = new MatchClient(wsUrl, {
         onWelcome: (msg) => {
           setWelcome(msg);
-          renderer!.setIdentity(msg);
           youId = msg.you.id;
+          if (rendererReady) {
+            renderer!.setIdentity(msg);
+          } else {
+            pendingWelcome = msg;
+          }
           if (msg.started) {
             // Reconnecting to already-running match — skip countdown, unlock immediately.
             inputBlockedRef.current = false;
             setCountdown(null);
+            sfx.unlockAudio();
           } else {
             // Fresh match start: VS countdown 3-2-1-FIGHT then unlock input.
             inputBlockedRef.current = true;
@@ -102,6 +109,8 @@ export function MatchPage() {
           }
         },
         onSnapshot: (msg: SSnapshot) => {
+          // Skip snapshots until the renderer has finished initialising.
+          if (!rendererReady) return;
           renderer!.applySnapshot(msg);
           const me = msg.players.find((p) => p.id === youId);
           const opp = msg.players.find((p) => p.id !== youId);
@@ -133,7 +142,20 @@ export function MatchPage() {
           }
         },
       });
-      client.connect();
+      client.connect(); // ← WS connects here, parallel to renderer.init() below
+
+      // ── Initialise renderer in parallel with WS handshake ──
+      await renderer.init();
+      if (cancelled) return;
+      rendererReady = true;
+
+      // If welcome arrived while renderer was loading, apply it now.
+      if (pendingWelcome) {
+        renderer.setIdentity(pendingWelcome);
+        pendingWelcome = null;
+      }
+
+      cleanupControls = controls.attach(host, joyRef.current!, fireRef.current!, abRef.current!);
 
       // Wire joystick indicator
       controls.onJoystickMove = (dx, dy) => {

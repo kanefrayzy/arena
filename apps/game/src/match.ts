@@ -154,7 +154,28 @@ export class Match {
     // before they have a chance to send their first input.
     this.sim.refreshInputAt(userId, Date.now());
     this.sendWelcome(userId);
-    this.maybeStart();
+    if (this.sim.finished && this.sim.result) {
+      // Match already over — deliver the result immediately so the reconnecting
+      // player can navigate to the result screen instead of getting a blank page.
+      const result = this.sim.result;
+      const c = this.clients.get(userId);
+      if (c) {
+        const end: SMatchEnd = {
+          winnerId: result.winnerId,
+          reason: result.reason,
+          durationMs: result.durationMs,
+          score: result.score,
+        };
+        log.info({ matchId: this.matchId, userId }, 'sending S_MATCH_END on reconnect to finished match');
+        try {
+          c.ws.send(encodeMsg(MSG.S_MATCH_END, end), true);
+        } catch {
+          /* ignore */
+        }
+      }
+    } else {
+      this.maybeStart();
+    }
   }
 
   /**
@@ -438,8 +459,9 @@ export class Match {
         ...(this.seed.stakeUsd ? { stakeUsd: this.seed.stakeUsd } : {}),
       },
       obstacles: this.sim.obstacles,
-      // Tell the client whether the match is already running (reconnect scenario).
-      started: this.timer !== null,
+      // Tell the client whether the match has ever started (reconnect scenario).
+      // Using startNotified (not timer) so the flag stays true even after finalize().
+      started: this.startNotified,
     };
     try {
       c.ws.send(encodeMsg(MSG.S_WELCOME, welcome), true);
