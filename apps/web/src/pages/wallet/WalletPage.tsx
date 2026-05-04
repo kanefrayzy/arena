@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../../shared/api/client';
@@ -28,6 +28,33 @@ interface DepositResponse {
 
 type Tab = 'deposit' | 'withdraw' | 'history';
 
+// --- copy helper that works on http origins (where navigator.clipboard is blocked) ---
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch { /* fall through */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch { return false; }
+}
+
+function qrUrl(text: string, size = 240): string {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=8&data=${encodeURIComponent(text)}`;
+}
+
 export function WalletPage() {
   const { t } = useTranslation();
   const nav = useNavigate();
@@ -40,9 +67,9 @@ export function WalletPage() {
   const [card, setCard] = useState('');
   const [address, setAddress] = useState('');
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [reqs, setReqs] = useState<DepositResponse | null>(null);
+  const [sheetMin, setSheetMin] = useState(false);
 
   const reload = async () => {
     try {
@@ -60,14 +87,18 @@ export function WalletPage() {
 
   const filtered = methods.filter((m) => (tab === 'deposit' ? m.isDeposit : tab === 'withdraw' ? m.isWithdraw : false));
   const selected = methods.find((m) => m.slug === methodSlug) ?? null;
+  const isCrypto = selected?.kind === 'westwallet';
+  const needsAmount = !(tab === 'deposit' && isCrypto);
 
   const submitDeposit = async () => {
     if (!selected) return;
-    setBusy(true); setMsg(null); setErr(null); setReqs(null);
+    setBusy(true); setErr(null); setReqs(null);
     try {
-      const r = await api.post<DepositResponse>('/payments/deposit', { method: selected.slug, amount });
+      // crypto: amount field is irrelevant — backend won't use it for static-address deposits, but the API still requires a positive value.
+      const amt = isCrypto ? '0.01' : amount;
+      const r = await api.post<DepositResponse>('/payments/deposit', { method: selected.slug, amount: amt });
       setReqs(r);
-      setMsg(t('wallet.deposit_started'));
+      setSheetMin(false);
       await reload();
     } catch (e) {
       setErr(e instanceof ApiError ? `${e.code}` : (e as Error).message);
@@ -76,13 +107,13 @@ export function WalletPage() {
 
   const submitWithdraw = async () => {
     if (!selected) return;
-    setBusy(true); setMsg(null); setErr(null);
+    setBusy(true); setErr(null);
     try {
       const body: any = { method: selected.slug, amount };
       if (selected.kind === 'betra_payout') body.card = card;
       else if (selected.kind === 'westwallet') body.address = address;
       await api.post('/payments/withdraw', body);
-      setMsg(t('wallet.withdraw_ok'));
+      setErr(null);
       await reload();
     } catch (e) {
       setErr(e instanceof ApiError ? `${e.code}` : (e as Error).message);
@@ -102,7 +133,7 @@ export function WalletPage() {
         <div className="w-12" />
       </header>
 
-      <div className="relative z-10 flex flex-1 flex-col overflow-y-auto pb-6">
+      <div className="relative z-10 flex flex-1 flex-col overflow-y-auto pb-32">
         <section className="flex flex-col items-center gap-2 px-6 pt-6">
           <div className="text-xs font-semibold uppercase tracking-widest text-white/60">{t('wallet.balance')}</div>
           <div className="game-title text-5xl text-game-yellow drop-shadow-[0_4px_0_rgba(0,0,0,0.4)]">
@@ -117,7 +148,7 @@ export function WalletPage() {
           {(['deposit', 'withdraw', 'history'] as Tab[]).map((tt) => (
             <button
               key={tt}
-              onClick={() => { setTab(tt); setMethodSlug(null); setReqs(null); setMsg(null); setErr(null); }}
+              onClick={() => { setTab(tt); setMethodSlug(null); setReqs(null); setErr(null); }}
               className={'game-btn game-btn-sm flex-1 ' + (tab === tt ? 'game-btn-yellow' : 'game-btn-ghost')}
             >
               {t(`wallet.tab_${tt}`)}
@@ -134,7 +165,7 @@ export function WalletPage() {
               {filtered.map((m) => (
                 <button
                   key={m.slug}
-                  onClick={() => { setMethodSlug(m.slug); setReqs(null); setMsg(null); setErr(null); }}
+                  onClick={() => { setMethodSlug(m.slug); setReqs(null); setErr(null); }}
                   className={
                     'game-card flex flex-col items-center gap-2 p-3 transition ' +
                     (methodSlug === m.slug ? 'ring-2 ring-game-yellow' : 'hover:scale-[1.02]')
@@ -156,13 +187,20 @@ export function WalletPage() {
 
         {tab !== 'history' && selected && (
           <section className="flex flex-col gap-3 px-6 pt-4">
-            <input
-              inputMode="decimal"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-              className="game-input font-mono text-xl"
-              placeholder={`Amount in ${selected.currency}`}
-            />
+            {needsAmount && (
+              <input
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+                className="game-input font-mono text-xl"
+                placeholder={`Amount in ${selected.currency}`}
+              />
+            )}
+            {tab === 'deposit' && isCrypto && (
+              <div className="rounded-xl bg-white/5 px-3 py-2 text-xs text-white/70">
+                {t('wallet.crypto_any_amount', { currency: selected.currency })}
+              </div>
+            )}
             {tab === 'withdraw' && selected.kind === 'betra_payout' && (
               <input
                 value={card}
@@ -182,61 +220,15 @@ export function WalletPage() {
             )}
             <button
               type="button"
-              disabled={busy || !amount}
+              disabled={busy || (needsAmount && !amount)}
               onClick={() => (tab === 'deposit' ? void submitDeposit() : void submitWithdraw())}
               className={'game-btn ' + (tab === 'deposit' ? 'game-btn-green' : 'game-btn-purple')}
             >
-              {tab === 'deposit' ? t('wallet.deposit') : t('wallet.withdraw')}
+              {tab === 'deposit'
+                ? (isCrypto ? t('wallet.get_address') : t('wallet.deposit'))
+                : t('wallet.withdraw')}
             </button>
             {err && <div className="text-center text-sm font-semibold text-game-red">{err}</div>}
-            {msg && <div className="text-center text-sm font-semibold text-game-green">{msg}</div>}
-
-            {/* Betra card requisites */}
-            {reqs?.betra && (
-              <div className="game-card flex flex-col gap-2 p-4">
-                <div className="font-display text-base text-game-yellow">{t('wallet.pay_to_card')}</div>
-                {reqs.betra.card && (
-                  <div className="flex items-center justify-between gap-2 rounded-lg bg-black/40 px-3 py-2">
-                    <span className="font-mono text-lg">{reqs.betra.card}</span>
-                    <button onClick={() => navigator.clipboard.writeText(reqs.betra!.card!)} className="game-btn game-btn-ghost game-btn-sm">
-                      {t('wallet.copy')}
-                    </button>
-                  </div>
-                )}
-                {reqs.betra.cardHolder && <div className="text-sm text-white/80">{reqs.betra.cardHolder}</div>}
-                {reqs.betra.bank && <div className="text-xs text-white/60">{reqs.betra.bank}</div>}
-                <div className="text-sm font-semibold text-white">
-                  {Number(reqs.betra.amount).toFixed(2)} {reqs.betra.currency}
-                </div>
-                {reqs.betra.qrLink && (
-                  <a href={reqs.betra.qrLink} target="_blank" rel="noreferrer" className="game-btn game-btn-yellow game-btn-sm">
-                    {t('wallet.open_qr')}
-                  </a>
-                )}
-                {reqs.betra.expiredAt && (
-                  <div className="text-xs text-white/50">
-                    {t('wallet.expires_at')}: {new Date(reqs.betra.expiredAt).toLocaleString()}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Crypto static address */}
-            {reqs?.crypto && (
-              <div className="game-card flex flex-col gap-2 p-4">
-                <div className="font-display text-base text-game-yellow">{t('wallet.send_to_address')}</div>
-                <div className="flex items-center justify-between gap-2 rounded-lg bg-black/40 px-3 py-2">
-                  <span className="break-all font-mono text-sm">{reqs.crypto.address}</span>
-                  <button onClick={() => navigator.clipboard.writeText(reqs.crypto!.address)} className="game-btn game-btn-ghost game-btn-sm shrink-0">
-                    {t('wallet.copy')}
-                  </button>
-                </div>
-                {reqs.crypto.destTag && (
-                  <div className="text-xs text-white/70">Memo / Dest tag: <span className="font-mono">{reqs.crypto.destTag}</span></div>
-                )}
-                <div className="text-xs text-white/50">{t('wallet.address_static_note', { currency: reqs.crypto.currency })}</div>
-              </div>
-            )}
           </section>
         )}
 
@@ -267,6 +259,190 @@ export function WalletPage() {
             </ul>
           </section>
         )}
+      </div>
+
+      {reqs && (
+        <DepositSheet
+          reqs={reqs}
+          minimized={sheetMin}
+          onMinimize={() => setSheetMin((v) => !v)}
+          onClose={() => setReqs(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function DepositSheet({
+  reqs, minimized, onMinimize, onClose,
+}: {
+  reqs: DepositResponse;
+  minimized: boolean;
+  onMinimize: () => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const [drag, setDrag] = useState<{ startY: number; dy: number } | null>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  const onCopy = async (text: string) => {
+    const ok = await copyText(text);
+    if (ok) {
+      setCopied(text);
+      setTimeout(() => setCopied(null), 1500);
+    }
+  };
+
+  const headerLabel = reqs.betra
+    ? t('wallet.pay_to_card')
+    : reqs.crypto
+    ? t('wallet.send_to_address') + ` (${reqs.crypto.currency})`
+    : t('wallet.deposit');
+
+  // Drag-to-collapse: track pointer Y delta on the handle.
+  const onPointerDown = (e: React.PointerEvent) => {
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    setDrag({ startY: e.clientY, dy: 0 });
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!drag) return;
+    const dy = e.clientY - drag.startY;
+    setDrag({ ...drag, dy });
+  };
+  const onPointerUp = () => {
+    if (!drag) return;
+    const { dy } = drag;
+    setDrag(null);
+    if (dy > 60 && !minimized) onMinimize();
+    else if (dy < -60 && minimized) onMinimize();
+  };
+
+  // While dragging, translate sheet for visual feedback.
+  const translatePx = drag
+    ? Math.max(minimized ? -200 : 0, Math.min(minimized ? 0 : 200, drag.dy))
+    : 0;
+
+  return (
+    <div className="pointer-events-none fixed inset-0 z-40 flex justify-center">
+      <div
+        ref={sheetRef}
+        className={
+          'pointer-events-auto absolute bottom-0 w-full max-w-md transform rounded-t-3xl border-2 border-b-0 border-game-yellow/40 bg-bg/95 shadow-[0_-12px_30px_rgba(0,0,0,0.6)] backdrop-blur-md transition-transform duration-200 ' +
+          (drag ? '' : 'ease-out')
+        }
+        style={{
+          transform: `translateY(${minimized ? 'calc(100% - 64px)' : '0px'}) translateY(${translatePx}px)`,
+        }}
+      >
+        {/* Drag handle / header */}
+        <div
+          className="flex select-none items-center gap-2 px-4 py-3 cursor-grab active:cursor-grabbing"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onClick={() => { if (!drag) onMinimize(); }}
+        >
+          <div className="mx-auto flex flex-col items-center gap-1">
+            <div className="h-1.5 w-12 rounded-full bg-white/30" />
+          </div>
+        </div>
+        <div className="flex items-center justify-between px-5 pb-2">
+          <div className="font-display text-base text-game-yellow">{headerLabel}</div>
+          <div className="flex gap-1">
+            <button onClick={onMinimize} className="game-btn game-btn-ghost game-btn-sm" title={minimized ? 'expand' : 'collapse'}>
+              {minimized ? '▴' : '▾'}
+            </button>
+            <button onClick={onClose} className="game-btn game-btn-ghost game-btn-sm" title="close">✕</button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className={'overflow-y-auto px-5 pb-6 transition-opacity duration-200 ' + (minimized ? 'opacity-0' : 'opacity-100')}
+          style={{ maxHeight: '70vh' }}>
+          {reqs.betra && <BetraView b={reqs.betra} onCopy={onCopy} copied={copied} />}
+          {reqs.crypto && <CryptoView c={reqs.crypto} onCopy={onCopy} copied={copied} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BetraView({ b, onCopy, copied }: { b: BetraReqs; onCopy: (s: string) => void; copied: string | null }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="rounded-xl bg-black/40 px-4 py-3">
+        <div className="text-[10px] uppercase tracking-widest text-white/50">{t('wallet.amount')}</div>
+        <div className="font-mono text-2xl font-bold text-game-yellow">
+          {Number(b.amount).toFixed(2)} <span className="text-base text-white/70">{b.currency}</span>
+        </div>
+      </div>
+      {b.card && (
+        <div className="rounded-xl bg-black/40 px-4 py-3">
+          <div className="mb-1 text-[10px] uppercase tracking-widest text-white/50">{t('wallet.card_number')}</div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-mono text-lg tracking-wider">{b.card}</span>
+            <button onClick={() => onCopy(b.card!)} className="game-btn game-btn-ghost game-btn-sm">
+              {copied === b.card ? t('wallet.copied') : t('wallet.copy')}
+            </button>
+          </div>
+        </div>
+      )}
+      {b.cardHolder && (
+        <div className="rounded-xl bg-black/40 px-4 py-3">
+          <div className="mb-1 text-[10px] uppercase tracking-widest text-white/50">{t('wallet.holder')}</div>
+          <div className="text-sm text-white/90">{b.cardHolder}</div>
+        </div>
+      )}
+      {b.bank && <div className="text-xs text-white/60">{b.bank}</div>}
+      {b.qrLink && (
+        <div className="flex flex-col items-center gap-2 rounded-xl bg-white/5 p-4">
+          <img src={b.qrLink} alt="QR" className="h-48 w-48 rounded-lg bg-white p-2" />
+          <a href={b.qrLink} target="_blank" rel="noreferrer" className="text-xs text-game-yellow underline">
+            {t('wallet.open_qr')}
+          </a>
+        </div>
+      )}
+      {b.expiredAt && (
+        <div className="text-center text-xs text-white/50">
+          {t('wallet.expires_at')}: {new Date(b.expiredAt).toLocaleString()}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CryptoView({ c, onCopy, copied }: { c: { address: string; destTag?: string; currency: string }; onCopy: (s: string) => void; copied: string | null }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <div className="rounded-2xl bg-white p-3">
+        <img src={qrUrl(c.address, 240)} alt="QR" width={240} height={240} className="block" />
+      </div>
+      <div className="w-full rounded-xl bg-black/40 px-4 py-3">
+        <div className="mb-1 text-[10px] uppercase tracking-widest text-white/50">{c.currency} {t('wallet.address')}</div>
+        <div className="flex items-center gap-2">
+          <span className="break-all font-mono text-sm text-white/90">{c.address}</span>
+          <button onClick={() => onCopy(c.address)} className="game-btn game-btn-ghost game-btn-sm shrink-0">
+            {copied === c.address ? t('wallet.copied') : t('wallet.copy')}
+          </button>
+        </div>
+      </div>
+      {c.destTag && (
+        <div className="w-full rounded-xl bg-black/40 px-4 py-3">
+          <div className="mb-1 text-[10px] uppercase tracking-widest text-white/50">Memo / Dest tag</div>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-sm">{c.destTag}</span>
+            <button onClick={() => onCopy(c.destTag!)} className="game-btn game-btn-ghost game-btn-sm shrink-0">
+              {copied === c.destTag ? t('wallet.copied') : t('wallet.copy')}
+            </button>
+          </div>
+        </div>
+      )}
+      <div className="text-center text-xs text-white/60">
+        {t('wallet.address_static_note', { currency: c.currency })}
       </div>
     </div>
   );
