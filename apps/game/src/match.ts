@@ -68,6 +68,8 @@ export interface ConnectedClient {
 }
 
 const SNAPSHOT_RATE_HZ = 30;
+/** Milliseconds a disconnected player has to reconnect before losing. */
+const RECONNECT_TIMEOUT_MS = 10_000;
 
 export class Match {
   readonly matchId: string;
@@ -76,6 +78,8 @@ export class Match {
   private replay: ReplayWriter;
   private clients: Map<number, ConnectedClient> = new Map();
   private timer: NodeJS.Timeout | null = null;
+  /** Pending reconnect timeouts keyed by userId. Cleared on re-attach or match end. */
+  private reconnectTimers: Map<number, NodeJS.Timeout> = new Map();
   private lastTick = 0;
   private snapshotAccum = 0;
   private finishCalled = false;
@@ -134,6 +138,8 @@ export class Match {
       ws.close();
       return;
     }
+    // Cancel any pending reconnect timer — player made it back in time.
+    this.clearReconnectTimer(userId);
     const old = this.clients.get(userId);
     if (old) {
       try {
@@ -154,21 +160,41 @@ export class Match {
   /**
    * Remove a client socket.
    * @param explicit - true when the player deliberately quit (C_LEAVE).
-   *   When false (unexpected close / page refresh) the AFK timer in the sim
-   *   acts as the 10-second reconnect grace period before ending the match.
+   *   When false (unexpected close / page refresh) a 10-second reconnect window is granted.
    */
   detachClient(userId: number, now: number, explicit = false): void {
     const c = this.clients.get(userId);
     if (!c) return;
     this.clients.delete(userId);
     log.info({ matchId: this.matchId, userId, explicit }, 'client detached');
-    if (!this.sim.finished) {
-      if (explicit || !this.timer) {
-        // Explicit leave, or match never started → end immediately.
-        this.sim.markDisconnect(userId, now);
-      }
-      // Else: match is running, unexpected disconnect → let AFK detection
-      // (10 s) handle it, giving the player time to reconnect.
+    if (this.sim.finished) return;
+    if (explicit) {
+      // Intentional quit — end immediately.
+      this.clearReconnectTimer(userId);
+      this.sim.markDisconnect(userId, now);
+    } else {
+      // Unexpected disconnect (page refresh, network drop) — start reconnect window.
+      // Reset AFK clock from *now* so the sim's own AFK detection also gives ~10s.
+      this.sim.refreshInputAt(userId, now);
+      // Clear any old timer first (shouldn't exist, but be safe).
+      this.clearReconnectTimer(userId);
+      const t = setTimeout(() => {
+        this.reconnectTimers.delete(userId);
+        if (!this.sim.finished) {
+          log.info({ matchId: this.matchId, userId }, 'reconnect timeout — declaring disconnect');
+          this.sim.markDisconnect(userId, Date.now());
+        }
+      }, RECONNECT_TIMEOUT_MS);
+      this.reconnectTimers.set(userId, t);
+      log.info({ matchId: this.matchId, userId }, 'reconnect window started (10 s)');
+    }
+  }
+
+  private clearReconnectTimer(userId: number): void {
+    const t = this.reconnectTimers.get(userId);
+    if (t !== undefined) {
+      clearTimeout(t);
+      this.reconnectTimers.delete(userId);
     }
   }
 
@@ -313,6 +339,9 @@ export class Match {
     this.finishCalled = true;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    // Cancel all reconnect timers — match is over.
+    for (const t of this.reconnectTimers.values()) clearTimeout(t);
+    this.reconnectTimers.clear();
 
     const result = this.sim.result;
     if (!result) return;
@@ -425,6 +454,8 @@ export class Match {
     this.finishCalled = true;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    for (const t of this.reconnectTimers.values()) clearTimeout(t);
+    this.reconnectTimers.clear();
     await this.replay.end(this.sim.elapsedMs, { aborted: true, reason }).catch(() => undefined);
     await this.api
       .post('/internal/match/abort', { matchId: this.matchId, reason })

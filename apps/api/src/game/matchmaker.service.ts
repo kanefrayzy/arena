@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { BOT_USER_ID, QUEUE_TIMEOUT_BOT_OFFER_MS } from '@arena/shared';
+import type { QueueMode } from '@arena/shared';
 import { PrismaService } from '../common/prisma/prisma.module';
 import { QueueService } from './queue.service';
 import { MatchCreationService } from './match-creation.service';
@@ -18,6 +19,8 @@ const TICK_MS = 500;
 export class MatchmakerService implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger('Matchmaker');
   private timer: NodeJS.Timeout | null = null;
+  /** Guard against overlapping ticks (async tick takes longer than TICK_MS). */
+  private ticking = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -27,7 +30,11 @@ export class MatchmakerService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit(): void {
     this.timer = setInterval(() => {
-      this.tick().catch((e) => this.log.error(`tick failed: ${(e as Error).message}`));
+      if (this.ticking) return; // skip if previous tick still running
+      this.ticking = true;
+      this.tick()
+        .catch((e) => this.log.error(`tick failed: ${(e as Error).message}`))
+        .finally(() => { this.ticking = false; });
     }, TICK_MS);
     this.log.log(`matchmaker tick=${TICK_MS}ms`);
   }
@@ -91,6 +98,10 @@ export class MatchmakerService implements OnModuleInit, OnModuleDestroy {
         });
       } catch (e) {
         this.log.error(`pair create failed: ${(e as Error).message}`);
+        // Re-queue both players so they don't get stuck without a match or a queue slot.
+        const qMode = mode.toLowerCase() as QueueMode;
+        await this.queue.join(a.userId, qMode, roomId).catch(() => undefined);
+        await this.queue.join(b.userId, qMode, roomId).catch(() => undefined);
       }
     }
 

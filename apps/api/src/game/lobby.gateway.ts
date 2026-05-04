@@ -229,8 +229,10 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
       opponent: ev.opponent,
       room: ev.room,
     });
-    // Clear the per-user fallback key now that it was delivered
-    this.sub?.del(`lobby:pending-match:${ev.userId}`).catch(() => undefined);
+    // NOTE: intentionally NOT deleting lobby:pending-match here.
+    // If the socket closes in the millisecond between send and client processing,
+    // deliverPendingMatch will redeliver on reconnect.
+    // The key has a 60-second TTL and is deleted by deliverPendingMatch on re-delivery.
   }
 
   private async deliverPendingMatch(sock: AuthedSocket): Promise<void> {
