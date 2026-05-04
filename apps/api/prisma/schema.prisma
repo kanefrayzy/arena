@@ -282,6 +282,20 @@ model Setting {
   value Json
 }
 
+model Notification {
+  id        BigInt   @id @default(autoincrement())
+  userId    Int
+  type      String   // deposit | withdrawal | match_win | match_loss | system
+  title     String
+  body      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  meta      Json?
+
+  @@index([userId, createdAt])
+  @@index([userId, read])
+}
+
 model Sprite {
   slot      String   @id
   url       String

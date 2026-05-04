@@ -30,6 +30,8 @@ export function MatchPage() {
   const [remainingMs, setRemainingMs] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null); // 3,2,1,0(FIGHT) or null
+  const [ping, setPing] = useState(0);
+  const [disconnectMsg, setDisconnectMsg] = useState<string | null>(null);
   const inputBlockedRef = useRef(true);
 
   useEffect(() => {
@@ -45,6 +47,7 @@ export function MatchPage() {
     let renderer: PixiRenderer | null = null;
     let client: MatchClient | null = null;
     let inputTimer: number | null = null;
+    let pingDisplayTimer: number | null = null;
     let cleanupControls: (() => void) | null = null;
     const controls = new Controls();
 
@@ -103,8 +106,16 @@ export function MatchPage() {
         onMatchEnd: (msg: SMatchEnd) => {
           const youWon = msg.winnerId === youId;
           sfx.matchEnd(youWon);
-          sessionStorage.setItem(`result:${matchId}`, JSON.stringify({ ...msg, opponent: info.opponent }));
-          nav(`/result/${matchId}`);
+          if (msg.reason === 'disconnect') {
+            setDisconnectMsg('Противник отключился');
+            window.setTimeout(() => {
+              sessionStorage.setItem(`result:${matchId}`, JSON.stringify({ ...msg, opponent: info.opponent }));
+              nav(`/result/${matchId}`);
+            }, 2000);
+          } else {
+            sessionStorage.setItem(`result:${matchId}`, JSON.stringify({ ...msg, opponent: info.opponent }));
+            nav(`/result/${matchId}`);
+          }
         },
         onError: (code, message) => {
           setError(`${code}: ${message}`);
@@ -125,6 +136,11 @@ export function MatchPage() {
           joyDotRef.current.style.transform = `translate(${dx * max}px, ${dy * max}px)`;
         }
       };
+
+      // Update ping display every 5 s
+      pingDisplayTimer = window.setInterval(() => {
+        setPing(client!.getLatencyMs());
+      }, 5_000);
 
       // Send input at 30 Hz
       inputTimer = window.setInterval(() => {
@@ -162,6 +178,7 @@ export function MatchPage() {
     return () => {
       cancelled = true;
       if (inputTimer) clearInterval(inputTimer);
+      if (pingDisplayTimer) clearInterval(pingDisplayTimer);
       cleanupControls?.();
       client?.leave();
       client?.close();
@@ -171,7 +188,6 @@ export function MatchPage() {
 
   const remainingS = Math.ceil(remainingMs / 1000);
   const cdS = Math.ceil(cdMs / 1000);
-  const [muted, setMutedState] = useState<boolean>(sfx.isMuted());
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-bg">
@@ -183,22 +199,6 @@ export function MatchPage() {
             <div className="text-xs uppercase text-game-cyan">{welcome?.you.username ?? 'YOU'}</div>
             <div className="font-display text-lg text-white">HP {hp.you}</div>
           </div>
-          <div className="rounded-2xl border-2 border-game-yellow/60 bg-black/60 px-3 py-2 backdrop-blur text-center shadow-[0_4px_0_rgba(0,0,0,0.5)]">
-            <div className="font-display text-2xl tabular-nums text-game-yellow">{remainingS}s</div>
-            <div className="text-[10px] uppercase text-white/60">{t('match.timer')}</div>
-            <button
-              type="button"
-              onClick={() => {
-                const m = !muted;
-                sfx.setMuted(m);
-                setMutedState(m);
-                if (!m) sfx.unlockAudio();
-              }}
-              className="pointer-events-auto mt-1 rounded bg-white/10 px-2 py-0.5 text-[11px] text-white/70 hover:bg-white/20"
-            >
-              {muted ? '🔇' : '🔊'}
-            </button>
-          </div>
           <div className="rounded-2xl border-2 border-game-pink/40 bg-black/60 px-3 py-2 text-right backdrop-blur shadow-[0_4px_0_rgba(0,0,0,0.5)]">
             <div className="text-xs uppercase text-game-pink">{welcome?.opponent.username ?? 'OPP'}</div>
             <div className="font-display text-lg text-white">HP {hp.opp}</div>
@@ -208,6 +208,31 @@ export function MatchPage() {
           {cdMs > 0 ? `${t('match.ability_cd')}: ${cdS}s` : t('match.ability_ready')}
         </div>
         {error && <div className="mt-3 text-center text-red-400">{error}</div>}
+        {/* Timer — bottom-center, away from opponent spawn */}
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2">
+          <div className="rounded-xl border border-game-yellow/40 bg-black/70 px-3 py-1.5 text-center backdrop-blur">
+            <div className="font-display text-xl tabular-nums text-game-yellow">{remainingS}s</div>
+          </div>
+        </div>
+        {/* Ping — subtle, top-center */}
+        {ping > 0 && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2">
+            <span className={
+              'rounded-full px-2 py-0.5 text-[10px] font-mono ' +
+              (ping < 80 ? 'bg-game-green/20 text-game-green' : ping < 180 ? 'bg-game-yellow/20 text-game-yellow' : 'bg-rose-500/20 text-rose-400')
+            }>
+              {ping}ms
+            </span>
+          </div>
+        )}
+        {/* Disconnect toast */}
+        {disconnectMsg && (
+          <div className="pointer-events-none absolute inset-x-0 top-1/3 flex justify-center">
+            <div className="rounded-2xl border border-rose-400/40 bg-black/80 px-6 py-3 text-base font-semibold text-rose-300 backdrop-blur">
+              {disconnectMsg}
+            </div>
+          </div>
+        )}
       </div>
       {/* VS countdown overlay */}
       {countdown !== null && welcome && (

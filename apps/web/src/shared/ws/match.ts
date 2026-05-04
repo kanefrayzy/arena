@@ -20,11 +20,17 @@ export class MatchClient {
   private ws: WebSocket | null = null;
   private inputSeq = 0;
   private pingTimer: number | null = null;
+  private _latencyMs = 0;
 
   constructor(
     private readonly url: string,
     private readonly handlers: MatchClientHandlers,
   ) {}
+
+  /** Round-trip latency in ms (updated every 5 s). */
+  getLatencyMs(): number {
+    return this._latencyMs;
+  }
 
   connect(): void {
     const ws = new WebSocket(this.url);
@@ -49,6 +55,11 @@ export class MatchClient {
           case MSG.S_MATCH_END:
             this.handlers.onMatchEnd(frame.payload as SMatchEnd);
             break;
+          case MSG.S_PONG: {
+            const p = frame.payload as { t: number };
+            this._latencyMs = Math.round((Date.now() - p.t) / 2);
+            break;
+          }
           case MSG.S_ERROR: {
             const p = frame.payload as { code: string; message: string };
             this.handlers.onError(p.code, p.message);

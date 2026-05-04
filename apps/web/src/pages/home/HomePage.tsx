@@ -5,6 +5,7 @@ import { api, ApiError } from '../../shared/api/client';
 import { useAuth, type Me } from '../../shared/store/auth';
 import * as sfx from '../../shared/game/audio';
 import { MatchHistoryModal } from './MatchHistoryModal';
+import { NotificationsPanel } from './NotificationsPanel';
 
 interface Wallet {
   balance: string;
@@ -42,6 +43,8 @@ export function HomePage() {
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [showNotifs, setShowNotifs] = useState(false);
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
 
   useEffect(() => {
     void (async () => {
@@ -50,6 +53,11 @@ export function HomePage() {
         setMe(u);
         const w = await api.get<Wallet>('/wallet');
         setWallet(w);
+        // Fetch unread notification count
+        try {
+          const nr = await api.get<{ items: unknown[]; unreadCount: number }>('/notifications?limit=1');
+          setUnreadNotifs(nr.unreadCount);
+        } catch { /* ignore */ }
         // Resolve equipped character (or fall back to first available).
         try {
           const list = await api.get<{ characters: CharSummary[] }>('/characters');
@@ -106,6 +114,24 @@ export function HomePage() {
         </button>
         <div className="game-title text-lg text-white/90">@{me.username}</div>
         <div className="flex items-center gap-1.5">
+          {/* Bell — notifications */}
+          <button
+            type="button"
+            onClick={() => setShowNotifs(true)}
+            className="game-btn game-btn-ghost game-btn-sm relative"
+            title="Уведомления"
+            aria-label="Уведомления"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            {unreadNotifs > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-rose-500 text-[9px] font-bold text-white flex items-center justify-center">
+                {unreadNotifs > 9 ? '9+' : unreadNotifs}
+              </span>
+            )}
+          </button>
           <button
             type="button"
             onClick={() => setShowHistory(true)}
@@ -254,6 +280,12 @@ export function HomePage() {
       </main>
 
       {showHistory && <MatchHistoryModal onClose={() => setShowHistory(false)} />}
+      {showNotifs && (
+        <NotificationsPanel
+          onClose={() => setShowNotifs(false)}
+          onUnreadChange={setUnreadNotifs}
+        />
+      )}
     </div>
   );
 }

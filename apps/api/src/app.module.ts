@@ -11,6 +11,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { ContentModule } from './content/content.module';
 import { GameModule } from './game/game.module';
 import { AdminModule } from './admin/admin.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { AdminModule } from './admin/admin.module';
     ContentModule,
     GameModule,
     AdminModule,
+    NotificationsModule,
   ],
   controllers: [HealthController],
 })

@@ -150,16 +150,48 @@ export function shoot(): void {
 export function hit(): void {
   const c = ensure();
   if (!c || !masterGain) return;
-  const noise = c.createBufferSource();
-  noise.buffer = noiseBuffer(c, 0.1);
-  const bp = c.createBiquadFilter();
-  bp.type = 'bandpass';
-  bp.frequency.value = 600;
-  bp.Q.value = 4;
-  const ng = envGain(c, 0.001, 0.5, 0.1);
-  noise.connect(bp).connect(ng).connect(masterGain);
-  noise.start();
-  noise.stop(c.currentTime + 0.12);
+  // Metallic "thwack" — pitched ring + body + snap
+  const t0 = c.currentTime;
+
+  // 1. Short pitched ring (metallic ping)
+  const ring = c.createOscillator();
+  ring.type = 'sine';
+  ring.frequency.setValueAtTime(1200, t0);
+  ring.frequency.exponentialRampToValueAtTime(300, t0 + 0.18);
+  const ringGain = c.createGain();
+  ringGain.gain.setValueAtTime(0.0001, t0);
+  ringGain.gain.exponentialRampToValueAtTime(0.55, t0 + 0.004);
+  ringGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+  ring.connect(ringGain).connect(masterGain);
+  ring.start(t0);
+  ring.stop(t0 + 0.25);
+
+  // 2. Body thump — low sine thud
+  const thud = c.createOscillator();
+  thud.type = 'sine';
+  thud.frequency.setValueAtTime(200, t0);
+  thud.frequency.exponentialRampToValueAtTime(60, t0 + 0.12);
+  const thudGain = c.createGain();
+  thudGain.gain.setValueAtTime(0.0001, t0);
+  thudGain.gain.exponentialRampToValueAtTime(0.5, t0 + 0.005);
+  thudGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.14);
+  thud.connect(thudGain).connect(masterGain);
+  thud.start(t0);
+  thud.stop(t0 + 0.18);
+
+  // 3. Snap noise burst
+  const snap = c.createBufferSource();
+  snap.buffer = noiseBuffer(c, 0.06);
+  const hp = c.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 3000;
+  const snapGain = c.createGain();
+  snapGain.gain.setValueAtTime(0.0001, t0);
+  snapGain.gain.exponentialRampToValueAtTime(0.7, t0 + 0.002);
+  snapGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.06);
+  snap.connect(hp).connect(snapGain).connect(masterGain);
+  snap.start(t0);
+  snap.stop(t0 + 0.07);
 }
 
 export function hitObstacle(): void {

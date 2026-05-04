@@ -5,6 +5,7 @@ import { PrismaService } from '../common/prisma/prisma.module';
 import { LedgerService } from '../wallet/ledger.service';
 import { BetraService, BetraDepositReqs } from './betra.service';
 import { WestwalletService } from './westwallet.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL ?? 'http://localhost').replace(/\/$/, '');
 
@@ -34,6 +35,7 @@ export class PaymentsService {
     private readonly ledger: LedgerService,
     private readonly betra: BetraService,
     private readonly west: WestwalletService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async listMethods() {
@@ -163,6 +165,12 @@ export class PaymentsService {
         }
       }
       const after = await this.prisma.wallet.findUnique({ where: { userId } });
+      void this.notifications.create({
+        userId, type: 'withdrawal',
+        title: 'Заявка на вывод создана',
+        body: `${amount.toFixed(2)} ${method.currency} — ожидает обработки`,
+        meta: { paymentId: payment.id, amount: amount.toFixed(2), currency: method.currency },
+      }).catch(() => undefined);
       return { paymentId: payment.id, status: 'PENDING', balance: after?.balance.toString() ?? '0' };
     }
 
@@ -193,6 +201,12 @@ export class PaymentsService {
         }
       }
       const after = await this.prisma.wallet.findUnique({ where: { userId } });
+      void this.notifications.create({
+        userId, type: 'withdrawal',
+        title: 'Заявка на вывод создана',
+        body: `${amount.toFixed(8)} ${method.currency} — ожидает обработки`,
+        meta: { paymentId: payment.id, amount: amount.toFixed(8), currency: method.currency },
+      }).catch(() => undefined);
       return { paymentId: payment.id, status: 'PENDING', balance: after?.balance.toString() ?? '0' };
     }
 
@@ -234,6 +248,12 @@ export class PaymentsService {
         where: { id: payment.id },
         data: { status: 'COMPLETED', finishedAt: new Date(), meta: { ...((payment.meta as any) ?? {}), webhook: payload } as Prisma.InputJsonValue },
       });
+      void this.notifications.create({
+        userId: payment.userId, type: 'deposit',
+        title: 'Пополнение зачислено',
+        body: `${payment.amountRaw.toString()} ${payment.currency} (≈$${Number(payment.amountUsd).toFixed(2)}) зачислено на счёт`,
+        meta: { paymentId: payment.id },
+      }).catch(() => undefined);
     } else if (['expired', 'cancelled', 'error'].includes(status)) {
       await this.prisma.payment.update({ where: { id: payment.id }, data: { status: 'FAILED', finishedAt: new Date() } });
     }
@@ -291,6 +311,12 @@ export class PaymentsService {
       userId: addr.userId, amount: usdAmount, type: 'DEPOSIT',
       refType: 'payment', refId: payment.id, idempotencyKey,
     });
+    void this.notifications.create({
+      userId: addr.userId, type: 'deposit',
+      title: 'Пополнение зачислено',
+      body: `${amountRaw.toFixed(8)} ${tx.currency} (≈$${usdAmount.toFixed(2)}) зачислено на счёт`,
+      meta: { paymentId: payment.id },
+    }).catch(() => undefined);
     return { ok: true };
   }
 

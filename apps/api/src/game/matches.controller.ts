@@ -21,7 +21,7 @@ export class MatchesController {
     const userId = req.user.sub;
     const items = await this.prisma.match.findMany({
       where: { OR: [{ player1Id: userId }, { player2Id: userId }] },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { startedAt: 'desc' },
       take,
       include: {
         player1: { select: { id: true, username: true } },

@@ -117,6 +117,8 @@ export class Controls {
 
     const fireDown = (e: Event) => {
       this.fireTouch = true;
+      // Reset tap-to-aim so fire button always tracks opponent, not last tap point
+      this.tapAngle = null;
       e.preventDefault();
     };
     const fireUp = (e: Event) => {
