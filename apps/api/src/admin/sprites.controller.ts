@@ -39,7 +39,7 @@ export const SPRITE_SLOTS = {
 
 export type SpriteSlot = keyof typeof SPRITE_SLOTS;
 
-const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']);
+const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'image/gif']);
 const MAX_BYTES = 1024 * 1024; // 1 MB
 
 function uploadDir(): string {
@@ -54,6 +54,7 @@ function extFromMime(mime: string): string {
   if (mime === 'image/jpeg') return '.jpg';
   if (mime === 'image/webp') return '.webp';
   if (mime === 'image/svg+xml') return '.svg';
+  if (mime === 'image/gif') return '.gif';
   return '.bin';
 }
 
