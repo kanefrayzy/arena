@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../../shared/api/client';
@@ -45,6 +45,13 @@ export function HomePage() {
   const [showHistory, setShowHistory] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [spriteW, setSpriteW] = useState(120);
+  const spriteRef = useRef<HTMLImageElement | HTMLVideoElement | null>(null);
+
+  // Measure rendered sprite width to scale shadow
+  const measureSprite = (el: HTMLImageElement | HTMLVideoElement | null) => {
+    if (el) setSpriteW(el.offsetWidth || 120);
+  };
 
   useEffect(() => {
     void (async () => {
@@ -210,44 +217,64 @@ export function HomePage() {
                     const isWebm = /\.webm(\?|$)/i.test(activeChar.spriteUrl ?? '');
                     const cls = 'max-h-full w-auto max-w-[75%] object-contain drop-shadow-[0_14px_32px_rgba(0,0,0,0.7)] transition-transform group-active:scale-95';
                     return isWebm
-                      ? <video src={activeChar.spriteUrl} autoPlay loop muted playsInline className={cls} />
-                      : <img src={activeChar.spriteUrl} alt={activeChar.name} className={cls} />;
+                      ? <video
+                          key={activeChar.spriteUrl}
+                          ref={el => { spriteRef.current = el; measureSprite(el); }}
+                          src={activeChar.spriteUrl} autoPlay loop muted playsInline
+                          className={cls}
+                          onLoadedMetadata={e => measureSprite(e.currentTarget)}
+                        />
+                      : <img
+                          key={activeChar.spriteUrl}
+                          ref={el => { spriteRef.current = el; }}
+                          src={activeChar.spriteUrl} alt={activeChar.name}
+                          className={cls}
+                          onLoad={e => measureSprite(e.currentTarget)}
+                        />;
                   })()
                 ) : (
                   <div className="h-40 w-40 rounded-full bg-white/10" />
                 )}
               </div>
 
-              {/* Realistic 3-layer contact shadow (umbra / penumbra / ambient) */}
-              <div className="pointer-events-none relative" style={{ marginTop: '-4px', height: '32px', width: '240px', flexShrink: 0 }}>
-                {/* Ambient occlusion — widest, softest, lightest */}
-                <div style={{
-                  position: 'absolute', top: '50%', left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: '220px', height: '32px',
-                  borderRadius: '50%',
-                  background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.28) 0%, transparent 70%)',
-                  filter: 'blur(12px)',
-                }} />
-                {/* Penumbra — medium */}
-                <div style={{
-                  position: 'absolute', top: '50%', left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: '140px', height: '20px',
-                  borderRadius: '50%',
-                  background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.52) 0%, transparent 75%)',
-                  filter: 'blur(5px)',
-                }} />
-                {/* Umbra — contact point, tight and dark */}
-                <div style={{
-                  position: 'absolute', top: '50%', left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  width: '80px', height: '11px',
-                  borderRadius: '50%',
-                  background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.45) 50%, transparent 100%)',
-                  filter: 'blur(2px)',
-                }} />
-              </div>
+              {/* Realistic 3-layer contact shadow — scales with sprite width */}
+              {(() => {
+                const aw = spriteW; // ambient
+                const pw = Math.round(aw * 0.65); // penumbra
+                const uw = Math.round(aw * 0.38); // umbra
+                const containerW = aw + 60;
+                return (
+                  <div className="pointer-events-none relative" style={{ marginTop: '-4px', height: '36px', width: `${containerW}px`, flexShrink: 0 }}>
+                    {/* Ambient occlusion */}
+                    <div style={{
+                      position: 'absolute', top: '50%', left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      width: `${aw + 50}px`, height: `${Math.round(aw * 0.16)}px`,
+                      borderRadius: '50%',
+                      background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.28) 0%, transparent 70%)',
+                      filter: 'blur(14px)',
+                    }} />
+                    {/* Penumbra */}
+                    <div style={{
+                      position: 'absolute', top: '50%', left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      width: `${pw + 20}px`, height: `${Math.round(pw * 0.14)}px`,
+                      borderRadius: '50%',
+                      background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.52) 0%, transparent 75%)',
+                      filter: 'blur(5px)',
+                    }} />
+                    {/* Umbra — contact point */}
+                    <div style={{
+                      position: 'absolute', top: '50%', left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      width: `${uw}px`, height: `${Math.round(uw * 0.14)}px`,
+                      borderRadius: '50%',
+                      background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.45) 50%, transparent 100%)',
+                      filter: 'blur(2px)',
+                    }} />
+                  </div>
+                );
+              })()}
 
               {/* Name label */}
               <div className="mt-2 mb-3 rounded-full bg-black/50 px-4 py-0.5 font-display text-sm uppercase tracking-wide text-game-yellow backdrop-blur-sm drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]">
