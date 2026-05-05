@@ -39,6 +39,8 @@ export function NotificationsPanel({ onClose, onUnreadChange }: Props) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef(0);
   const dragCurY = useRef(0);
+  const isDragging = useRef(false);
+  const openedAt = useRef(Date.now());
 
   useEffect(() => {
     void (async () => {
@@ -69,9 +71,13 @@ export function NotificationsPanel({ onClose, onUnreadChange }: Props) {
 
   const onPointerDown = (e: React.PointerEvent) => {
     dragStartY.current = e.clientY;
+    dragCurY.current = 0;
+    isDragging.current = true;
+    if (sheetRef.current) sheetRef.current.style.transition = 'none';
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
   const onPointerMove = (e: React.PointerEvent) => {
+    if (!isDragging.current) return;
     dragCurY.current = e.clientY - dragStartY.current;
     if (sheetRef.current) {
       const dy = Math.max(0, dragCurY.current);
@@ -79,9 +85,24 @@ export function NotificationsPanel({ onClose, onUnreadChange }: Props) {
     }
   };
   const onPointerUp = () => {
-    if (dragCurY.current > 80) { onClose(); return; }
+    if (!isDragging.current) return;
+    isDragging.current = false;
+    if (sheetRef.current) sheetRef.current.style.transition = '';
+    // Ignore close if panel was just opened (prevents accidental swipe-close from open gesture)
+    if (dragCurY.current > 80 && Date.now() - openedAt.current > 350) {
+      onClose();
+      return;
+    }
     if (sheetRef.current) sheetRef.current.style.transform = '';
     dragCurY.current = 0;
+  };
+  const onPointerCancel = () => {
+    isDragging.current = false;
+    dragCurY.current = 0;
+    if (sheetRef.current) {
+      sheetRef.current.style.transition = '';
+      sheetRef.current.style.transform = '';
+    }
   };
 
   const unreadCount = items.filter((n) => !n.read).length;
@@ -99,6 +120,7 @@ export function NotificationsPanel({ onClose, onUnreadChange }: Props) {
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
+          onPointerCancel={onPointerCancel}
         >
           <div className="mx-auto flex flex-col items-center gap-1">
             <div className="h-1.5 w-12 rounded-full bg-white/30" />

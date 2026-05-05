@@ -8,6 +8,9 @@ interface ShopCharacter {
   name: string;
   spriteUrl: string | null;
   priceUsd: string | null;
+  baseHp: number;
+  baseSpeed: number;
+  baseDamage: number;
 }
 interface MyInventory {
   characters: Array<{ characterId: number }>;
@@ -25,6 +28,7 @@ export function ShopPage() {
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   async function reload() {
     try {
@@ -39,6 +43,8 @@ export function ShopPage() {
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) nav('/');
       else setError(e instanceof Error ? e.message : 'load failed');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -87,7 +93,12 @@ export function ShopPage() {
 
       <main className="relative z-10 flex flex-1 flex-col gap-3 overflow-y-auto px-5 py-5">
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          {chars.length === 0 && (
+          {loading && (
+            <div className="game-card col-span-full px-4 py-10 text-center font-display text-base text-white/40">
+              …
+            </div>
+          )}
+          {!loading && chars.length === 0 && (
             <div className="game-card col-span-full px-4 py-10 text-center font-display text-base text-white/70">
               {t('shop.empty.characters')}
             </div>
@@ -103,6 +114,9 @@ export function ShopPage() {
                 name={c.name}
                 spriteUrl={c.spriteUrl}
                 priceUsd={c.priceUsd}
+                baseHp={c.baseHp}
+                baseSpeed={c.baseSpeed}
+                baseDamage={c.baseDamage}
                 owned={owned}
                 canAfford={canAfford}
                 busy={busy === k}
@@ -125,6 +139,9 @@ interface CardProps {
   name: string;
   spriteUrl: string | null;
   priceUsd: string | null;
+  baseHp: number;
+  baseSpeed: number;
+  baseDamage: number;
   owned: boolean;
   canAfford: boolean;
   busy: boolean;
@@ -157,6 +174,11 @@ function Card(p: CardProps) {
         )}
       </div>
       <div className="font-display text-sm uppercase tracking-wide text-white">{p.name}</div>
+      <div className="grid w-full grid-cols-3 gap-1 text-[10px]">
+        <Stat label="HP" value={p.baseHp} color="text-game-red" />
+        <Stat label="SPD" value={p.baseSpeed} color="text-game-cyan" />
+        <Stat label="DMG" value={p.baseDamage} color="text-game-yellow" />
+      </div>
       {!isFree && (
         <div className="font-display text-base text-game-yellow">${p.priceUsd}</div>
       )}
@@ -177,6 +199,15 @@ function Card(p: CardProps) {
           {p.busy ? '…' : p.buyLabel}
         </button>
       )}
+    </div>
+  );
+}
+
+function Stat({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className="rounded-lg bg-black/30 px-1 py-1 text-center">
+      <div className="text-[9px] uppercase text-white/50">{label}</div>
+      <div className={`font-display text-sm ${color}`}>{value}</div>
     </div>
   );
 }

@@ -200,13 +200,10 @@ export function HomePage() {
             <button
               type="button"
               onClick={() => nav('/loadout')}
-              className="group relative flex h-full w-full max-w-[300px] flex-col items-center justify-center"
+              className="group relative flex h-full w-full max-w-[300px] items-center justify-center"
               title={activeChar.name}
             >
-              <div className="pointer-events-none mb-1 font-display text-sm uppercase tracking-wide text-game-yellow drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]">
-                {activeChar.name}
-              </div>
-              <div className="relative flex flex-1 w-full items-center justify-center">
+              <div className="relative flex h-full w-full items-center justify-center">
                 <div className="pointer-events-none absolute bottom-[6%] left-1/2 h-2.5 w-[38%] -translate-x-1/2 rounded-full bg-black/45 blur-md" />
                 {activeChar.spriteUrl ? (
                   <img
@@ -217,6 +214,10 @@ export function HomePage() {
                 ) : (
                   <div className="relative h-40 w-40 animate-float rounded-full bg-white/10" />
                 )}
+                {/* Name label — absolute at bottom of sprite area */}
+                <div className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 rounded-full bg-black/50 px-4 py-0.5 font-display text-sm uppercase tracking-wide text-game-yellow drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)] backdrop-blur-sm">
+                  {activeChar.name}
+                </div>
               </div>
             </button>
           )}
