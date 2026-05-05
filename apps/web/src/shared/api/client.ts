@@ -16,7 +16,28 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+// Prevent concurrent refresh attempts
+let refreshPromise: Promise<boolean> | null = null;
+
+async function tryRefresh(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch(`${BASE}/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      return res.ok;
+    } catch {
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
+}
+
+async function request<T>(method: string, path: string, body?: unknown, isRetry = false): Promise<T> {
   const init: RequestInit = {
     method,
     credentials: 'include',
@@ -35,8 +56,13 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     | null;
 
   if (!res.ok) {
-    if (res.status === 401) {
-      // Redirect to login if not already there
+    if (res.status === 401 && !isRetry && path !== '/auth/refresh') {
+      // Try to silently refresh the access token, then retry once
+      const refreshed = await tryRefresh();
+      if (refreshed) {
+        return request<T>(method, path, body, true);
+      }
+      // Refresh also failed — redirect to login
       const p = window.location.pathname;
       if (p !== '/' && p !== '/login' && p !== '/register') {
         window.location.replace('/');
@@ -59,7 +85,7 @@ export const api = {
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
   delete: <T>(path: string) => request<T>('DELETE', path),
-  postForm: async <T>(path: string, form: FormData): Promise<T> => {
+  postForm: async <T>(path: string, form: FormData, isRetry = false): Promise<T> => {
     const res = await fetch(`${BASE}${path}`, {
       method: 'POST',
       credentials: 'include',
@@ -71,6 +97,14 @@ export const api = {
       | T
       | null;
     if (!res.ok) {
+      if (res.status === 401 && !isRetry) {
+        const refreshed = await tryRefresh();
+        if (refreshed) return api.postForm<T>(path, form, true);
+        const p = window.location.pathname;
+        if (p !== '/' && p !== '/login' && p !== '/register') {
+          window.location.replace('/');
+        }
+      }
       const err = (json as { error?: { code: string; message: string } })?.error;
       throw new ApiError(
         res.status,
