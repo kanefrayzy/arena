@@ -200,36 +200,51 @@ export function HomePage() {
             <button
               type="button"
               onClick={() => nav('/loadout')}
-              className="group flex flex-col items-center gap-1"
+              className="group flex flex-col items-center"
               title={activeChar.name}
             >
-              {/* Sprite container — fixed height */}
-              <div className="relative flex h-64 w-56 items-end justify-center">
+              {/* Platform spotlight — behind character */}
+              <div className="pointer-events-none relative mb-0 flex items-end justify-center">
+                {/* Big radial spotlight (white glow from below) */}
+                <div
+                  className="absolute bottom-0 left-1/2 -translate-x-1/2"
+                  style={{
+                    width: '260px',
+                    height: '130px',
+                    background: 'radial-gradient(ellipse 50% 50% at 50% 100%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.07) 40%, transparent 70%)',
+                    borderRadius: '50%',
+                    filter: 'blur(2px)',
+                  }}
+                />
+                {/* Sharp dark contact shadow */}
+                <div
+                  className="absolute bottom-0 left-1/2 -translate-x-1/2"
+                  style={{
+                    width: '110px',
+                    height: '18px',
+                    background: 'radial-gradient(ellipse 50% 50% at 50% 50%, rgba(0,0,0,0.55) 0%, transparent 100%)',
+                    borderRadius: '50%',
+                    filter: 'blur(3px)',
+                  }}
+                />
+                {/* Sprite — responsive height via clamp */}
                 {activeChar.spriteUrl ? (
                   (() => {
                     const isWebm = /\.webm(\?|$)/i.test(activeChar.spriteUrl ?? '');
+                    const cls = 'relative z-10 object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.65)] transition-transform group-active:scale-95';
+                    const style = { height: 'clamp(220px, 42vh, 340px)', width: 'auto', maxWidth: '240px' };
                     return isWebm ? (
-                      <video
-                        src={activeChar.spriteUrl}
-                        autoPlay loop muted playsInline
-                        className="max-h-full max-w-full object-contain drop-shadow-[0_8px_20px_rgba(0,0,0,0.6)] transition-transform group-active:scale-95"
-                      />
+                      <video src={activeChar.spriteUrl} autoPlay loop muted playsInline className={cls} style={style} />
                     ) : (
-                      <img
-                        src={activeChar.spriteUrl}
-                        alt={activeChar.name}
-                        className="max-h-full max-w-full object-contain drop-shadow-[0_8px_20px_rgba(0,0,0,0.6)] transition-transform group-active:scale-95"
-                      />
+                      <img src={activeChar.spriteUrl} alt={activeChar.name} className={cls} style={style} />
                     );
                   })()
                 ) : (
-                  <div className="h-40 w-40 rounded-full bg-white/10" />
+                  <div className="relative z-10 rounded-full bg-white/10" style={{ width: 'clamp(140px, 28vh, 200px)', height: 'clamp(140px, 28vh, 200px)' }} />
                 )}
               </div>
-              {/* Platform shadow — right under feet */}
-              <div className="pointer-events-none -mt-2 h-3 w-28 rounded-full bg-black/60 blur-[6px]" />
               {/* Name label */}
-              <div className="mt-1 rounded-full bg-black/50 px-4 py-0.5 font-display text-sm uppercase tracking-wide text-game-yellow backdrop-blur-sm drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]">
+              <div className="mt-2 rounded-full bg-black/50 px-4 py-0.5 font-display text-sm uppercase tracking-wide text-game-yellow backdrop-blur-sm drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]">
                 {activeChar.name}
               </div>
             </button>
