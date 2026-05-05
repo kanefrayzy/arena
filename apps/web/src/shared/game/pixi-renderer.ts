@@ -84,6 +84,7 @@ export class PixiRenderer {
   private snapTime = 0;
   private cameraScale = 1;
   private textures: Partial<Record<SpriteSlot, Texture>> = {};
+  private gifBuffers: Partial<Record<SpriteSlot, ArrayBuffer>> = {};
   private playerCharTex = new Map<number, Texture>();
   private playerCharGif = new Map<number, AnimatedGIF>();
   private playerWeaponTex = new Map<number, Texture>();
@@ -300,18 +301,35 @@ export class PixiRenderer {
     for (const slot of Object.keys(registry) as SpriteSlot[]) {
       const row = registry[slot];
       if (!row) continue;
-      tasks.push(
-        Assets.load<Texture>(row.url)
-          .then((tex) => {
-            this.textures[slot] = tex;
-            // eslint-disable-next-line no-console
-            console.info('[renderer] loaded', slot, '=', tex.width, '×', tex.height, 'from', row.url);
-          })
-          .catch((err) => {
-            // eslint-disable-next-line no-console
-            console.warn('[renderer] FAILED to load', slot, row.url, err);
-          }),
-      );
+      const isGif = row.url.split('?')[0].toLowerCase().endsWith('.gif');
+      if (isGif) {
+        tasks.push(
+          fetch(row.url)
+            .then((r) => r.arrayBuffer())
+            .then((buf) => {
+              this.gifBuffers[slot] = buf;
+              // eslint-disable-next-line no-console
+              console.info('[renderer] loaded GIF buffer', slot, 'from', row.url);
+            })
+            .catch((err) => {
+              // eslint-disable-next-line no-console
+              console.warn('[renderer] FAILED to load GIF', slot, row.url, err);
+            }),
+        );
+      } else {
+        tasks.push(
+          Assets.load<Texture>(row.url)
+            .then((tex) => {
+              this.textures[slot] = tex;
+              // eslint-disable-next-line no-console
+              console.info('[renderer] loaded', slot, '=', tex.width, '×', tex.height, 'from', row.url);
+            })
+            .catch((err) => {
+              // eslint-disable-next-line no-console
+              console.warn('[renderer] FAILED to load', slot, row.url, err);
+            }),
+        );
+      }
     }
     await Promise.all(tasks);
   }
@@ -341,9 +359,10 @@ export class PixiRenderer {
       const weaponG = new Graphics();
       const hpG = new Graphics();
       root.addChild(bodyG);
-      // Optional sprite-based body — prefer GIF, then per-player texture, fall back to slot.
+      // Optional sprite-based body — prefer per-player GIF, then per-player texture, then slot GIF/texture.
       const charGif = this.playerCharGif.get(p.id);
-      const bodyTex = charGif ? null : (this.playerCharTex.get(p.id) ?? this.textures[isYou ? 'player_you' : 'player_opp']);
+      const slotGifBuf = charGif ? null : this.gifBuffers[isYou ? 'player_you' : 'player_opp'];
+      const bodyTex = (charGif || slotGifBuf) ? null : (this.playerCharTex.get(p.id) ?? this.textures[isYou ? 'player_you' : 'player_opp']);
       let bodySprite: Sprite | null = null;
       if (charGif) {
         charGif.anchor.set(0.5);
@@ -351,6 +370,15 @@ export class PixiRenderer {
         charGif.scale.set(scale);
         root.addChild(charGif);
         bodySprite = charGif;
+      } else if (slotGifBuf) {
+        const gif = AnimatedGIF.fromBuffer(slotGifBuf);
+        gif.loop = true;
+        gif.play();
+        gif.anchor.set(0.5);
+        const scale = (PLAYER_RADIUS * 2.2) / Math.max(gif.width || 1, gif.height || 1);
+        gif.scale.set(scale);
+        root.addChild(gif);
+        bodySprite = gif;
       } else if (bodyTex) {
         bodySprite = new Sprite(bodyTex);
         bodySprite.anchor.set(0.5);
@@ -613,8 +641,19 @@ export class PixiRenderer {
       const ox = ob.x;
       const oy = this.flipY ? MAP_HEIGHT - ob.y - ob.h : ob.y;
       const kind: SpriteSlot = ob.kind === 'barrel' ? 'barrel' : ob.kind === 'wall' ? 'wall' : 'crate';
+      const gifBuf = this.gifBuffers[kind];
       const tex = this.textures[kind];
-      if (tex) {
+      if (gifBuf) {
+        // Each obstacle needs its own AnimatedGIF instance — display objects can't have multiple parents.
+        const gif = AnimatedGIF.fromBuffer(gifBuf);
+        gif.loop = true;
+        gif.play();
+        gif.x = ox;
+        gif.y = oy;
+        gif.width = ob.w;
+        gif.height = ob.h;
+        layer.addChild(gif);
+      } else if (tex) {
         const s = new Sprite(tex);
         s.x = ox;
         s.y = oy;
