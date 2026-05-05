@@ -33,12 +33,14 @@ type UploadedMulterFile = {
 };
 
 const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']);
+const ALLOWED_MIME_CHAR_SPRITE = new Set([...ALLOWED_MIME, 'image/gif']);
 const MAX_BYTES = 1024 * 1024;
 function extFromMime(m: string): string {
   if (m === 'image/png') return '.png';
   if (m === 'image/jpeg') return '.jpg';
   if (m === 'image/webp') return '.webp';
   if (m === 'image/svg+xml') return '.svg';
+  if (m === 'image/gif') return '.gif';
   return '.bin';
 }
 function ensureDir(sub: string): string {
@@ -234,7 +236,7 @@ export class AdminController {
     @UploadedFile() file: UploadedMulterFile | undefined,
   ) {
     if (!file) throw new BadRequestException('no file');
-    if (!ALLOWED_MIME.has(file.mimetype)) throw new BadRequestException('unsupported mime');
+    if (!ALLOWED_MIME_CHAR_SPRITE.has(file.mimetype)) throw new BadRequestException('unsupported mime');
     if (file.size > MAX_BYTES) throw new BadRequestException('file too large');
     const ext = extname(file.originalname).toLowerCase() || extFromMime(file.mimetype);
     const filename = `char_${id}${ext}`;

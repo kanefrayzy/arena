@@ -175,6 +175,7 @@ export function ContentTab() {
                 onFile={(f) => void uploadCharSprite(c, f)}
                 disabled={busy === `c${c.id}`}
                 label="Sprite"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
               />
               <UploadButton
                 onFile={(f) => void uploadCharBattleSprite(c, f)}
@@ -344,13 +345,14 @@ function SpriteCell({ url, alt }: { url: string | null; alt: string }) {
   );
 }
 
-function UploadButton({ onFile, disabled, label }: { onFile: (file: File) => void; disabled?: boolean; label: string }) {
+function UploadButton({ onFile, disabled, label, accept }: { onFile: (file: File) => void; disabled?: boolean; label: string; accept?: string }) {
+  const acceptStr = accept ?? 'image/png,image/jpeg,image/webp,image/svg+xml';
   return (
     <label className={`cursor-pointer rounded-md bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10 ${disabled ? 'pointer-events-none opacity-50' : ''}`}>
       {label}
       <input
         type="file"
-        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+        accept={acceptStr}
         className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0];
