@@ -218,34 +218,9 @@ export function HomePage() {
                 )}
               </div>
 
-              {/* Brawl Stars-style platform */}
-              <div className="pointer-events-none flex flex-col items-center" style={{ marginTop: '-6px' }}>
-                {/* Outer glow — wide soft purple-white ellipse */}
-                <div style={{
-                  width: '220px',
-                  height: '38px',
-                  borderRadius: '50%',
-                  background: 'radial-gradient(ellipse at center, rgba(230,220,255,0.55) 0%, rgba(180,150,255,0.28) 40%, transparent 72%)',
-                  filter: 'blur(5px)',
-                }} />
-                {/* Inner bright core */}
-                <div style={{
-                  marginTop: '-28px',
-                  width: '110px',
-                  height: '18px',
-                  borderRadius: '50%',
-                  background: 'radial-gradient(ellipse at center, rgba(255,255,255,0.6) 0%, rgba(210,190,255,0.35) 50%, transparent 100%)',
-                  filter: 'blur(2px)',
-                }} />
-                {/* Contact shadow at feet */}
-                <div style={{
-                  marginTop: '-10px',
-                  width: '80px',
-                  height: '10px',
-                  borderRadius: '50%',
-                  background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.6) 0%, transparent 100%)',
-                  filter: 'blur(3px)',
-                }} />
+              {/* Platform shadow image */}
+              <div className="pointer-events-none" style={{ marginTop: '-12px' }}>
+                <img src="/shadow.webp" alt="" aria-hidden className="w-48 select-none" draggable={false} />
               </div>
 
               {/* Name label */}
