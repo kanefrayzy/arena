@@ -163,13 +163,13 @@ export function HomePage() {
         )}
 
         {/* ── CHARACTER AREA (flex-1) ── */}
-        <div className="relative flex flex-1 items-center justify-center">
+        <div className="relative flex flex-1 overflow-hidden">
 
           {/* History — top-left corner of char area */}
           <button
             type="button"
             onClick={() => setShowHistory(true)}
-            className="absolute left-4 top-2 z-10 flex h-11 w-11 items-center justify-center rounded-2xl border border-game-yellow/40 bg-black/40 text-game-yellow backdrop-blur active:scale-90 hover:bg-black/60"
+            className="absolute left-4 top-2 z-20 flex h-11 w-11 items-center justify-center rounded-2xl border border-game-yellow/40 bg-black/40 text-game-yellow backdrop-blur active:scale-90 hover:bg-black/60"
             aria-label="История матчей"
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -181,7 +181,7 @@ export function HomePage() {
           <button
             type="button"
             onClick={() => setShowNotifs(true)}
-            className="absolute right-4 top-2 z-10 flex h-11 w-11 items-center justify-center rounded-2xl border border-game-cyan/40 bg-black/40 text-game-cyan backdrop-blur active:scale-90 hover:bg-black/60"
+            className="absolute right-4 top-2 z-20 flex h-11 w-11 items-center justify-center rounded-2xl border border-game-cyan/40 bg-black/40 text-game-cyan backdrop-blur active:scale-90 hover:bg-black/60"
             aria-label="Уведомления"
           >
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -195,56 +195,61 @@ export function HomePage() {
             )}
           </button>
 
-          {/* Character sprite */}
+          {/* Character — fills entire area */}
           {activeChar && (
             <button
               type="button"
               onClick={() => nav('/loadout')}
-              className="group flex flex-col items-center"
+              className="group absolute inset-0 z-10 flex flex-col items-center"
               title={activeChar.name}
             >
-              {/* Platform spotlight — behind character */}
-              <div className="pointer-events-none relative mb-0 flex items-end justify-center">
-                {/* Big radial spotlight (white glow from below) */}
-                <div
-                  className="absolute bottom-0 left-1/2 -translate-x-1/2"
-                  style={{
-                    width: '260px',
-                    height: '130px',
-                    background: 'radial-gradient(ellipse 50% 50% at 50% 100%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.07) 40%, transparent 70%)',
-                    borderRadius: '50%',
-                    filter: 'blur(2px)',
-                  }}
-                />
-                {/* Sharp dark contact shadow */}
-                <div
-                  className="absolute bottom-0 left-1/2 -translate-x-1/2"
-                  style={{
-                    width: '110px',
-                    height: '18px',
-                    background: 'radial-gradient(ellipse 50% 50% at 50% 50%, rgba(0,0,0,0.55) 0%, transparent 100%)',
-                    borderRadius: '50%',
-                    filter: 'blur(3px)',
-                  }}
-                />
-                {/* Sprite — responsive height via clamp */}
+              {/* Image wrapper — takes all vertical space, top padding clears the buttons */}
+              <div className="flex min-h-0 flex-1 w-full items-end justify-center pt-16 pb-0">
                 {activeChar.spriteUrl ? (
                   (() => {
                     const isWebm = /\.webm(\?|$)/i.test(activeChar.spriteUrl ?? '');
-                    const cls = 'relative z-10 object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.65)] transition-transform group-active:scale-95';
-                    const style = { height: 'clamp(220px, 42vh, 340px)', width: 'auto', maxWidth: '240px' };
-                    return isWebm ? (
-                      <video src={activeChar.spriteUrl} autoPlay loop muted playsInline className={cls} style={style} />
-                    ) : (
-                      <img src={activeChar.spriteUrl} alt={activeChar.name} className={cls} style={style} />
-                    );
+                    const cls = 'max-h-full w-auto max-w-[75%] object-contain drop-shadow-[0_14px_32px_rgba(0,0,0,0.7)] transition-transform group-active:scale-95';
+                    return isWebm
+                      ? <video src={activeChar.spriteUrl} autoPlay loop muted playsInline className={cls} />
+                      : <img src={activeChar.spriteUrl} alt={activeChar.name} className={cls} />;
                   })()
                 ) : (
-                  <div className="relative z-10 rounded-full bg-white/10" style={{ width: 'clamp(140px, 28vh, 200px)', height: 'clamp(140px, 28vh, 200px)' }} />
+                  <div className="h-40 w-40 rounded-full bg-white/10" />
                 )}
               </div>
+
+              {/* Brawl Stars-style platform */}
+              <div className="pointer-events-none flex flex-col items-center" style={{ marginTop: '-6px' }}>
+                {/* Outer glow — wide soft purple-white ellipse */}
+                <div style={{
+                  width: '220px',
+                  height: '38px',
+                  borderRadius: '50%',
+                  background: 'radial-gradient(ellipse at center, rgba(230,220,255,0.55) 0%, rgba(180,150,255,0.28) 40%, transparent 72%)',
+                  filter: 'blur(5px)',
+                }} />
+                {/* Inner bright core */}
+                <div style={{
+                  marginTop: '-28px',
+                  width: '110px',
+                  height: '18px',
+                  borderRadius: '50%',
+                  background: 'radial-gradient(ellipse at center, rgba(255,255,255,0.6) 0%, rgba(210,190,255,0.35) 50%, transparent 100%)',
+                  filter: 'blur(2px)',
+                }} />
+                {/* Contact shadow at feet */}
+                <div style={{
+                  marginTop: '-10px',
+                  width: '80px',
+                  height: '10px',
+                  borderRadius: '50%',
+                  background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.6) 0%, transparent 100%)',
+                  filter: 'blur(3px)',
+                }} />
+              </div>
+
               {/* Name label */}
-              <div className="mt-2 rounded-full bg-black/50 px-4 py-0.5 font-display text-sm uppercase tracking-wide text-game-yellow backdrop-blur-sm drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]">
+              <div className="mt-2 mb-3 rounded-full bg-black/50 px-4 py-0.5 font-display text-sm uppercase tracking-wide text-game-yellow backdrop-blur-sm drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]">
                 {activeChar.name}
               </div>
             </button>
