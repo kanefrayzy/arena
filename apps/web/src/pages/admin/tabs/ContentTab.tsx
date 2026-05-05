@@ -175,7 +175,7 @@ export function ContentTab() {
                 onFile={(f) => void uploadCharSprite(c, f)}
                 disabled={busy === `c${c.id}`}
                 label="Sprite"
-                accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif,video/webm"
               />
               <UploadButton
                 onFile={(f) => void uploadCharBattleSprite(c, f)}
@@ -334,10 +334,15 @@ export function ContentTab() {
 }
 
 function SpriteCell({ url, alt }: { url: string | null; alt: string }) {
+  const isWebm = url?.split('?')[0].toLowerCase().endsWith('.webm') ?? false;
   return (
     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-black/40">
       {url ? (
-        <img src={url} alt={alt} className="max-h-full max-w-full object-contain" />
+        isWebm ? (
+          <video src={url} autoPlay loop muted playsInline className="max-h-full max-w-full object-contain" />
+        ) : (
+          <img src={url} alt={alt} className="max-h-full max-w-full object-contain" />
+        )
       ) : (
         <span className="text-[10px] text-white/30">no img</span>
       )}

@@ -127,11 +127,19 @@ export function LoadoutPage() {
                   {/* ground shadow */}
                   <div className="absolute bottom-2 left-1/2 h-2 w-16 -translate-x-1/2 rounded-full bg-black/50 blur-sm" />
                   {c.spriteUrl ? (
-                    <img
-                      src={c.spriteUrl}
-                      alt={c.name}
-                      className="relative max-h-[88%] max-w-[88%] animate-float object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]"
-                    />
+                    /\.webm(\?|$)/i.test(c.spriteUrl) ? (
+                      <video
+                        src={c.spriteUrl}
+                        autoPlay loop muted playsInline
+                        className="relative max-h-[88%] max-w-[88%] animate-float object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]"
+                      />
+                    ) : (
+                      <img
+                        src={c.spriteUrl}
+                        alt={c.name}
+                        className="relative max-h-[88%] max-w-[88%] animate-float object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]"
+                      />
+                    )
                   ) : (
                     <div className="relative h-14 w-14 animate-float rounded-full bg-white/20" />
                   )}

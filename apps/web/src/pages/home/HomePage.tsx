@@ -206,11 +206,22 @@ export function HomePage() {
               <div className="relative flex h-full w-full items-center justify-center">
                 <div className="pointer-events-none absolute bottom-[6%] left-1/2 h-2.5 w-[38%] -translate-x-1/2 rounded-full bg-black/45 blur-md" />
                 {activeChar.spriteUrl ? (
-                  <img
-                    src={activeChar.spriteUrl}
-                    alt={activeChar.name}
-                    className="relative max-h-full max-w-[75%] animate-float object-contain drop-shadow-[0_6px_8px_rgba(0,0,0,0.45)] transition-transform group-active:scale-95"
-                  />
+                  (() => {
+                    const isWebm = /\.webm(\?|$)/i.test(activeChar.spriteUrl ?? '');
+                    return isWebm ? (
+                      <video
+                        src={activeChar.spriteUrl}
+                        autoPlay loop muted playsInline
+                        className="relative max-h-full max-w-[75%] animate-float object-contain drop-shadow-[0_6px_8px_rgba(0,0,0,0.45)] transition-transform group-active:scale-95"
+                      />
+                    ) : (
+                      <img
+                        src={activeChar.spriteUrl}
+                        alt={activeChar.name}
+                        className="relative max-h-full max-w-[75%] animate-float object-contain drop-shadow-[0_6px_8px_rgba(0,0,0,0.45)] transition-transform group-active:scale-95"
+                      />
+                    );
+                  })()
                 ) : (
                   <div className="relative h-40 w-40 animate-float rounded-full bg-white/10" />
                 )}

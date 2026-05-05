@@ -33,14 +33,15 @@ type UploadedMulterFile = {
 };
 
 const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']);
-const ALLOWED_MIME_CHAR_SPRITE = new Set([...ALLOWED_MIME, 'image/gif']);
-const MAX_BYTES = 1024 * 1024;
+const ALLOWED_MIME_CHAR_SPRITE = new Set([...ALLOWED_MIME, 'image/gif', 'video/webm']);
+const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 function extFromMime(m: string): string {
   if (m === 'image/png') return '.png';
   if (m === 'image/jpeg') return '.jpg';
   if (m === 'image/webp') return '.webp';
   if (m === 'image/svg+xml') return '.svg';
   if (m === 'image/gif') return '.gif';
+  if (m === 'video/webm') return '.webm';
   return '.bin';
 }
 function ensureDir(sub: string): string {

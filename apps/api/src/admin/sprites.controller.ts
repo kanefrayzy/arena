@@ -39,8 +39,8 @@ export const SPRITE_SLOTS = {
 
 export type SpriteSlot = keyof typeof SPRITE_SLOTS;
 
-const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'image/gif']);
-const MAX_BYTES = 1024 * 1024; // 1 MB
+const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'image/gif', 'video/webm']);
+const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
 function uploadDir(): string {
   // CWD when api runs is /workspace/apps/api in container, host root otherwise.
@@ -55,6 +55,7 @@ function extFromMime(mime: string): string {
   if (mime === 'image/webp') return '.webp';
   if (mime === 'image/svg+xml') return '.svg';
   if (mime === 'image/gif') return '.gif';
+  if (mime === 'video/webm') return '.webm';
   return '.bin';
 }
 
