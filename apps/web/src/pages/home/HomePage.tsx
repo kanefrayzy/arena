@@ -218,9 +218,35 @@ export function HomePage() {
                 )}
               </div>
 
-              {/* Platform shadow image */}
-              <div className="pointer-events-none" style={{ marginTop: '-12px' }}>
-                <img src="/shadow.webp" alt="" aria-hidden className="w-48 select-none" draggable={false} />
+              {/* Realistic 3-layer contact shadow (umbra / penumbra / ambient) */}
+              <div className="pointer-events-none relative" style={{ marginTop: '-4px', height: '32px', width: '240px', flexShrink: 0 }}>
+                {/* Ambient occlusion — widest, softest, lightest */}
+                <div style={{
+                  position: 'absolute', top: '50%', left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: '220px', height: '32px',
+                  borderRadius: '50%',
+                  background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.28) 0%, transparent 70%)',
+                  filter: 'blur(12px)',
+                }} />
+                {/* Penumbra — medium */}
+                <div style={{
+                  position: 'absolute', top: '50%', left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: '140px', height: '20px',
+                  borderRadius: '50%',
+                  background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.52) 0%, transparent 75%)',
+                  filter: 'blur(5px)',
+                }} />
+                {/* Umbra — contact point, tight and dark */}
+                <div style={{
+                  position: 'absolute', top: '50%', left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: '80px', height: '11px',
+                  borderRadius: '50%',
+                  background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.45) 50%, transparent 100%)',
+                  filter: 'blur(2px)',
+                }} />
               </div>
 
               {/* Name label */}
