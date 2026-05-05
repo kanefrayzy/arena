@@ -204,7 +204,6 @@ export function HomePage() {
               title={activeChar.name}
             >
               <div className="relative flex h-full w-full items-center justify-center">
-                <div className="pointer-events-none absolute bottom-[6%] left-1/2 h-2.5 w-[38%] -translate-x-1/2 rounded-full bg-black/45 blur-md" />
                 {activeChar.spriteUrl ? (
                   (() => {
                     const isWebm = /\.webm(\?|$)/i.test(activeChar.spriteUrl ?? '');
@@ -212,19 +211,26 @@ export function HomePage() {
                       <video
                         src={activeChar.spriteUrl}
                         autoPlay loop muted playsInline
-                        className="relative max-h-full max-w-[75%] animate-float object-contain drop-shadow-[0_6px_8px_rgba(0,0,0,0.45)] transition-transform group-active:scale-95"
+                        className="relative max-h-full max-w-[75%] object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,0.55)] transition-transform group-active:scale-95"
                       />
                     ) : (
                       <img
                         src={activeChar.spriteUrl}
                         alt={activeChar.name}
-                        className="relative max-h-full max-w-[75%] animate-float object-contain drop-shadow-[0_6px_8px_rgba(0,0,0,0.45)] transition-transform group-active:scale-95"
+                        className="relative max-h-full max-w-[75%] object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,0.55)] transition-transform group-active:scale-95"
                       />
                     );
                   })()
                 ) : (
-                  <div className="relative h-40 w-40 animate-float rounded-full bg-white/10" />
+                  <div className="relative h-40 w-40 rounded-full bg-white/10" />
                 )}
+                {/* Platform shadow under character */}
+                <div className="pointer-events-none absolute bottom-[12%] left-1/2 -translate-x-1/2">
+                  {/* Outer glow ring */}
+                  <div className="h-5 w-32 rounded-full bg-white/[0.06] blur-sm" />
+                  {/* Inner sharp ellipse */}
+                  <div className="absolute inset-x-3 top-1 h-3 rounded-full bg-black/50 blur-[3px]" />
+                </div>
                 {/* Name label — absolute at bottom of sprite area */}
                 <div className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 rounded-full bg-black/50 px-4 py-0.5 font-display text-sm uppercase tracking-wide text-game-yellow drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)] backdrop-blur-sm">
                   {activeChar.name}
