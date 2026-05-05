@@ -204,18 +204,15 @@ export function HomePage() {
 
           {/* Character — fills entire area */}
           {activeChar && (
-            <button
-              type="button"
-              onClick={() => nav('/loadout')}
-              className="group absolute inset-0 z-10 flex flex-col items-center"
-              title={activeChar.name}
+            <div
+              className="absolute inset-0 z-10 flex flex-col items-center"
             >
               {/* Image wrapper — takes all vertical space, top padding clears the buttons */}
               <div className="flex min-h-0 flex-1 w-full items-end justify-center pt-16 pb-0">
                 {activeChar.spriteUrl ? (
                   (() => {
                     const isWebm = /\.webm(\?|$)/i.test(activeChar.spriteUrl ?? '');
-                    const cls = 'max-h-full w-auto max-w-[75%] object-contain drop-shadow-[0_14px_32px_rgba(0,0,0,0.7)] transition-transform group-active:scale-95';
+                    const cls = 'max-h-full w-auto max-w-[75%] object-contain drop-shadow-[0_14px_32px_rgba(0,0,0,0.7)] animate-float';
                     return isWebm
                       ? <video
                           key={activeChar.spriteUrl}
@@ -281,7 +278,7 @@ export function HomePage() {
               <div className="mt-2 mb-3 rounded-full bg-black/50 px-4 py-0.5 font-display text-sm uppercase tracking-wide text-game-yellow backdrop-blur-sm drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]">
                 {activeChar.name}
               </div>
-            </button>
+            </div>
           )}
         </div>
 
