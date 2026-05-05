@@ -238,7 +238,8 @@ export function HomePage() {
               </div>
 
               {/* Realistic 3-layer contact shadow — scales with sprite width */}
-              {(() => {
+              {/* TODO: shadow disabled temporarily */}
+              {/* {(() => {
                 const aw = spriteW; // ambient
                 const pw = Math.round(aw * 0.65); // penumbra
                 const uw = Math.round(aw * 0.38); // umbra
@@ -246,7 +247,7 @@ export function HomePage() {
                 return (
                   <div className="pointer-events-none relative" style={{ marginTop: '-4px', height: '36px', width: `${containerW}px`, flexShrink: 0 }}>
                     {/* Ambient occlusion */}
-                    <div style={{
+                    {/*<div style={{
                       position: 'absolute', top: '50%', left: '50%',
                       transform: 'translate(-50%, -50%)',
                       width: `${aw + 50}px`, height: `${Math.round(aw * 0.16)}px`,
@@ -255,7 +256,7 @@ export function HomePage() {
                       filter: 'blur(14px)',
                     }} />
                     {/* Penumbra */}
-                    <div style={{
+                    {/*<div style={{
                       position: 'absolute', top: '50%', left: '50%',
                       transform: 'translate(-50%, -50%)',
                       width: `${pw + 20}px`, height: `${Math.round(pw * 0.14)}px`,
@@ -264,7 +265,7 @@ export function HomePage() {
                       filter: 'blur(5px)',
                     }} />
                     {/* Umbra — contact point */}
-                    <div style={{
+                    {/*<div style={{
                       position: 'absolute', top: '50%', left: '50%',
                       transform: 'translate(-50%, -50%)',
                       width: `${uw}px`, height: `${Math.round(uw * 0.14)}px`,
@@ -274,7 +275,7 @@ export function HomePage() {
                     }} />
                   </div>
                 );
-              })()}
+              })()} */}
 
               {/* Name label */}
               <div className="mt-2 mb-3 rounded-full bg-black/50 px-4 py-0.5 font-display text-sm uppercase tracking-wide text-game-yellow backdrop-blur-sm drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]">
