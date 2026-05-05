@@ -4,6 +4,7 @@
  * back to procedural Graphics when a slot is empty or fails to load.
  */
 import { Application, Graphics, Container, Text, Sprite, Texture, Assets, TilingSprite } from 'pixi.js';
+import { AnimatedGIF } from '@pixi/gif';
 import type {
   SSnapshot,
   SnapshotPlayer,
@@ -84,6 +85,7 @@ export class PixiRenderer {
   private cameraScale = 1;
   private textures: Partial<Record<SpriteSlot, Texture>> = {};
   private playerCharTex = new Map<number, Texture>();
+  private playerCharGif = new Map<number, AnimatedGIF>();
   private playerWeaponTex = new Map<number, Texture>();
   private flipY = false;
   private flipDecided = false;
@@ -130,12 +132,23 @@ export class PixiRenderer {
     // Per-player sprites (admin-uploaded, sent via welcome).
     for (const wp of [welcome.you, welcome.opponent]) {
       if (wp.characterSpriteUrl) {
-        Assets.load<Texture>(wp.characterSpriteUrl)
-          .then((tex) => {
-            this.playerCharTex.set(wp.id, tex);
-            this.swapInPlayerSprites(wp.id);
-          })
-          .catch(() => undefined);
+        if (wp.characterSpriteUrl.toLowerCase().endsWith('.gif')) {
+          AnimatedGIF.fromURL(wp.characterSpriteUrl)
+            .then((gif) => {
+              gif.loop = true;
+              gif.play();
+              this.playerCharGif.set(wp.id, gif);
+              this.swapInPlayerSprites(wp.id);
+            })
+            .catch(() => undefined);
+        } else {
+          Assets.load<Texture>(wp.characterSpriteUrl)
+            .then((tex) => {
+              this.playerCharTex.set(wp.id, tex);
+              this.swapInPlayerSprites(wp.id);
+            })
+            .catch(() => undefined);
+        }
       }
       if (wp.weaponSpriteUrl) {
         Assets.load<Texture>(wp.weaponSpriteUrl)
@@ -152,15 +165,23 @@ export class PixiRenderer {
   private swapInPlayerSprites(playerId: number): void {
     const view = this.players.get(playerId);
     if (!view) return;
+    const charGif = this.playerCharGif.get(playerId);
     const charTex = this.playerCharTex.get(playerId);
-    if (charTex) {
+    if (charGif || charTex) {
       if (view.bodySprite) {
         try { view.bodySprite.destroy(); } catch { /* ignore */ }
       }
-      const sp = new Sprite(charTex);
+      let sp: Sprite;
+      if (charGif) {
+        sp = charGif;
+        const scale = (PLAYER_RADIUS * 2.2) / Math.max(charGif.width || 1, charGif.height || 1);
+        sp.scale.set(scale);
+      } else {
+        sp = new Sprite(charTex!);
+        const scale = (PLAYER_RADIUS * 2.2) / Math.max(charTex!.width, charTex!.height);
+        sp.scale.set(scale);
+      }
       sp.anchor.set(0.5);
-      const scale = (PLAYER_RADIUS * 2.2) / Math.max(charTex.width, charTex.height);
-      sp.scale.set(scale);
       view.root.addChildAt(sp, 1); // above bodyG (index 0)
       view.bodySprite = sp;
     }
@@ -320,10 +341,17 @@ export class PixiRenderer {
       const weaponG = new Graphics();
       const hpG = new Graphics();
       root.addChild(bodyG);
-      // Optional sprite-based body — prefer per-player texture, fall back to slot.
-      const bodyTex = this.playerCharTex.get(p.id) ?? this.textures[isYou ? 'player_you' : 'player_opp'];
+      // Optional sprite-based body — prefer GIF, then per-player texture, fall back to slot.
+      const charGif = this.playerCharGif.get(p.id);
+      const bodyTex = charGif ? null : (this.playerCharTex.get(p.id) ?? this.textures[isYou ? 'player_you' : 'player_opp']);
       let bodySprite: Sprite | null = null;
-      if (bodyTex) {
+      if (charGif) {
+        charGif.anchor.set(0.5);
+        const scale = (PLAYER_RADIUS * 2.2) / Math.max(charGif.width || 1, charGif.height || 1);
+        charGif.scale.set(scale);
+        root.addChild(charGif);
+        bodySprite = charGif;
+      } else if (bodyTex) {
         bodySprite = new Sprite(bodyTex);
         bodySprite.anchor.set(0.5);
         // Scale so longer side ≈ player diameter * 2

@@ -190,6 +190,9 @@ importers:
       '@msgpack/msgpack':
         specifier: ^3.0.0-beta3
         version: 3.1.3
+      '@pixi/gif':
+        specifier: ^3.0.1
+        version: 3.0.1(pixi.js@8.18.1)
       '@tanstack/react-query':
         specifier: ^5.59.0
         version: 5.100.8(react@18.3.1)
@@ -1396,6 +1399,11 @@ packages:
 
   '@pixi/colord@2.9.6':
     resolution: {integrity: sha512-nezytU2pw587fQstUu1AsJZDVEynjskwOL+kibwcdxsMBFqPsFFNA7xl0ii/gXuDi6M0xj3mfRJj8pBSc2jCfA==}
+
+  '@pixi/gif@3.0.1':
+    resolution: {integrity: sha512-oGl0nkbFAe1vaRLyIvGbJc3fcIrS8vF1E00cwjiV+9f1pYe072D+yijJxHsgYnXs6jdzERh+D0MqSrEag0jRzg==}
+    peerDependencies:
+      pixi.js: ^8.0.0
 
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
@@ -5938,6 +5946,10 @@ snapshots:
   '@pinojs/redact@0.4.0': {}
 
   '@pixi/colord@2.9.6': {}
+
+  '@pixi/gif@3.0.1(pixi.js@8.18.1)':
+    dependencies:
+      pixi.js: 8.18.1
 
   '@pkgjs/parseargs@0.11.0':
     optional: true
