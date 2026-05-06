@@ -10,8 +10,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - pgdata:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # No ports exposed — accessible only within the Docker network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -21,13 +20,17 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
+    command: >
+      redis-server
+      --appendonly yes
+      --bind 0.0.0.0
+      --protected-mode no
+      --requirepass ${REDIS_PASSWORD}
     volumes:
       - redisdata:/data
-    ports:
-      - "6379:6379"
+    # No ports exposed — accessible only within the Docker network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -43,7 +46,7 @@ services:
       NODE_ENV: development
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       PRISMA_GENERATE_SKIP_AUTOINSTALL: "true"
       PRISMA_HIDE_UPDATE_MESSAGE: "true"
     depends_on:
@@ -59,7 +62,7 @@ services:
       - protocol_node_modules:/workspace/packages/protocol/node_modules
       - replays:/var/data/replays
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     entrypoint: ["sh", "/workspace/docker/api-entrypoint.sh"]
 
   game:
@@ -72,6 +75,7 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3001
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
     depends_on:
       - api
       - redis
@@ -81,7 +85,7 @@ services:
       - game_apps_node_modules:/workspace/apps/game/node_modules
       - replays:/var/data/replays
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     entrypoint: ["sh", "/workspace/docker/game-entrypoint.sh"]
 
   web:
@@ -98,7 +102,7 @@ services:
       - web_node_modules:/workspace/node_modules
       - web_apps_node_modules:/workspace/apps/web/node_modules
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"
     entrypoint: ["sh", "/workspace/docker/web-entrypoint.sh"]
 
   caddy:
