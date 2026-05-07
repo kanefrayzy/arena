@@ -282,7 +282,12 @@ export class AdminService {
   }
 
   async deleteCharacter(id: number) {
-    return this.prisma.character.delete({ where: { id } });
+    await this.prisma.$transaction([
+      this.prisma.userLoadout.deleteMany({ where: { characterId: id } }),
+      this.prisma.userCharacter.deleteMany({ where: { characterId: id } }),
+      this.prisma.skin.deleteMany({ where: { characterId: id } }),
+      this.prisma.character.delete({ where: { id } }),
+    ]);
   }
 
   async listCharacters() {
