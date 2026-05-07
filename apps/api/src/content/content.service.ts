@@ -17,6 +17,7 @@ export interface CharacterDto {
   isActive: boolean;
   spriteUrl: string | null;
   battleSpriteUrl: string | null;
+  bulletSpriteUrl: string | null;
   priceUsd: string | null;
   isStarter: boolean;
   skins: SkinDto[];
@@ -85,6 +86,7 @@ export class ContentService {
       isActive: c.isActive,
       spriteUrl: c.spriteUrl ?? null,
       battleSpriteUrl: c.battleSpriteUrl ?? null,
+      bulletSpriteUrl: c.bulletSpriteUrl ?? null,
       priceUsd: c.priceUsd ? c.priceUsd.toString() : null,
       isStarter: c.isStarter,
       skins: c.skins.filter((s) => s.isActive).map((s) => this.toSkinDto(s)),
