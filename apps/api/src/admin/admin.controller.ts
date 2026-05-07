@@ -421,8 +421,9 @@ export class AdminController {
 
   // Abilities CRUD
   @Get('abilities')
-  listAbilities() {
-    return this.admin.listAbilities();
+  async listAbilities() {
+    const abilities = await this.admin.listAbilities();
+    return { abilities };
   }
 
   @Post('abilities')
