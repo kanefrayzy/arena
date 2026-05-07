@@ -86,6 +86,8 @@ export class Match {
   private snapshotAccum = 0;
   private finishCalled = false;
   private startNotified = false;
+  /** Events accumulated across sim steps since the last snapshot broadcast. */
+  private pendingEvents: SnapshotEvent[] = [];
 
   constructor(
     private readonly seed: MatchSeed,
@@ -273,13 +275,18 @@ export class Match {
     if (this.bot) this.bot.step(now);
 
     this.sim.step(dt, now);
+    // Accumulate events so they are never lost between snapshot intervals.
+    if (this.sim.events.length > 0) {
+      this.pendingEvents.push(...this.sim.events);
+    }
 
     // Send snapshot at SNAPSHOT_RATE_HZ
     this.snapshotAccum += dt;
     const snapInterval = 1000 / SNAPSHOT_RATE_HZ;
     if (this.snapshotAccum >= snapInterval || this.sim.finished) {
       this.snapshotAccum = 0;
-      this.broadcastSnapshot();
+      this.broadcastSnapshot(this.pendingEvents);
+      this.pendingEvents = [];
     }
 
     if (this.sim.finished) {
@@ -302,7 +309,7 @@ export class Match {
     }));
   }
 
-  private broadcastSnapshot(): void {
+  private broadcastSnapshot(events: SnapshotEvent[]): void {
     const remainingMs = Math.max(0, this.sim.durationMs - this.sim.elapsedMs);
     const players = this.buildSnapshotPlayers();
     const bullets = [...this.sim.bullets.values()].map((b) => ({
@@ -315,7 +322,6 @@ export class Match {
       type: 'bullet',
       ttl: Math.round(b.ttlMs),
     }));
-    const events: SnapshotEvent[] = [...this.sim.events];
 
     // Per-client snapshot — include their last ackInputSeq.
     for (const c of this.clients.values()) {

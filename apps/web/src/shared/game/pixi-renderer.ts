@@ -98,6 +98,18 @@ export class PixiRenderer {
   /** Screen shake remaining ms and amplitude. */
   private shakeMs = 0;
   private shakeAmp = 0;
+  /** Whether audio has been unlocked by a user gesture. */
+  private audioUnlocked = false;
+  private readonly unlockAudio = (): void => {
+    if (this.audioUnlocked) return;
+    this.audioUnlocked = true;
+    for (const snd of this.playerAbilitySound.values()) {
+      snd.muted = true;
+      void snd.play().then(() => { snd.pause(); snd.muted = false; snd.currentTime = 0; }).catch(() => undefined);
+    }
+    document.removeEventListener('pointerdown', this.unlockAudio);
+    document.removeEventListener('keydown', this.unlockAudio);
+  };
   private flipY = false;
   private flipDecided = false;
   onEvent: FxCallback | null = null;
@@ -125,11 +137,16 @@ export class PixiRenderer {
     this.drawArena();
     this.app.ticker.add(() => this.tick(this.app.ticker!.deltaMS));
     window.addEventListener('resize', this.handleResize);
+    // Unlock audio on first user interaction (required by browsers).
+    document.addEventListener('pointerdown', this.unlockAudio);
+    document.addEventListener('keydown', this.unlockAudio);
     this.handleResize();
   }
 
   destroy(): void {
     window.removeEventListener('resize', this.handleResize);
+    document.removeEventListener('pointerdown', this.unlockAudio);
+    document.removeEventListener('keydown', this.unlockAudio);
     try {
       this.app.destroy(true, { children: true });
     } catch {
