@@ -281,6 +281,10 @@ export class AdminService {
     return this.prisma.character.update({ where: { id }, data });
   }
 
+  async deleteCharacter(id: number) {
+    return this.prisma.character.delete({ where: { id } });
+  }
+
   async listCharacters() {
     return this.prisma.character.findMany({
       orderBy: { id: 'asc' },

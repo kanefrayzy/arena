@@ -249,6 +249,11 @@ export class AdminController {
     return this.admin.updateCharacter(id, body);
   }
 
+  @Delete('characters/:id')
+  deleteCharacter(@Param('id', ParseIntPipe) id: number) {
+    return this.admin.deleteCharacter(id);
+  }
+
   @Post('characters/:id/sprite')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_BYTES } }))
   async uploadCharacterSprite(

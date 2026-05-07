@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../../shared/api/client';
 import { Modal, PrimaryButton, GhostButton, Field, inputCls } from '../components/Modal';
-import { Badge } from '../components/Badge';
 
 interface Skin {
   id: number;
@@ -29,6 +28,7 @@ interface Character {
   priceUsd: string | null;
   isStarter: boolean;
   skins: Skin[];
+  ability?: { id: number; name: string; type: string; iconUrl: string | null } | null;
 }
 
 interface Ability {
@@ -51,12 +51,6 @@ interface Weapon {
   isStarter: boolean;
   isActive: boolean;
 }
-
-const STAT_FIELDS: { key: 'baseHp' | 'baseSpeed' | 'baseDamage'; label: string; suffix: string }[] = [
-  { key: 'baseHp', label: 'HP', suffix: '' },
-  { key: 'baseSpeed', label: 'Speed', suffix: '' },
-  { key: 'baseDamage', label: 'Damage', suffix: '' },
-];
 
 export function ContentTab() {
   const [chars, setChars] = useState<Character[]>([]);
@@ -185,90 +179,73 @@ export function ContentTab() {
         </button>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-2">
         {chars.map((c) => (
           <div key={c.id} className="rounded-lg border border-white/10 bg-surface">
-            <header className="flex items-center gap-3 border-b border-white/10 px-4 py-3">
+            {/* Header row */}
+            <div className="flex items-center gap-3 px-4 py-3">
               <SpriteCell url={c.spriteUrl} alt={c.name} />
-              <SpriteCell url={c.battleSpriteUrl} alt={`${c.name} battle`} />
-              <SpriteCell url={c.bulletSpriteUrl} alt={`${c.name} bullet`} />
               <div className="flex-1 min-w-0">
                 <div className="font-semibold">{c.name}</div>
-                <div className="text-xs text-white/40">/{c.slug} · {c.weaponType} · {c.priceUsd ? `$${c.priceUsd}` : (c.isStarter ? 'starter' : 'free')}</div>
+                <div className="text-xs text-white/40">
+                  /{c.slug} · {c.weaponType}
+                </div>
               </div>
-              <UploadButton
-                onFile={(f) => void uploadCharSprite(c, f)}
-                disabled={busy === `c${c.id}`}
-                label="Sprite"
-                accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif,video/webm"
-              />
-              <UploadButton
-                onFile={(f) => void uploadCharBattleSprite(c, f)}
-                disabled={busy === `cb${c.id}`}
-                label="Battle"
-              />
-              <UploadButton
-                onFile={(f) => void uploadCharBulletSprite(c, f)}
-                disabled={busy === `cbull${c.id}`}
-                label="Bullet"
-                accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif,video/webm"
-              />
               <button
                 type="button"
                 onClick={() => setEditChar(c)}
-                className="rounded-md bg-white/5 px-3 py-1.5 text-xs hover:bg-white/10"
+                className="rounded-md bg-accent/20 px-3 py-1.5 text-xs font-semibold text-accent hover:bg-accent/30"
               >
                 Edit
               </button>
-            </header>
-
-            <div className="grid grid-cols-4 divide-x divide-white/5 border-b border-white/10 text-center">
-              {STAT_FIELDS.map((f) => (
-                <div key={f.key} className="px-2 py-3">
-                  <div className="text-[10px] uppercase text-white/40">{f.label}</div>
-                  <div className="mt-0.5 font-mono text-sm tabular-nums">
-                    {c[f.key]}{f.suffix}
-                  </div>
-                </div>
-              ))}
             </div>
 
-            <div className="flex flex-col">
-              {c.skins.map((s) => (
-                <div key={s.id} className="flex items-center gap-3 border-b border-white/5 px-4 py-2.5 last:border-b-0">
-                  <span className="h-4 w-4 shrink-0 rounded-full ring-1 ring-white/10" style={{ backgroundColor: s.tint ?? '#888' }} />
-                  <div className="flex-1 min-w-0">
-                    <div className={`text-sm ${!s.isActive ? 'text-white/40 line-through' : ''}`}>{s.name}</div>
-                    <div className="text-[10px] uppercase text-white/40">{s.rarity}</div>
-                  </div>
-                  <span className="font-mono text-sm tabular-nums text-white/80">
-                    {s.priceUsd ? `$${s.priceUsd}` : <span className="text-white/30">free</span>}
-                  </span>
-                  <button
-                    type="button"
-                    disabled={busy === `s${s.id}`}
-                    onClick={() => setEditSkin(s)}
-                    className="rounded-md bg-white/5 px-2 py-1 text-xs hover:bg-white/10 disabled:opacity-40"
-                  >
-                    price
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy === `s${s.id}`}
-                    onClick={() => void toggleSkin(s)}
-                    className="rounded-md bg-white/5 px-2 py-1 text-xs hover:bg-white/10 disabled:opacity-40"
-                  >
-                    {s.isActive ? 'disable' : 'enable'}
-                  </button>
-                </div>
-              ))}
-              {c.skins.length === 0 && <div className="px-4 py-3 text-xs text-white/40">No skins</div>}
+            {/* Stats row */}
+            <div className="grid grid-cols-4 border-t border-white/10">
+              <StatCell label="HP" value={c.baseHp} color="text-red-400" />
+              <StatCell label="Speed" value={c.baseSpeed} color="text-cyan-400" />
+              <StatCell label="Damage" value={c.baseDamage} color="text-yellow-400" />
+              <StatCell
+                label="Price"
+                value={c.priceUsd ? `$${c.priceUsd}` : c.isStarter ? 'starter' : 'free'}
+                color="text-green-400"
+                mono={false}
+              />
+            </div>
+
+            {/* Sprite upload row */}
+            <div className="flex items-center gap-2 border-t border-white/10 px-3 py-2">
+              <span className="text-[10px] uppercase tracking-wide text-white/40 mr-1">Sprites</span>
+              <UploadButton onFile={(f) => void uploadCharSprite(c, f)} disabled={busy === `c${c.id}`} label="Idle" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif,video/webm" />
+              <UploadButton onFile={(f) => void uploadCharBattleSprite(c, f)} disabled={busy === `cb${c.id}`} label="Battle" />
+              <UploadButton onFile={(f) => void uploadCharBulletSprite(c, f)} disabled={busy === `cbull${c.id}`} label="Bullet" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif,video/webm" />
+              {c.spriteUrl && <SpritePreviewThumb url={c.spriteUrl} />}
+              {c.battleSpriteUrl && <SpritePreviewThumb url={c.battleSpriteUrl} />}
+              {c.bulletSpriteUrl && <SpritePreviewThumb url={c.bulletSpriteUrl} />}
+            </div>
+
+            {/* Ability badge */}
+            <div className="flex items-center gap-2 border-t border-white/10 px-3 py-2">
+              <span className="text-[10px] uppercase tracking-wide text-white/40 mr-1">Ability</span>
+              {c.ability ? (
+                <>
+                  {c.ability.iconUrl ? (
+                    <img src={c.ability.iconUrl} className="h-6 w-6 rounded-full object-cover ring-1 ring-accent/30" alt="" />
+                  ) : (
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-accent/20 text-[10px] font-bold text-accent">Q</div>
+                  )}
+                  <span className="text-sm font-medium text-white/80">{c.ability.name}</span>
+                  <span className="text-xs text-white/40">({c.ability.type})</span>
+                </>
+              ) : (
+                <span className="text-xs text-white/30">none</span>
+              )}
             </div>
           </div>
         ))}
       </div>
 
-      <CharStatsModal
+      <CharEditModal
         char={editChar}
         abilities={abilities}
         onClose={() => setEditChar(null)}
@@ -362,6 +339,27 @@ export function ContentTab() {
         }}
         setErr={setErr}
       />
+    </div>
+  );
+}
+
+function StatCell({ label, value, color, mono = true }: { label: string; value: string | number; color: string; mono?: boolean }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-0.5 py-3 px-2 border-r border-white/5 last:border-r-0">
+      <span className="text-[9px] uppercase tracking-widest text-white/40">{label}</span>
+      <span className={`${mono ? 'font-mono tabular-nums' : ''} text-sm font-bold ${color}`}>{value}</span>
+    </div>
+  );
+}
+
+function SpritePreviewThumb({ url }: { url: string }) {
+  const isWebm = url.split('?')[0].toLowerCase().endsWith('.webm');
+  return (
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-black/40 ring-1 ring-white/10">
+      {isWebm
+        ? <video src={url} autoPlay loop muted playsInline className="max-h-full max-w-full object-contain" />
+        : <img src={url} alt="" className="max-h-full max-w-full object-contain" />
+      }
     </div>
   );
 }
@@ -638,7 +636,7 @@ function WeaponEditModal({
   );
 }
 
-function CharStatsModal({
+function CharEditModal({
   char,
   abilities,
   onClose,
@@ -651,18 +649,24 @@ function CharStatsModal({
   onDone: () => Promise<void>;
   setErr: (s: string | null) => void;
 }) {
+  const [name, setName] = useState('');
   const [hp, setHp] = useState('');
   const [speed, setSpeed] = useState('');
   const [damage, setDamage] = useState('');
+  const [priceUsd, setPriceUsd] = useState('');
   const [abilityId, setAbilityId] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (char) {
+      setName(char.name);
       setHp(String(char.baseHp));
       setSpeed(String(char.baseSpeed));
       setDamage(String(char.baseDamage));
+      setPriceUsd(char.priceUsd ?? '');
       setAbilityId(char.abilityId != null ? String(char.abilityId) : '');
+      setConfirmDelete(false);
     }
   }, [char]);
 
@@ -671,9 +675,11 @@ function CharStatsModal({
     setSubmitting(true);
     try {
       await api.patch(`/admin/characters/${char.id}`, {
+        name: name.trim(),
         baseHp: parseInt(hp, 10),
         baseSpeed: parseFloat(speed),
         baseDamage: parseInt(damage, 10),
+        priceUsd: priceUsd.trim() === '' ? null : priceUsd.trim(),
         abilityId: abilityId ? parseInt(abilityId, 10) : null,
       });
       await onDone();
@@ -684,31 +690,101 @@ function CharStatsModal({
     }
   }
 
+  async function deleteChar() {
+    if (!char) return;
+    setSubmitting(true);
+    try {
+      await api.delete(`/admin/characters/${char.id}`);
+      await onDone();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'failed');
+    } finally {
+      setSubmitting(false);
+      setConfirmDelete(false);
+    }
+  }
+
+  const selectedAbility = abilities.find((a) => String(a.id) === abilityId);
+
   return (
     <Modal
       open={!!char}
       onClose={onClose}
-      title={char ? `Stats · ${char.name}` : ''}
+      title={char ? `Edit · ${char.name}` : ''}
       footer={
-        <>
-          <GhostButton onClick={onClose}>Cancel</GhostButton>
-          <PrimaryButton onClick={submit} disabled={submitting}>
-            {submitting ? 'saving…' : 'Save'}
-          </PrimaryButton>
-        </>
+        <div className="flex w-full items-center justify-between">
+          {!confirmDelete ? (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="rounded-md bg-red-500/15 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/30"
+            >
+              Delete character
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-red-400">Sure?</span>
+              <button
+                type="button"
+                onClick={() => void deleteChar()}
+                disabled={submitting}
+                className="rounded-md bg-red-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600 disabled:opacity-40"
+              >
+                Yes, delete
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                className="rounded-md bg-white/10 px-3 py-1.5 text-xs text-white/70 hover:bg-white/15"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+          <div className="flex gap-2">
+            <GhostButton onClick={onClose}>Cancel</GhostButton>
+            <PrimaryButton onClick={() => void submit()} disabled={submitting || !name.trim()}>
+              {submitting ? 'saving…' : 'Save'}
+            </PrimaryButton>
+          </div>
+        </div>
       }
     >
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="HP">
-          <input className={inputCls} value={hp} onChange={(e) => setHp(e.target.value)} type="number" />
-        </Field>
-        <Field label="Speed">
-          <input className={inputCls} value={speed} onChange={(e) => setSpeed(e.target.value)} type="number" step="0.1" />
-        </Field>
-        <Field label="Damage">
-          <input className={inputCls} value={damage} onChange={(e) => setDamage(e.target.value)} type="number" />
-        </Field>
-        <Field label="Ability" className="col-span-2">
+      <div className="flex flex-col gap-4">
+        {/* Name + Price row */}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Name">
+            <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          </Field>
+          <Field label="Price USD (empty = free)">
+            <input className={inputCls} value={priceUsd} onChange={(e) => setPriceUsd(e.target.value)} placeholder="0.00" />
+          </Field>
+        </div>
+
+        {/* Stats row — big number inputs */}
+        <div className="grid grid-cols-3 gap-3">
+          <Field label="HP">
+            <div className="relative">
+              <input className={inputCls + ' pr-8'} value={hp} onChange={(e) => setHp(e.target.value)} type="number" min="1" />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-red-400">HP</span>
+            </div>
+          </Field>
+          <Field label="Speed">
+            <div className="relative">
+              <input className={inputCls + ' pr-10'} value={speed} onChange={(e) => setSpeed(e.target.value)} type="number" step="1" min="1" />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-cyan-400">spd</span>
+            </div>
+          </Field>
+          <Field label="Damage">
+            <div className="relative">
+              <input className={inputCls + ' pr-8'} value={damage} onChange={(e) => setDamage(e.target.value)} type="number" min="0" />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-yellow-400">dmg</span>
+            </div>
+          </Field>
+        </div>
+
+        {/* Ability selector */}
+        <Field label="Ability (Q button)">
           <select className={inputCls} value={abilityId} onChange={(e) => setAbilityId(e.target.value)}>
             <option value="">— none —</option>
             {abilities.map((a) => (
@@ -716,6 +792,26 @@ function CharStatsModal({
             ))}
           </select>
         </Field>
+
+        {/* Preview of selected ability */}
+        {selectedAbility && (
+          <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2.5">
+            {selectedAbility.iconUrl ? (
+              <img src={selectedAbility.iconUrl} className="h-9 w-9 rounded-full object-cover ring-2 ring-accent/40" alt="" />
+            ) : (
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent/20 text-sm font-bold text-accent">Q</div>
+            )}
+            <div>
+              <div className="text-sm font-semibold text-white">{selectedAbility.name}</div>
+              <div className="text-xs text-white/50">{selectedAbility.type} · {Math.round((char?.abilityId === selectedAbility.id ? 8000 : 8000) / 1000)}s cooldown</div>
+            </div>
+          </div>
+        )}
+        {!selectedAbility && (
+          <div className="rounded-lg border border-dashed border-white/10 px-3 py-2 text-center text-xs text-white/30">
+            No ability assigned — Q button will be hidden
+          </div>
+        )}
       </div>
     </Modal>
   );
