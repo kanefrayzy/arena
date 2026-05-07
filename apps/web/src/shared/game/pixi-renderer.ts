@@ -285,7 +285,7 @@ export class PixiRenderer {
   }
   private mapBullet(b: SnapshotBullet): SnapshotBullet {
     if (!this.flipY) return b;
-    return { ...b, y: MAP_HEIGHT - b.y };
+    return { ...b, y: MAP_HEIGHT - b.y, vy: -b.vy };
   }
   private mapEvent(ev: SnapshotEvent): SnapshotEvent {
     if (!this.flipY || ev.y === undefined) return ev;
