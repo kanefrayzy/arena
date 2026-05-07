@@ -97,32 +97,47 @@ async function main() {
     console.log(`✓ admin user created: ${adminEmail}`);
   }
 
+  // ---------- Abilities ----------
+  const abilitySeedData = [
+    { slug: 'dash', name: 'Рывок', description: 'Быстрый рывок в направлении движения.', type: 'dash', cooldownMs: 8000, damageAmount: 0, durationMs: 0, range: 200 },
+    { slug: 'blink', name: 'Телепорт', description: 'Мгновенный прыжок на 300 пикселей в сторону прицела.', type: 'blink', cooldownMs: 10000, damageAmount: 0, durationMs: 0, range: 300 },
+    { slug: 'shield', name: 'Щит', description: 'Временный щит на 1.5 секунды, блокирующий входящий урон.', type: 'shield', cooldownMs: 12000, damageAmount: 0, durationMs: 1500, range: 0 },
+    { slug: 'slow', name: 'Замедление', description: 'Замедляет противника на 2 секунды (скорость ×0.4).', type: 'slow', cooldownMs: 10000, damageAmount: 0, durationMs: 2000, range: 0 },
+    { slug: 'triple_shot', name: 'Тройной выстрел', description: 'Выпускает три пули веером одновременно.', type: 'triple_shot', cooldownMs: 7000, damageAmount: 0, durationMs: 0, range: 0 },
+    { slug: 'bomb', name: 'Бомба', description: 'Взрыв в радиусе 200 пикселей, наносящий 50 урона.', type: 'bomb', cooldownMs: 14000, damageAmount: 50, durationMs: 0, range: 200 },
+    { slug: 'heal', name: 'Лечение', description: 'Восстанавливает 30 HP.', type: 'heal', cooldownMs: 15000, damageAmount: 30, durationMs: 0, range: 0 },
+  ];
+  for (const a of abilitySeedData) {
+    await prisma.ability.upsert({
+      where: { slug: a.slug },
+      update: { name: a.name, description: a.description, type: a.type, cooldownMs: a.cooldownMs, damageAmount: a.damageAmount, durationMs: a.durationMs, range: a.range },
+      create: a,
+    });
+  }
+
   // ---------- Characters ----------
   // Single base character — the only one that's a starter (granted to everyone).
   // All other content is created via Admin → Content.
-  const characters = [
-    {
-      slug: 'default',
-      name: 'Боец',
-      baseHp: 100,
-      baseSpeed: 220,
-      baseDamage: 18,
-      weaponType: 'ranged',
-      abilityType: 'dash',
-      abilityCooldownS: 8,
-      isStarter: true,
-    },
-  ] as const;
+  const dashAbility = await prisma.ability.findUnique({ where: { slug: 'dash' } });
+
+  const charData = {
+    slug: 'default',
+    name: 'Боец',
+    baseHp: 100,
+    baseSpeed: 220,
+    baseDamage: 18,
+    weaponType: 'ranged',
+    isStarter: true,
+    ...(dashAbility ? { abilityId: dashAbility.id } : {}),
+  };
 
   const charBySlug = new Map<string, number>();
-  for (const c of characters) {
-    const row = await prisma.character.upsert({
-      where: { slug: c.slug },
-      update: c,
-      create: c,
-    });
-    charBySlug.set(c.slug, row.id);
-  }
+  const row = await prisma.character.upsert({
+    where: { slug: 'default' },
+    update: charData,
+    create: charData,
+  });
+  charBySlug.set('default', row.id);
 
   // Deactivate ONLY known legacy seed slugs (shooter/tank/scout).
   // Do NOT touch admin-created characters — they must persist across redeploys.
