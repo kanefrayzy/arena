@@ -536,6 +536,9 @@ export class PixiRenderer {
     }
     view.display.x = b.x;
     view.display.y = b.y;
+    if ((b.vx !== 0 || b.vy !== 0) && view.display instanceof Sprite) {
+      view.display.rotation = Math.atan2(b.vy, b.vx);
+    }
   }
 
   private spawnMuzzleFlash(x: number, y: number, isYou: boolean): void {

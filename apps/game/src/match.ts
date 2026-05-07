@@ -309,6 +309,8 @@ export class Match {
       id: b.id,
       x: round1(b.x),
       y: round1(b.y),
+      vx: round1(b.vx),
+      vy: round1(b.vy),
       owner: b.ownerId,
       type: 'bullet',
       ttl: Math.round(b.ttlMs),
