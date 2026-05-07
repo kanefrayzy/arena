@@ -218,6 +218,7 @@ export class AdminService {
     abilityCooldownS?: number;
     spriteUrl?: string | null;
     battleSpriteUrl?: string | null;
+    bulletSpriteUrl?: string | null;
     priceUsd?: string | null;
     isStarter?: boolean;
   }) {
@@ -233,6 +234,7 @@ export class AdminService {
         abilityCooldownS: input.abilityCooldownS ?? 10,
         spriteUrl: input.spriteUrl ?? null,
         battleSpriteUrl: input.battleSpriteUrl ?? null,
+        bulletSpriteUrl: input.bulletSpriteUrl ?? null,
         priceUsd: input.priceUsd ? new Prisma.Decimal(input.priceUsd) : null,
         isStarter: input.isStarter ?? false,
       },
@@ -262,6 +264,7 @@ export class AdminService {
     isActive: boolean;
     spriteUrl: string | null;
     battleSpriteUrl: string | null;
+    bulletSpriteUrl: string | null;
     priceUsd: string | null;
     isStarter: boolean;
   }>) {
@@ -276,6 +279,7 @@ export class AdminService {
     if (patch.isActive !== undefined) data.isActive = patch.isActive;
     if (patch.spriteUrl !== undefined) data.spriteUrl = patch.spriteUrl;
     if (patch.battleSpriteUrl !== undefined) data.battleSpriteUrl = patch.battleSpriteUrl;
+    if (patch.bulletSpriteUrl !== undefined) data.bulletSpriteUrl = patch.bulletSpriteUrl;
     if (patch.priceUsd !== undefined) data.priceUsd = patch.priceUsd ? new Prisma.Decimal(patch.priceUsd) : null;
     if (patch.isStarter !== undefined) data.isStarter = patch.isStarter;
     return this.prisma.character.update({ where: { id }, data });

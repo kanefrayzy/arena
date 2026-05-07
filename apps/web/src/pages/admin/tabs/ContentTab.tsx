@@ -26,6 +26,7 @@ interface Character {
   isActive: boolean;
   spriteUrl: string | null;
   battleSpriteUrl: string | null;
+  bulletSpriteUrl: string | null;
   priceUsd: string | null;
   isStarter: boolean;
   skins: Skin[];
@@ -120,6 +121,20 @@ export function ContentTab() {
     }
   }
 
+  async function uploadCharBulletSprite(c: Character, file: File) {
+    setBusy(`cbull${c.id}`);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      await api.postForm(`/admin/characters/${c.id}/bullet-sprite`, fd);
+      await load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'upload failed');
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function uploadWeaponSprite(w: Weapon, file: File) {
     setBusy(`w${w.id}`);
     try {
@@ -167,6 +182,7 @@ export function ContentTab() {
             <header className="flex items-center gap-3 border-b border-white/10 px-4 py-3">
               <SpriteCell url={c.spriteUrl} alt={c.name} />
               <SpriteCell url={c.battleSpriteUrl} alt={`${c.name} battle`} />
+              <SpriteCell url={c.bulletSpriteUrl} alt={`${c.name} bullet`} />
               <div className="flex-1 min-w-0">
                 <div className="font-semibold">{c.name}</div>
                 <div className="text-xs text-white/40">/{c.slug} · {c.weaponType} · {c.priceUsd ? `$${c.priceUsd}` : (c.isStarter ? 'starter' : 'free')}</div>
@@ -181,6 +197,12 @@ export function ContentTab() {
                 onFile={(f) => void uploadCharBattleSprite(c, f)}
                 disabled={busy === `cb${c.id}`}
                 label="Battle"
+              />
+              <UploadButton
+                onFile={(f) => void uploadCharBulletSprite(c, f)}
+                disabled={busy === `cbull${c.id}`}
+                label="Bullet"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif,video/webm"
               />
               <button
                 type="button"

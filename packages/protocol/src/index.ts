@@ -65,6 +65,8 @@ export interface WelcomePlayer {
   characterSpriteUrl?: string | null;
   /** Per-weapon sprite URL (resolved from loadout/starter), nullable. */
   weaponSpriteUrl?: string | null;
+  /** Custom bullet sprite for this character, nullable. */
+  bulletSpriteUrl?: string | null;
 }
 
 export interface Obstacle {

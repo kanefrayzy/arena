@@ -110,6 +110,7 @@ export class MatchCreationService {
         stats: p1Loadout.stats,
         characterSpriteUrl: p1Loadout.characterSpriteUrl,
         weaponSpriteUrl: p1Loadout.weaponSpriteUrl,
+        bulletSpriteUrl: p1Loadout.bulletSpriteUrl,
       },
       player2: {
         userId: player2.id,
@@ -119,6 +120,7 @@ export class MatchCreationService {
         stats: p2Loadout.stats,
         characterSpriteUrl: p2Loadout.characterSpriteUrl,
         weaponSpriteUrl: p2Loadout.weaponSpriteUrl,
+        bulletSpriteUrl: p2Loadout.bulletSpriteUrl,
       },
     };
     await this.redis.client.set(`match:seed:${match.id}`, JSON.stringify(seed), 'EX', 600);
@@ -177,6 +179,7 @@ export class MatchCreationService {
           stats: this.computeStats(char, skin, weapon),
           characterSpriteUrl: char.battleSpriteUrl ?? char.spriteUrl ?? null,
           weaponSpriteUrl: weapon?.spriteUrl ?? null,
+          bulletSpriteUrl: char.bulletSpriteUrl ?? null,
         };
       }
     }
@@ -199,6 +202,7 @@ export class MatchCreationService {
       stats: this.computeStats(char, skin, weapon),
       characterSpriteUrl: char.battleSpriteUrl ?? char.spriteUrl ?? null,
       weaponSpriteUrl: weapon?.spriteUrl ?? null,
+      bulletSpriteUrl: char.bulletSpriteUrl ?? null,
     };
   }
 
@@ -250,4 +254,5 @@ interface ResolvedLoadout {
   stats: EffectiveStats;
   characterSpriteUrl: string | null;
   weaponSpriteUrl: string | null;
+  bulletSpriteUrl: string | null;
 }

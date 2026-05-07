@@ -88,6 +88,7 @@ export class PixiRenderer {
   private playerCharTex = new Map<number, Texture>();
   private playerCharGif = new Map<number, AnimatedGIF>();
   private playerWeaponTex = new Map<number, Texture>();
+  private playerBulletTex = new Map<number, Texture>();
   private flipY = false;
   private flipDecided = false;
   onEvent: FxCallback | null = null;
@@ -157,6 +158,11 @@ export class PixiRenderer {
             this.playerWeaponTex.set(wp.id, tex);
             this.swapInPlayerSprites(wp.id);
           })
+          .catch(() => undefined);
+      }
+      if (wp.bulletSpriteUrl) {
+        Assets.load<Texture>(wp.bulletSpriteUrl)
+          .then((tex) => { this.playerBulletTex.set(wp.id, tex); })
           .catch(() => undefined);
       }
     }
@@ -508,7 +514,8 @@ export class PixiRenderer {
   private upsertBullet(b: SnapshotBullet): void {
     let view = this.bullets.get(b.id);
     if (!view) {
-      const tex = this.textures.bullet;
+      const perPlayerTex = this.playerBulletTex.get(b.owner);
+      const tex = perPlayerTex ?? this.textures.bullet;
       let display: Sprite | Graphics;
       if (tex) {
         const s = new Sprite(tex);

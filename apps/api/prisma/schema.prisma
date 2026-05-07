@@ -155,6 +155,8 @@ model Character {
   // Optional separate sprite used during the match on the map.
   // Falls back to spriteUrl when null.
   battleSpriteUrl  String?
+  // Custom bullet sprite for this character; falls back to slot sprite when null.
+  bulletSpriteUrl  String?
   // Price in USD; null = free / starter.
   priceUsd         Decimal? @db.Decimal(20, 8)
   // Auto-granted to every user (no purchase required).

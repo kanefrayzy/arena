@@ -31,6 +31,8 @@ export interface MatchPlayerSeed {
   characterSpriteUrl?: string | null;
   /** Per-weapon sprite URL (resolved from loadout/starter). */
   weaponSpriteUrl?: string | null;
+  /** Custom bullet sprite for this character. */
+  bulletSpriteUrl?: string | null;
 }
 
 export interface PlayerStatsSeed {
@@ -443,6 +445,7 @@ export class Match {
         spawnY: p.y,
         characterSpriteUrl: s?.characterSpriteUrl ?? null,
         weaponSpriteUrl: s?.weaponSpriteUrl ?? null,
+        bulletSpriteUrl: s?.bulletSpriteUrl ?? null,
       };
     };
     const welcome: SWelcome = {
