@@ -322,9 +322,9 @@ export class Sim {
 
   private activateAbility(p: PlayerState): void {
     const type = p.abilityType;
-    this.events.push({ kind: 'ability', who: p.id, type });
 
     if (type === 'dash') {
+      this.events.push({ kind: 'ability', who: p.id, type, x: p.x, y: p.y });
       p.dashLeftMs = DASH_DURATION_MS;
       p.dashVx = Math.cos(p.angle) * DASH_SPEED;
       p.dashVy = Math.sin(p.angle) * DASH_SPEED;
@@ -334,13 +334,18 @@ export class Sim {
 
     if (type === 'blink') {
       const dist = p.abilityRange > 0 ? p.abilityRange : BLINK_DIST;
+      const fromX = p.x;
+      const fromY = p.y;
       p.x = clamp(p.x + Math.cos(p.angle) * dist, PLAYER_RADIUS, MAP_WIDTH - PLAYER_RADIUS);
       p.y = clamp(p.y + Math.sin(p.angle) * dist, PLAYER_RADIUS, MAP_HEIGHT - PLAYER_RADIUS);
+      // Push event AFTER teleport so x/y is the destination
+      this.events.push({ kind: 'ability', who: p.id, type, x: p.x, y: p.y, fromX, fromY });
       return;
     }
 
     if (type === 'shield') {
       const dur = p.abilityDurationMs > 0 ? p.abilityDurationMs : SHIELD_DEFAULT_MS;
+      this.events.push({ kind: 'ability', who: p.id, type, x: p.x, y: p.y });
       p.buffs = [...p.buffs.filter((b) => b !== 'shield'), 'shield'];
       p.buffLeftMs = dur;
       return;
@@ -348,6 +353,13 @@ export class Sim {
 
     if (type === 'slow') {
       const dur = p.abilityDurationMs > 0 ? p.abilityDurationMs : SLOW_DEFAULT_MS;
+      let victimId: number | undefined;
+      for (const other of this.players.values()) {
+        if (other.id === p.id) continue;
+        victimId = other.id;
+        break;
+      }
+      this.events.push({ kind: 'ability', who: p.id, type, x: p.x, y: p.y, victim: victimId });
       // Apply slow to opponent
       for (const other of this.players.values()) {
         if (other.id === p.id) continue;
@@ -361,6 +373,7 @@ export class Sim {
     }
 
     if (type === 'triple_shot') {
+      this.events.push({ kind: 'ability', who: p.id, type, x: p.x, y: p.y });
       this.spawnBullet(p); // center
       const savedAngle = p.angle;
       p.angle = savedAngle + TRIPLE_ANGLE;
@@ -372,6 +385,7 @@ export class Sim {
     }
 
     if (type === 'bomb') {
+      this.events.push({ kind: 'ability', who: p.id, type, x: p.x, y: p.y });
       const radius = p.abilityRange > 0 ? p.abilityRange : BOMB_DEFAULT_RADIUS;
       const dmg = p.abilityDamageAmount > 0 ? p.abilityDamageAmount : BOMB_DEFAULT_DAMAGE;
       for (const other of this.players.values()) {
@@ -393,6 +407,7 @@ export class Sim {
     }
 
     if (type === 'heal') {
+      this.events.push({ kind: 'ability', who: p.id, type, x: p.x, y: p.y });
       const amount = p.abilityDamageAmount > 0 ? p.abilityDamageAmount : HEAL_DEFAULT_AMOUNT;
       p.hp = Math.min(p.maxHp, p.hp + amount);
       return;

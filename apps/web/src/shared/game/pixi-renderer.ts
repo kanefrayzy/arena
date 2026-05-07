@@ -60,6 +60,8 @@ interface Particle {
   ttl: number;
   maxTtl: number;
   fade: boolean;
+  /** Scale growth per second (for expanding rings). */
+  expand?: number;
 }
 
 const COLOR_YOU = 0x4ad29a;
@@ -93,6 +95,9 @@ export class PixiRenderer {
   private playerAbilitySound = new Map<number, HTMLAudioElement>();
   /** Ability icon texture per player id. */
   private playerAbilityIconTex = new Map<number, Texture>();
+  /** Screen shake remaining ms and amplitude. */
+  private shakeMs = 0;
+  private shakeAmp = 0;
   private flipY = false;
   private flipDecided = false;
   onEvent: FxCallback | null = null;
@@ -368,6 +373,8 @@ export class PixiRenderer {
     } else if (ev.kind === 'ability') {
       const who = Number(ev.who);
       const type = String(ev.type ?? 'dash');
+      const evX = Number(ev.x ?? 0);
+      const evY = Number(ev.y ?? 0);
       const view = this.players.get(who);
       // Play sound for both players
       const snd = this.playerAbilitySound.get(who);
@@ -375,19 +382,30 @@ export class PixiRenderer {
       if (!view) return;
       const color = view.isYou ? COLOR_YOU : COLOR_OPP;
       if (type === 'dash') {
-        this.spawnDashTrail(view.curX, view.curY, color);
+        this.spawnDashTrail(evX, evY, color);
       } else if (type === 'blink') {
-        this.spawnSparks(view.curX, view.curY, 0xaa88ff, 20);
+        // Origin: dissolve sparks; Destination: arrival ring
+        const fromX = Number(ev.fromX ?? view.curX);
+        const fromY = Number(ev.fromY ?? view.curY);
+        this.spawnSparks(fromX, fromY, 0xaa88ff, 18);
+        this.spawnBlinkEntry(evX, evY);
       } else if (type === 'shield') {
-        this.spawnShieldRing(view.curX, view.curY, color);
+        this.spawnShieldRing(evX, evY, color);
       } else if (type === 'slow') {
-        this.spawnSparks(view.curX, view.curY, 0x88ddff, 16);
+        // Slow wave from caster
+        this.spawnSlowField(evX, evY);
+        // Debuff effect on victim
+        const victimView = this.players.get(Number(ev.victim ?? -1));
+        if (victimView) this.spawnSlowDebuff(victimView.curX, victimView.curY);
       } else if (type === 'triple_shot') {
-        this.spawnSparks(view.curX, view.curY, 0xffdd44, 10);
+        this.spawnSparks(evX, evY, 0xffdd44, 10);
       } else if (type === 'bomb') {
-        this.spawnBombWave(view.curX, view.curY, color);
+        this.spawnBombWave(evX, evY, color);
+        this.shakeMs = 320;
+        this.shakeAmp = 10;
       } else if (type === 'heal') {
-        this.spawnHealBurst(view.curX, view.curY);
+        this.spawnHealBurst(evX, evY);
+        this.spawnHealParticles(evX, evY);
       }
     }
   }
@@ -536,6 +554,23 @@ export class PixiRenderer {
       view.weaponG.circle(0, 0, PLAYER_RADIUS + 8).stroke({ color: 0xffffff, alpha: 0.5, width: 2 });
     }
 
+    // Persistent buff rings (drawn every snapshot tick)
+    const hasShield = (p.buffs ?? []).includes('shield');
+    const isSlowed = (p.buffs ?? []).includes('slow_victim');
+    if (hasShield) {
+      // Pulsing blue-white ring — alpha varies with time so it "breathes"
+      const pulse = 0.55 + Math.sin(Date.now() / 140) * 0.25;
+      view.bodyG
+        .circle(0, 0, PLAYER_RADIUS + 11).stroke({ color: 0x88ccff, alpha: pulse, width: 3 })
+        .circle(0, 0, PLAYER_RADIUS + 6).stroke({ color: 0xffffff, alpha: pulse * 0.4, width: 1.5 });
+    }
+    if (isSlowed) {
+      // Cyan chain ring — shows victim is slowed
+      view.bodyG
+        .circle(0, 0, PLAYER_RADIUS + 9).stroke({ color: 0x22ddff, alpha: 0.8, width: 2.5 })
+        .circle(0, 0, PLAYER_RADIUS + 5).stroke({ color: 0x22ddff, alpha: 0.3, width: 1 });
+    }
+
     // HP bar
     const w = 50;
     view.hpG.rect(-w / 2, -PLAYER_RADIUS - 14, w, 5).fill({ color: 0x000000, alpha: 0.5 });
@@ -611,34 +646,119 @@ export class PixiRenderer {
   }
 
   private spawnShieldRing(x: number, y: number, color: number): void {
-    const g = new Graphics();
-    g.circle(0, 0, PLAYER_RADIUS + 14).stroke({ color: 0x88aaff, alpha: 0.9, width: 4 });
-    g.x = x;
-    g.y = y;
-    this.fxLayer.addChild(g);
-    this.particles.push({ gfx: g, vx: 0, vy: 0, ttl: 1500, maxTtl: 1500, fade: true });
+    // Outer expanding ring
+    const outer = new Graphics();
+    outer.circle(0, 0, PLAYER_RADIUS + 14).stroke({ color: 0x88ccff, alpha: 0.9, width: 4 });
+    outer.x = x;
+    outer.y = y;
+    this.fxLayer.addChild(outer);
+    this.particles.push({ gfx: outer, vx: 0, vy: 0, ttl: 600, maxTtl: 600, fade: true, expand: 1.2 });
+    // Inner solid glow
+    const inner = new Graphics();
+    inner.circle(0, 0, PLAYER_RADIUS + 8).fill({ color: 0x88ccff, alpha: 0.25 });
+    inner.x = x;
+    inner.y = y;
+    this.fxLayer.addChild(inner);
+    this.particles.push({ gfx: inner, vx: 0, vy: 0, ttl: 400, maxTtl: 400, fade: true });
     void color;
   }
 
   private spawnBombWave(x: number, y: number, color: number): void {
+    // Center flash
+    const flash = new Graphics();
+    flash.circle(0, 0, PLAYER_RADIUS + 4).fill({ color: 0xff8800, alpha: 0.85 });
+    flash.x = x;
+    flash.y = y;
+    this.fxLayer.addChild(flash);
+    this.particles.push({ gfx: flash, vx: 0, vy: 0, ttl: 180, maxTtl: 180, fade: true });
+    // Expanding shockwave rings
     for (let r = 1; r <= 3; r++) {
       const g = new Graphics();
-      g.circle(0, 0, r * 40).stroke({ color: 0xff6600, alpha: 0.8, width: 3 });
+      g.circle(0, 0, r * 30).stroke({ color: r === 1 ? 0xffcc44 : 0xff6600, alpha: 0.85, width: 3 });
       g.x = x;
       g.y = y;
       this.fxLayer.addChild(g);
-      this.particles.push({ gfx: g, vx: 0, vy: 0, ttl: 300 + r * 80, maxTtl: 300 + r * 80, fade: true });
+      this.particles.push({ gfx: g, vx: 0, vy: 0, ttl: 350 + r * 100, maxTtl: 350 + r * 100, fade: true, expand: 1.5 + r * 0.5 });
     }
+    // Debris sparks
+    this.spawnSparks(x, y, 0xff8800, 20);
     void color;
   }
 
   private spawnHealBurst(x: number, y: number): void {
+    // Expanding green ring
+    const ring = new Graphics();
+    ring.circle(0, 0, PLAYER_RADIUS + 6).stroke({ color: 0x44ff88, alpha: 0.9, width: 3 });
+    ring.x = x;
+    ring.y = y;
+    this.fxLayer.addChild(ring);
+    this.particles.push({ gfx: ring, vx: 0, vy: 0, ttl: 500, maxTtl: 500, fade: true, expand: 1.8 });
+    // Solid glow
+    const glow = new Graphics();
+    glow.circle(0, 0, PLAYER_RADIUS + 10).fill({ color: 0x44ff88, alpha: 0.35 });
+    glow.x = x;
+    glow.y = y;
+    this.fxLayer.addChild(glow);
+    this.particles.push({ gfx: glow, vx: 0, vy: 0, ttl: 380, maxTtl: 380, fade: true });
+  }
+
+  private spawnHealParticles(x: number, y: number): void {
+    // Green "+" cross particles flying upward
+    for (let i = 0; i < 6; i++) {
+      const g = new Graphics();
+      g.rect(-1, -5, 2, 10).fill({ color: 0x44ff88 });
+      g.rect(-5, -1, 10, 2).fill({ color: 0x44ff88 });
+      g.x = x + (Math.random() - 0.5) * 30;
+      g.y = y + (Math.random() - 0.5) * 20;
+      this.fxLayer.addChild(g);
+      const ttl = 600 + Math.random() * 400;
+      this.particles.push({ gfx: g, vx: (Math.random() - 0.5) * 40, vy: -(60 + Math.random() * 80), ttl, maxTtl: ttl, fade: true });
+    }
+  }
+
+  private spawnBlinkEntry(x: number, y: number): void {
+    // Arrival ring burst
+    const ring = new Graphics();
+    ring.circle(0, 0, PLAYER_RADIUS + 4).stroke({ color: 0xcc88ff, alpha: 1, width: 3 });
+    ring.x = x;
+    ring.y = y;
+    this.fxLayer.addChild(ring);
+    this.particles.push({ gfx: ring, vx: 0, vy: 0, ttl: 350, maxTtl: 350, fade: true, expand: 1.5 });
+    // Sparkle at destination
+    this.spawnSparks(x, y, 0xcc88ff, 14);
+  }
+
+  private spawnSlowField(x: number, y: number): void {
+    // Expanding cyan slow wave rings
+    for (let r = 1; r <= 2; r++) {
+      const g = new Graphics();
+      g.circle(0, 0, r * 35).stroke({ color: 0x22ddff, alpha: 0.8, width: 2.5 });
+      g.x = x;
+      g.y = y;
+      this.fxLayer.addChild(g);
+      this.particles.push({ gfx: g, vx: 0, vy: 0, ttl: 500 + r * 150, maxTtl: 500 + r * 150, fade: true, expand: 1.0 + r * 0.4 });
+    }
+    this.spawnSparks(x, y, 0x22ddff, 10);
+  }
+
+  private spawnSlowDebuff(x: number, y: number): void {
+    // Blue-cyan flash on victim
     const g = new Graphics();
-    g.circle(0, 0, PLAYER_RADIUS + 10).fill({ color: 0x44ff88, alpha: 0.45 });
+    g.circle(0, 0, PLAYER_RADIUS + 8).fill({ color: 0x22ddff, alpha: 0.4 });
     g.x = x;
     g.y = y;
     this.fxLayer.addChild(g);
-    this.particles.push({ gfx: g, vx: 0, vy: 0, ttl: 500, maxTtl: 500, fade: true });
+    this.particles.push({ gfx: g, vx: 0, vy: 0, ttl: 400, maxTtl: 400, fade: true });
+    // Downward particles ("slowed" feeling)
+    for (let i = 0; i < 5; i++) {
+      const p = new Graphics();
+      p.circle(0, 0, 2.5).fill({ color: 0x22ddff });
+      p.x = x + (Math.random() - 0.5) * 24;
+      p.y = y - PLAYER_RADIUS;
+      this.fxLayer.addChild(p);
+      const ttl = 400 + Math.random() * 300;
+      this.particles.push({ gfx: p, vx: (Math.random() - 0.5) * 20, vy: 30 + Math.random() * 40, ttl, maxTtl: ttl, fade: true });
+    }
   }
 
   private tick(dtMs: number): void {
@@ -663,8 +783,13 @@ export class PixiRenderer {
       p.gfx.y += (p.vy * dt) / 1000;
       p.vx *= 0.92;
       p.vy *= 0.92;
+      if (p.expand) {
+        p.gfx.scale.x += p.expand * dt / 1000;
+        p.gfx.scale.y += p.expand * dt / 1000;
+      }
       if (p.fade) p.gfx.alpha = p.ttl / p.maxTtl;
     }
+    if (this.shakeMs > 0) this.shakeMs = Math.max(0, this.shakeMs - dt);
     this.updateCamera();
   }
 
@@ -674,6 +799,11 @@ export class PixiRenderer {
     const s = this.cameraScale;
     this.world.x = (W - MAP_WIDTH * s) / 2;
     this.world.y = (H - MAP_HEIGHT * s) / 2;
+    if (this.shakeMs > 0) {
+      const amp = (this.shakeMs / 300) * this.shakeAmp;
+      this.world.x += (Math.random() - 0.5) * amp;
+      this.world.y += (Math.random() - 0.5) * amp;
+    }
   }
 
   private handleResize = (): void => {
