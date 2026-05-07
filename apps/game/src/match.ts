@@ -437,7 +437,12 @@ export class Match {
         characterId: p.characterId,
         skinId: p.skinId,
         username: p.username,
-        stats: {\n          hp: p.maxHp,\n          speed: p.speed,\n          damage: p.damage,\n          abilityCooldownS: p.abilityCooldownMs / 1000,\n        },
+        stats: {
+          hp: p.maxHp,
+          speed: p.speed,
+          damage: p.damage,
+          abilityCooldownS: p.abilityCooldownMs / 1000,
+        },
         spawnX: p.x,
         spawnY: p.y,
         characterSpriteUrl: s?.characterSpriteUrl ?? null,

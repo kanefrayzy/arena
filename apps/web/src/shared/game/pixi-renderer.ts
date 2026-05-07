@@ -115,8 +115,10 @@ export class PixiRenderer {
     this.world.addChild(this.bgLayer);
     this.world.addChild(this.fxLayer);
     await this.loadSprites();
+    // Guard: app may have been destroyed while loadSprites() was awaiting (user navigated away).
+    if (!this.app.ticker) return;
     this.drawArena();
-    this.app.ticker.add(() => this.tick(this.app.ticker.deltaMS));
+    this.app.ticker.add(() => this.tick(this.app.ticker!.deltaMS));
     window.addEventListener('resize', this.handleResize);
     this.handleResize();
   }
@@ -606,19 +608,6 @@ export class PixiRenderer {
     g.y = y;
     this.fxLayer.addChild(g);
     this.particles.push({ gfx: g, vx: 0, vy: 0, ttl: 280, maxTtl: 280, fade: true });
-  }
-
-  private spawnSparks(x: number, y: number, color: number, count: number): void {
-    for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2;
-      const speed = 80 + Math.random() * 120;
-      const g = new Graphics();
-      g.circle(0, 0, 3).fill({ color });
-      g.x = x;
-      g.y = y;
-      this.fxLayer.addChild(g);
-      this.particles.push({ gfx: g, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, ttl: 400, maxTtl: 400, fade: true });
-    }
   }
 
   private spawnShieldRing(x: number, y: number, color: number): void {
