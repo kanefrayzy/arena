@@ -3,6 +3,14 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../../shared/api/client';
 
+interface AbilityInfo {
+  name: string;
+  description: string;
+  type: string;
+  cooldownMs: number;
+  iconUrl: string | null;
+}
+
 interface Character {
   id: number;
   slug: string;
@@ -15,6 +23,7 @@ interface Character {
   abilityCooldownS: number;
   spriteUrl: string | null;
   isStarter: boolean;
+  ability: AbilityInfo | null;
 }
 
 interface Inventory {
@@ -152,6 +161,22 @@ export function LoadoutPage() {
                   <Stat label={t('loadout.speed')} value={c.baseSpeed} color="text-game-cyan" />
                   <Stat label={t('loadout.damage')} value={c.baseDamage} color="text-game-yellow" />
                 </div>
+                {c.ability && (
+                  <div className="mt-0.5 flex w-full items-center gap-1.5 rounded-lg bg-black/30 px-2 py-1.5">
+                    {c.ability.iconUrl ? (
+                      <img src={c.ability.iconUrl} className="h-5 w-5 flex-shrink-0 rounded-full object-cover" alt="" />
+                    ) : (
+                      <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-game-purple text-[9px] font-bold text-white">Q</span>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[10px] font-bold uppercase tracking-wide text-game-purple">{c.ability.name}</div>
+                      {c.ability.description && (
+                        <div className="line-clamp-1 text-[9px] text-white/50">{c.ability.description}</div>
+                      )}
+                    </div>
+                    <div className="flex-shrink-0 text-[9px] text-white/40">{Math.round(c.ability.cooldownMs / 1000)}s</div>
+                  </div>
+                )}
                 {equipped && (
                   <div className="absolute -top-2 right-2 rounded-full bg-game-yellow px-2 py-0.5 text-[10px] font-bold uppercase text-[#1a1450] shadow-[0_2px_0_#b88200]">
                     {t('loadout.equipped')}
