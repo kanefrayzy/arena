@@ -89,6 +89,10 @@ export class PixiRenderer {
   private playerCharGif = new Map<number, AnimatedGIF>();
   private playerWeaponTex = new Map<number, Texture>();
   private playerBulletTex = new Map<number, Texture>();
+  /** Ability sound audio elements per player id. */
+  private playerAbilitySound = new Map<number, HTMLAudioElement>();
+  /** Ability icon texture per player id. */
+  private playerAbilityIconTex = new Map<number, Texture>();
   private flipY = false;
   private flipDecided = false;
   onEvent: FxCallback | null = null;
@@ -163,6 +167,16 @@ export class PixiRenderer {
       if (wp.bulletSpriteUrl) {
         Assets.load<Texture>(wp.bulletSpriteUrl)
           .then((tex) => { this.playerBulletTex.set(wp.id, tex); })
+          .catch(() => undefined);
+      }
+      if (wp.ability?.soundUrl) {
+        const audio = new Audio(wp.ability.soundUrl);
+        audio.preload = 'auto';
+        this.playerAbilitySound.set(wp.id, audio);
+      }
+      if (wp.ability?.iconUrl) {
+        Assets.load<Texture>(wp.ability.iconUrl)
+          .then((tex) => { this.playerAbilityIconTex.set(wp.id, tex); })
           .catch(() => undefined);
       }
     }
@@ -350,8 +364,29 @@ export class PixiRenderer {
       const view = this.players.get(Number(ev.who));
       if (view) this.spawnSparks(view.curX, view.curY, view.isYou ? COLOR_YOU : COLOR_OPP, 32);
     } else if (ev.kind === 'ability') {
-      const view = this.players.get(Number(ev.who));
-      if (view) this.spawnDashTrail(view.curX, view.curY, view.isYou ? COLOR_YOU : COLOR_OPP);
+      const who = Number(ev.who);
+      const type = String(ev.type ?? 'dash');
+      const view = this.players.get(who);
+      // Play sound for both players
+      const snd = this.playerAbilitySound.get(who);
+      if (snd) { snd.currentTime = 0; void snd.play().catch(() => undefined); }
+      if (!view) return;
+      const color = view.isYou ? COLOR_YOU : COLOR_OPP;
+      if (type === 'dash') {
+        this.spawnDashTrail(view.curX, view.curY, color);
+      } else if (type === 'blink') {
+        this.spawnSparks(view.curX, view.curY, 0xaa88ff, 20);
+      } else if (type === 'shield') {
+        this.spawnShieldRing(view.curX, view.curY, color);
+      } else if (type === 'slow') {
+        this.spawnSparks(view.curX, view.curY, 0x88ddff, 16);
+      } else if (type === 'triple_shot') {
+        this.spawnSparks(view.curX, view.curY, 0xffdd44, 10);
+      } else if (type === 'bomb') {
+        this.spawnBombWave(view.curX, view.curY, color);
+      } else if (type === 'heal') {
+        this.spawnHealBurst(view.curX, view.curY);
+      }
     }
   }
 
@@ -571,6 +606,50 @@ export class PixiRenderer {
     g.y = y;
     this.fxLayer.addChild(g);
     this.particles.push({ gfx: g, vx: 0, vy: 0, ttl: 280, maxTtl: 280, fade: true });
+  }
+
+  private spawnSparks(x: number, y: number, color: number, count: number): void {
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
+      const speed = 80 + Math.random() * 120;
+      const g = new Graphics();
+      g.circle(0, 0, 3).fill({ color });
+      g.x = x;
+      g.y = y;
+      this.fxLayer.addChild(g);
+      this.particles.push({ gfx: g, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, ttl: 400, maxTtl: 400, fade: true });
+    }
+  }
+
+  private spawnShieldRing(x: number, y: number, color: number): void {
+    const g = new Graphics();
+    g.circle(0, 0, PLAYER_RADIUS + 14).stroke({ color: 0x88aaff, alpha: 0.9, width: 4 });
+    g.x = x;
+    g.y = y;
+    this.fxLayer.addChild(g);
+    this.particles.push({ gfx: g, vx: 0, vy: 0, ttl: 1500, maxTtl: 1500, fade: true });
+    void color;
+  }
+
+  private spawnBombWave(x: number, y: number, color: number): void {
+    for (let r = 1; r <= 3; r++) {
+      const g = new Graphics();
+      g.circle(0, 0, r * 40).stroke({ color: 0xff6600, alpha: 0.8, width: 3 });
+      g.x = x;
+      g.y = y;
+      this.fxLayer.addChild(g);
+      this.particles.push({ gfx: g, vx: 0, vy: 0, ttl: 300 + r * 80, maxTtl: 300 + r * 80, fade: true });
+    }
+    void color;
+  }
+
+  private spawnHealBurst(x: number, y: number): void {
+    const g = new Graphics();
+    g.circle(0, 0, PLAYER_RADIUS + 10).fill({ color: 0x44ff88, alpha: 0.45 });
+    g.x = x;
+    g.y = y;
+    this.fxLayer.addChild(g);
+    this.particles.push({ gfx: g, vx: 0, vy: 0, ttl: 500, maxTtl: 500, fade: true });
   }
 
   private tick(dtMs: number): void {

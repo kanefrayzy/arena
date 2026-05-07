@@ -4,6 +4,20 @@ import { SYSTEM_USER_ID } from '@arena/shared';
 import { PrismaService } from '../common/prisma/prisma.module';
 import { LedgerService } from '../wallet/ledger.service';
 
+export interface AbilityDto {
+  id: number;
+  slug: string;
+  name: string;
+  description: string;
+  type: string;
+  cooldownMs: number;
+  damageAmount: number;
+  durationMs: number;
+  range: number;
+  soundUrl: string | null;
+  iconUrl: string | null;
+}
+
 export interface CharacterDto {
   id: number;
   slug: string;
@@ -20,6 +34,7 @@ export interface CharacterDto {
   bulletSpriteUrl: string | null;
   priceUsd: string | null;
   isStarter: boolean;
+  ability: AbilityDto | null;
   skins: SkinDto[];
 }
 
@@ -71,7 +86,7 @@ export class ContentService {
     const rows = await this.prisma.character.findMany({
       where: { isActive: true },
       orderBy: { id: 'asc' },
-      include: { skins: { orderBy: { id: 'asc' } } },
+      include: { skins: { orderBy: { id: 'asc' } }, ability: true },
     });
     return rows.map((c) => ({
       id: c.id,
@@ -89,6 +104,19 @@ export class ContentService {
       bulletSpriteUrl: c.bulletSpriteUrl ?? null,
       priceUsd: c.priceUsd ? c.priceUsd.toString() : null,
       isStarter: c.isStarter,
+      ability: c.ability ? {
+        id: c.ability.id,
+        slug: c.ability.slug,
+        name: c.ability.name,
+        description: c.ability.description,
+        type: c.ability.type,
+        cooldownMs: c.ability.cooldownMs,
+        damageAmount: c.ability.damageAmount,
+        durationMs: c.ability.durationMs,
+        range: c.ability.range,
+        soundUrl: c.ability.soundUrl ?? null,
+        iconUrl: c.ability.iconUrl ?? null,
+      } : null,
       skins: c.skins.filter((s) => s.isActive).map((s) => this.toSkinDto(s)),
     }));
   }

@@ -53,6 +53,16 @@ export interface PlayerStats {
   abilityCooldownS: number;
 }
 
+export interface AbilityInfo {
+  type: string;
+  cooldownMs: number;
+  damageAmount: number;
+  durationMs: number;
+  range: number;
+  soundUrl: string | null;
+  iconUrl: string | null;
+}
+
 export interface WelcomePlayer {
   id: number;
   characterId: number;
@@ -67,6 +77,8 @@ export interface WelcomePlayer {
   weaponSpriteUrl?: string | null;
   /** Custom bullet sprite for this character, nullable. */
   bulletSpriteUrl?: string | null;
+  /** Ability (ultimate) config for this character, null if none. */
+  ability?: AbilityInfo | null;
 }
 
 export interface Obstacle {

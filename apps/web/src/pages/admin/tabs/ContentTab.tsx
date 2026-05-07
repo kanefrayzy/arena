@@ -21,8 +21,7 @@ interface Character {
   baseSpeed: number;
   baseDamage: number;
   weaponType: string;
-  abilityType: string | null;
-  abilityCooldownS: number;
+  abilityId: number | null;
   isActive: boolean;
   spriteUrl: string | null;
   battleSpriteUrl: string | null;
@@ -30,6 +29,14 @@ interface Character {
   priceUsd: string | null;
   isStarter: boolean;
   skins: Skin[];
+}
+
+interface Ability {
+  id: number;
+  slug: string;
+  name: string;
+  type: string;
+  iconUrl: string | null;
 }
 
 interface Weapon {
@@ -45,16 +52,16 @@ interface Weapon {
   isActive: boolean;
 }
 
-const STAT_FIELDS: { key: 'baseHp' | 'baseSpeed' | 'baseDamage' | 'abilityCooldownS'; label: string; suffix: string }[] = [
+const STAT_FIELDS: { key: 'baseHp' | 'baseSpeed' | 'baseDamage'; label: string; suffix: string }[] = [
   { key: 'baseHp', label: 'HP', suffix: '' },
   { key: 'baseSpeed', label: 'Speed', suffix: '' },
   { key: 'baseDamage', label: 'Damage', suffix: '' },
-  { key: 'abilityCooldownS', label: 'Cooldown', suffix: 's' },
 ];
 
 export function ContentTab() {
   const [chars, setChars] = useState<Character[]>([]);
   const [weapons, setWeapons] = useState<Weapon[]>([]);
+  const [abilities, setAbilities] = useState<Ability[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [editChar, setEditChar] = useState<Character | null>(null);
   const [editSkin, setEditSkin] = useState<Skin | null>(null);
@@ -66,12 +73,14 @@ export function ContentTab() {
   async function load() {
     setErr(null);
     try {
-      const [r, w] = await Promise.all([
+      const [r, w, ab] = await Promise.all([
         api.get<{ characters: Character[] }>('/characters'),
         api.get<{ weapons: Weapon[] }>('/weapons'),
+        api.get<{ abilities: Ability[] }>('/admin/abilities'),
       ]);
       setChars(r.characters);
       setWeapons(w.weapons);
+      setAbilities(ab.abilities);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'load failed');
     }
@@ -261,6 +270,7 @@ export function ContentTab() {
 
       <CharStatsModal
         char={editChar}
+        abilities={abilities}
         onClose={() => setEditChar(null)}
         onDone={async () => {
           setEditChar(null);
@@ -279,6 +289,7 @@ export function ContentTab() {
       />
       <CharCreateModal
         open={createCharOpen}
+        abilities={abilities}
         onClose={() => setCreateCharOpen(false)}
         onDone={async () => {
           setCreateCharOpen(false);
@@ -393,11 +404,13 @@ function UploadButton({ onFile, disabled, label, accept }: { onFile: (file: File
 
 function CharCreateModal({
   open,
+  abilities,
   onClose,
   onDone,
   setErr,
 }: {
   open: boolean;
+  abilities: Ability[];
   onClose: () => void;
   onDone: () => Promise<void>;
   setErr: (s: string | null) => void;
@@ -408,8 +421,7 @@ function CharCreateModal({
   const [speed, setSpeed] = useState('220');
   const [damage, setDamage] = useState('20');
   const [weaponType, setWeaponType] = useState('ranged');
-  const [abilityType, setAbilityType] = useState('dash');
-  const [cd, setCd] = useState('8');
+  const [abilityId, setAbilityId] = useState('');
   const [priceUsd, setPriceUsd] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -423,8 +435,7 @@ function CharCreateModal({
         baseSpeed: parseFloat(speed),
         baseDamage: parseInt(damage, 10),
         weaponType: weaponType.trim() || 'ranged',
-        abilityType: abilityType.trim() || null,
-        abilityCooldownS: parseInt(cd, 10) || 0,
+        abilityId: abilityId ? parseInt(abilityId, 10) : null,
         priceUsd: priceUsd.trim() === '' ? null : priceUsd.trim(),
       });
       setSlug(''); setName('');
@@ -457,8 +468,14 @@ function CharCreateModal({
         <Field label="Speed"><input className={inputCls} value={speed} onChange={(e) => setSpeed(e.target.value)} type="number" step="0.1" /></Field>
         <Field label="Damage"><input className={inputCls} value={damage} onChange={(e) => setDamage(e.target.value)} type="number" /></Field>
         <Field label="Weapon type"><input className={inputCls} value={weaponType} onChange={(e) => setWeaponType(e.target.value)} /></Field>
-        <Field label="Ability"><input className={inputCls} value={abilityType} onChange={(e) => setAbilityType(e.target.value)} placeholder="dash" /></Field>
-        <Field label="Cooldown (s)"><input className={inputCls} value={cd} onChange={(e) => setCd(e.target.value)} type="number" /></Field>
+        <Field label="Ability" className="col-span-2">
+          <select className={inputCls} value={abilityId} onChange={(e) => setAbilityId(e.target.value)}>
+            <option value="">— none —</option>
+            {abilities.map((a) => (
+              <option key={a.id} value={String(a.id)}>{a.name} ({a.type})</option>
+            ))}
+          </select>
+        </Field>
         <Field label="Price (USD, empty = free)"><input className={inputCls} value={priceUsd} onChange={(e) => setPriceUsd(e.target.value)} placeholder="0.00" /></Field>
       </div>
       <p className="mt-2 text-xs text-white/40">After creating, click “Sprite” on the row to upload the character image.</p>
@@ -623,11 +640,13 @@ function WeaponEditModal({
 
 function CharStatsModal({
   char,
+  abilities,
   onClose,
   onDone,
   setErr,
 }: {
   char: Character | null;
+  abilities: Ability[];
   onClose: () => void;
   onDone: () => Promise<void>;
   setErr: (s: string | null) => void;
@@ -635,7 +654,7 @@ function CharStatsModal({
   const [hp, setHp] = useState('');
   const [speed, setSpeed] = useState('');
   const [damage, setDamage] = useState('');
-  const [cd, setCd] = useState('');
+  const [abilityId, setAbilityId] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -643,7 +662,7 @@ function CharStatsModal({
       setHp(String(char.baseHp));
       setSpeed(String(char.baseSpeed));
       setDamage(String(char.baseDamage));
-      setCd(String(char.abilityCooldownS));
+      setAbilityId(char.abilityId != null ? String(char.abilityId) : '');
     }
   }, [char]);
 
@@ -655,7 +674,7 @@ function CharStatsModal({
         baseHp: parseInt(hp, 10),
         baseSpeed: parseFloat(speed),
         baseDamage: parseInt(damage, 10),
-        abilityCooldownS: parseInt(cd, 10),
+        abilityId: abilityId ? parseInt(abilityId, 10) : null,
       });
       await onDone();
     } catch (e) {
@@ -689,8 +708,13 @@ function CharStatsModal({
         <Field label="Damage">
           <input className={inputCls} value={damage} onChange={(e) => setDamage(e.target.value)} type="number" />
         </Field>
-        <Field label="Cooldown (s)">
-          <input className={inputCls} value={cd} onChange={(e) => setCd(e.target.value)} type="number" />
+        <Field label="Ability" className="col-span-2">
+          <select className={inputCls} value={abilityId} onChange={(e) => setAbilityId(e.target.value)}>
+            <option value="">— none —</option>
+            {abilities.map((a) => (
+              <option key={a.id} value={String(a.id)}>{a.name} ({a.type})</option>
+            ))}
+          </select>
         </Field>
       </div>
     </Modal>

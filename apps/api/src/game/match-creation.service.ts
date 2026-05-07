@@ -111,6 +111,7 @@ export class MatchCreationService {
         characterSpriteUrl: p1Loadout.characterSpriteUrl,
         weaponSpriteUrl: p1Loadout.weaponSpriteUrl,
         bulletSpriteUrl: p1Loadout.bulletSpriteUrl,
+        ability: p1Loadout.ability,
       },
       player2: {
         userId: player2.id,
@@ -121,6 +122,7 @@ export class MatchCreationService {
         characterSpriteUrl: p2Loadout.characterSpriteUrl,
         weaponSpriteUrl: p2Loadout.weaponSpriteUrl,
         bulletSpriteUrl: p2Loadout.bulletSpriteUrl,
+        ability: p2Loadout.ability,
       },
     };
     await this.redis.client.set(`match:seed:${match.id}`, JSON.stringify(seed), 'EX', 600);
@@ -168,7 +170,7 @@ export class MatchCreationService {
     const loadout = await this.prisma.userLoadout.findUnique({ where: { userId } });
     if (loadout) {
       const [char, skin] = await Promise.all([
-        this.prisma.character.findUnique({ where: { id: loadout.characterId } }),
+        this.prisma.character.findUnique({ where: { id: loadout.characterId }, include: { ability: true } }),
         this.prisma.skin.findUnique({ where: { id: loadout.skinId } }),
       ]);
       if (char && skin) {
@@ -180,6 +182,15 @@ export class MatchCreationService {
           characterSpriteUrl: char.battleSpriteUrl ?? char.spriteUrl ?? null,
           weaponSpriteUrl: weapon?.spriteUrl ?? null,
           bulletSpriteUrl: char.bulletSpriteUrl ?? null,
+          ability: char.ability ? {
+            type: char.ability.type,
+            cooldownMs: char.ability.cooldownMs,
+            damageAmount: char.ability.damageAmount,
+            durationMs: char.ability.durationMs,
+            range: char.ability.range,
+            soundUrl: char.ability.soundUrl ?? null,
+            iconUrl: char.ability.iconUrl ?? null,
+          } : null,
         };
       }
     }
@@ -190,7 +201,7 @@ export class MatchCreationService {
     const char = await this.prisma.character.findFirst({
       where: { isActive: true },
       orderBy: { id: 'asc' },
-      include: { skins: { where: { isActive: true }, orderBy: { id: 'asc' }, take: 1 } },
+      include: { skins: { where: { isActive: true }, orderBy: { id: 'asc' }, take: 1 }, ability: true },
     });
     if (!char) throw new Error('no active character seeded');
     const skin = char.skins[0];
@@ -203,6 +214,15 @@ export class MatchCreationService {
       characterSpriteUrl: char.battleSpriteUrl ?? char.spriteUrl ?? null,
       weaponSpriteUrl: weapon?.spriteUrl ?? null,
       bulletSpriteUrl: char.bulletSpriteUrl ?? null,
+      ability: char.ability ? {
+        type: char.ability.type,
+        cooldownMs: char.ability.cooldownMs,
+        damageAmount: char.ability.damageAmount,
+        durationMs: char.ability.durationMs,
+        range: char.ability.range,
+        soundUrl: char.ability.soundUrl ?? null,
+        iconUrl: char.ability.iconUrl ?? null,
+      } : null,
     };
   }
 
@@ -218,24 +238,16 @@ export class MatchCreationService {
   }
 
   private computeStats(
-    char: { baseHp: number; baseSpeed: number; baseDamage: number; weaponType: string; abilityType: string | null; abilityCooldownS: number },
+    char: { baseHp: number; baseSpeed: number; baseDamage: number; weaponType: string },
     skin: { statModifiers: unknown },
     weapon: { damage: number; fireRateMs: number; bulletSpeed: number } | null,
   ): EffectiveStats {
     const mods = (skin.statModifiers ?? {}) as { hpPct?: number; speedPct?: number; damagePct?: number };
     const hp = Math.max(1, Math.round(char.baseHp * (1 + (mods.hpPct ?? 0) / 100)));
     const speed = Math.max(50, char.baseSpeed * (1 + (mods.speedPct ?? 0) / 100));
-    // Weapon damage takes priority when present.
     const baseDmg = weapon ? weapon.damage : char.baseDamage;
     const damage = Math.max(1, Math.round(baseDmg * (1 + (mods.damagePct ?? 0) / 100)));
-    return {
-      hp,
-      speed,
-      damage,
-      weaponType: char.weaponType,
-      abilityType: char.abilityType,
-      abilityCooldownMs: char.abilityCooldownS * 1000,
-    };
+    return { hp, speed, damage, weaponType: char.weaponType };
   }
 }
 
@@ -244,8 +256,16 @@ interface EffectiveStats {
   speed: number;
   damage: number;
   weaponType: string;
-  abilityType: string | null;
-  abilityCooldownMs: number;
+}
+
+interface AbilitySeed {
+  type: string;
+  cooldownMs: number;
+  damageAmount: number;
+  durationMs: number;
+  range: number;
+  soundUrl: string | null;
+  iconUrl: string | null;
 }
 
 interface ResolvedLoadout {
@@ -255,4 +275,5 @@ interface ResolvedLoadout {
   characterSpriteUrl: string | null;
   weaponSpriteUrl: string | null;
   bulletSpriteUrl: string | null;
+  ability: AbilitySeed | null;
 }

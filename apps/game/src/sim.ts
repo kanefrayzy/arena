@@ -42,11 +42,19 @@ export interface PlayerState {
   damage: number;
   abilityCooldownMs: number;
   abilityCdLeftMs: number;
+  /** Which ability type this player uses (from DB). */
+  abilityType: string;
+  /** Params from DB for configurable abilities. */
+  abilityDamageAmount: number;
+  abilityDurationMs: number;
+  abilityRange: number;
 
   fireCooldownLeftMs: number;
   dashLeftMs: number;
   dashVx: number;
   dashVy: number;
+  /** Active buff timer in ms (shield, slow, speed). */
+  buffLeftMs: number;
 
   lastInputSeq: number;
   lastInputAt: number; // ms
@@ -86,8 +94,16 @@ const BULLET_SPEED = 600;
 const BULLET_TTL_MS = 1500;
 const BULLET_DAMAGE = 20;
 const DASH_DURATION_MS = 200;
-const DASH_SPEED = 720; // adds on top of base
+const DASH_SPEED = 720;
 const DASH_CD_MS = 8_000;
+const BLINK_DIST = 300;
+const SHIELD_DEFAULT_MS = 1500;
+const SLOW_DEFAULT_MS = 2000;
+const SLOW_FACTOR = 0.4;
+const TRIPLE_ANGLE = 0.35; // radians ≈20°
+const BOMB_DEFAULT_RADIUS = 200;
+const BOMB_DEFAULT_DAMAGE = 50;
+const HEAL_DEFAULT_AMOUNT = 30;
 
 export class Sim {
   matchId: string;
@@ -168,19 +184,15 @@ export class Sim {
         p.fireCooldownLeftMs = FIRE_COOLDOWN_MS;
       }
 
-      // Ability — dash
+      // Ability
       if (input.ability && p.abilityCdLeftMs <= 0 && p.hp > 0) {
-        p.abilityCdLeftMs = DASH_CD_MS;
-        p.dashLeftMs = DASH_DURATION_MS;
-        p.dashVx = Math.cos(p.angle) * DASH_SPEED;
-        p.dashVy = Math.sin(p.angle) * DASH_SPEED;
-        p.buffs = ['dash'];
-        this.events.push({ kind: 'ability', who: p.id, type: 'dash' });
+        p.abilityCdLeftMs = p.abilityCooldownMs;
+        this.activateAbility(p);
       }
     }
     this.pendingInputs.clear();
 
-    // Cooldowns + dash motion
+    // Cooldowns + dash motion + buff timers
     for (const p of this.players.values()) {
       if (p.fireCooldownLeftMs > 0) p.fireCooldownLeftMs = Math.max(0, p.fireCooldownLeftMs - dt);
       if (p.abilityCdLeftMs > 0) p.abilityCdLeftMs = Math.max(0, p.abilityCdLeftMs - dt);
@@ -188,9 +200,21 @@ export class Sim {
         this.movePlayer(p, p.dashVx * dtS, p.dashVy * dtS);
         p.dashLeftMs = Math.max(0, p.dashLeftMs - dt);
         if (p.dashLeftMs === 0) {
-          p.buffs = [];
+          p.buffs = p.buffs.filter((b) => b !== 'dash');
           p.dashVx = 0;
           p.dashVy = 0;
+        }
+      }
+      // Timed buffs (shield, slow, speed)
+      if (p.buffLeftMs > 0) {
+        p.buffLeftMs = Math.max(0, p.buffLeftMs - dt);
+        if (p.buffLeftMs === 0) {
+          p.buffs = p.buffs.filter((b) => b !== 'shield' && b !== 'speed');
+          // If slow expired, restore opponent speed
+          if (p.buffs.includes('slow_victim')) {
+            p.buffs = p.buffs.filter((b) => b !== 'slow_victim');
+            p.speed = p.speed / SLOW_FACTOR;
+          }
         }
       }
       // Clamp to map bounds
@@ -232,15 +256,17 @@ export class Sim {
         const dx = target.x - b.x;
         const dy = target.y - b.y;
         if (dx * dx + dy * dy <= r * r) {
-          target.hp = Math.max(0, target.hp - b.damage);
-          this.events.push({
-            kind: 'hit',
-            victim: target.id,
-            attacker: b.ownerId,
-            dmg: b.damage,
-            x: target.x,
-            y: target.y,
-          });
+          if (!target.buffs.includes('shield')) {
+            target.hp = Math.max(0, target.hp - b.damage);
+            this.events.push({
+              kind: 'hit',
+              victim: target.id,
+              attacker: b.ownerId,
+              dmg: b.damage,
+              x: target.x,
+              y: target.y,
+            });
+          }
           this.bullets.delete(bid);
           if (target.hp <= 0) {
             this.events.push({ kind: 'death', who: target.id });
@@ -292,6 +318,85 @@ export class Sim {
     };
     this.bullets.set(id, b);
     this.events.push({ kind: 'shoot', who: owner.id, x: b.x, y: b.y });
+  }
+
+  private activateAbility(p: PlayerState): void {
+    const type = p.abilityType;
+    this.events.push({ kind: 'ability', who: p.id, type });
+
+    if (type === 'dash') {
+      p.dashLeftMs = DASH_DURATION_MS;
+      p.dashVx = Math.cos(p.angle) * DASH_SPEED;
+      p.dashVy = Math.sin(p.angle) * DASH_SPEED;
+      p.buffs = [...p.buffs.filter((b) => b !== 'dash'), 'dash'];
+      return;
+    }
+
+    if (type === 'blink') {
+      const dist = p.abilityRange > 0 ? p.abilityRange : BLINK_DIST;
+      p.x = clamp(p.x + Math.cos(p.angle) * dist, PLAYER_RADIUS, MAP_WIDTH - PLAYER_RADIUS);
+      p.y = clamp(p.y + Math.sin(p.angle) * dist, PLAYER_RADIUS, MAP_HEIGHT - PLAYER_RADIUS);
+      return;
+    }
+
+    if (type === 'shield') {
+      const dur = p.abilityDurationMs > 0 ? p.abilityDurationMs : SHIELD_DEFAULT_MS;
+      p.buffs = [...p.buffs.filter((b) => b !== 'shield'), 'shield'];
+      p.buffLeftMs = dur;
+      return;
+    }
+
+    if (type === 'slow') {
+      const dur = p.abilityDurationMs > 0 ? p.abilityDurationMs : SLOW_DEFAULT_MS;
+      // Apply slow to opponent
+      for (const other of this.players.values()) {
+        if (other.id === p.id) continue;
+        if (!other.buffs.includes('slow_victim')) {
+          other.speed *= SLOW_FACTOR;
+          other.buffs = [...other.buffs, 'slow_victim'];
+          other.buffLeftMs = dur;
+        }
+      }
+      return;
+    }
+
+    if (type === 'triple_shot') {
+      this.spawnBullet(p); // center
+      const savedAngle = p.angle;
+      p.angle = savedAngle + TRIPLE_ANGLE;
+      this.spawnBullet(p);
+      p.angle = savedAngle - TRIPLE_ANGLE;
+      this.spawnBullet(p);
+      p.angle = savedAngle;
+      return;
+    }
+
+    if (type === 'bomb') {
+      const radius = p.abilityRange > 0 ? p.abilityRange : BOMB_DEFAULT_RADIUS;
+      const dmg = p.abilityDamageAmount > 0 ? p.abilityDamageAmount : BOMB_DEFAULT_DAMAGE;
+      for (const other of this.players.values()) {
+        if (other.id === p.id) continue;
+        if (other.hp <= 0) continue;
+        if (other.buffs.includes('shield')) continue;
+        const dx = other.x - p.x;
+        const dy = other.y - p.y;
+        if (dx * dx + dy * dy <= radius * radius) {
+          other.hp = Math.max(0, other.hp - dmg);
+          this.events.push({ kind: 'hit', victim: other.id, attacker: p.id, dmg, x: other.x, y: other.y });
+          if (other.hp <= 0) {
+            this.events.push({ kind: 'death', who: other.id });
+            this.finish('kill', p.id, Date.now());
+          }
+        }
+      }
+      return;
+    }
+
+    if (type === 'heal') {
+      const amount = p.abilityDamageAmount > 0 ? p.abilityDamageAmount : HEAL_DEFAULT_AMOUNT;
+      p.hp = Math.min(p.maxHp, p.hp + amount);
+      return;
+    }
   }
 
   /** Move a player by (dx,dy) with axis-separated obstacle resolution. */

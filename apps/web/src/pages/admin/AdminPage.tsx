@@ -12,8 +12,9 @@ import { PaymentsTab } from './tabs/PaymentsTab';
 import { PaymentMethodsTab } from './tabs/PaymentMethodsTab';
 import { SettingsTab } from './tabs/SettingsTab';
 import { SpritesTab } from './tabs/SpritesTab';
+import { AbilitiesTab } from './tabs/AbilitiesTab';
 
-type Tab = 'dash' | 'users' | 'rooms' | 'content' | 'matches' | 'payments' | 'methods' | 'settings' | 'sprites';
+type Tab = 'dash' | 'users' | 'rooms' | 'content' | 'matches' | 'payments' | 'methods' | 'settings' | 'sprites' | 'abilities';
 
 const TABS: { key: Tab; label: string; desc: string; icon: string }[] = [
   { key: 'dash', label: 'Dashboard', desc: 'Key metrics', icon: '▦' },
@@ -21,6 +22,7 @@ const TABS: { key: Tab; label: string; desc: string; icon: string }[] = [
   { key: 'rooms', label: 'Rooms', desc: 'Match rooms', icon: '◫' },
   { key: 'content', label: 'Content', desc: 'Characters & skins', icon: '✦' },
   { key: 'sprites', label: 'Sprites', desc: 'Game graphics', icon: '◆' },
+  { key: 'abilities', label: 'Abilities', desc: 'Ability system', icon: '⚡' },
   { key: 'matches', label: 'Matches', desc: 'Live & history', icon: '⚔' },
   { key: 'payments', label: 'Payments', desc: 'Approvals & queue', icon: '$' },
   { key: 'methods', label: 'Methods', desc: 'Payment methods & icons', icon: '◈' },
@@ -160,6 +162,7 @@ export function AdminPage() {
             {tab === 'payments' && <PaymentsTab />}
             {tab === 'methods' && <PaymentMethodsTab />}
             {tab === 'settings' && <SettingsTab />}
+            {tab === 'abilities' && <AbilitiesTab />}
           </div>
         </main>
       </div>

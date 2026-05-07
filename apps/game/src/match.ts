@@ -33,6 +33,8 @@ export interface MatchPlayerSeed {
   weaponSpriteUrl?: string | null;
   /** Custom bullet sprite for this character. */
   bulletSpriteUrl?: string | null;
+  /** Ability config from DB. */
+  ability?: { type: string; cooldownMs: number; damageAmount: number; durationMs: number; range: number; soundUrl: string | null; iconUrl: string | null } | null;
 }
 
 export interface PlayerStatsSeed {
@@ -40,8 +42,6 @@ export interface PlayerStatsSeed {
   speed: number;
   damage: number;
   weaponType: string;
-  abilityType: string | null;
-  abilityCooldownMs: number;
 }
 
 export interface MatchSeed {
@@ -437,17 +437,21 @@ export class Match {
         characterId: p.characterId,
         skinId: p.skinId,
         username: p.username,
-        stats: {
-          hp: p.maxHp,
-          speed: p.speed,
-          damage: p.damage,
-          abilityCooldownS: p.abilityCooldownMs / 1000,
-        },
+        stats: {\n          hp: p.maxHp,\n          speed: p.speed,\n          damage: p.damage,\n          abilityCooldownS: p.abilityCooldownMs / 1000,\n        },
         spawnX: p.x,
         spawnY: p.y,
         characterSpriteUrl: s?.characterSpriteUrl ?? null,
         weaponSpriteUrl: s?.weaponSpriteUrl ?? null,
         bulletSpriteUrl: s?.bulletSpriteUrl ?? null,
+        ability: s?.ability ? {
+          type: s.ability.type,
+          cooldownMs: s.ability.cooldownMs,
+          damageAmount: s.ability.damageAmount,
+          durationMs: s.ability.durationMs,
+          range: s.ability.range,
+          soundUrl: s.ability.soundUrl ?? null,
+          iconUrl: s.ability.iconUrl ?? null,
+        } : null,
       };
     };
     const welcome: SWelcome = {
@@ -520,7 +524,7 @@ function buildPlayer(seed: MatchPlayerSeed, spawn: { x: number; y: number }): Pl
   const maxHp = stats?.hp ?? 100;
   const speed = stats?.speed ?? 240;
   const damage = stats?.damage ?? 20;
-  const abilityCooldownMs = stats?.abilityCooldownMs ?? 8000;
+  const ability = seed.ability;
   return {
     id: seed.userId,
     characterId: seed.characterId,
@@ -534,12 +538,17 @@ function buildPlayer(seed: MatchPlayerSeed, spawn: { x: number; y: number }): Pl
     maxHp,
     speed,
     damage,
-    abilityCooldownMs,
+    abilityCooldownMs: ability?.cooldownMs ?? 8000,
     abilityCdLeftMs: 0,
+    abilityType: ability?.type ?? 'dash',
+    abilityDamageAmount: ability?.damageAmount ?? 0,
+    abilityDurationMs: ability?.durationMs ?? 0,
+    abilityRange: ability?.range ?? 0,
     fireCooldownLeftMs: 0,
     dashLeftMs: 0,
     dashVx: 0,
     dashVy: 0,
+    buffLeftMs: 0,
     lastInputSeq: 0,
     lastInputAt: Date.now(),
     buffs: [],

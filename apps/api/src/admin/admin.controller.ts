@@ -34,6 +34,7 @@ type UploadedMulterFile = {
 
 const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']);
 const ALLOWED_MIME_CHAR_SPRITE = new Set([...ALLOWED_MIME, 'image/gif', 'video/webm']);
+const ALLOWED_MIME_SOUND = new Set(['audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm', 'audio/mp4']);
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 function extFromMime(m: string): string {
   if (m === 'image/png') return '.png';
@@ -42,6 +43,9 @@ function extFromMime(m: string): string {
   if (m === 'image/svg+xml') return '.svg';
   if (m === 'image/gif') return '.gif';
   if (m === 'video/webm') return '.webm';
+  if (m === 'audio/mpeg') return '.mp3';
+  if (m === 'audio/ogg') return '.ogg';
+  if (m === 'audio/wav') return '.wav';
   return '.bin';
 }
 function ensureDir(sub: string): string {
@@ -88,8 +92,7 @@ const charCreateSchema = z.object({
   baseSpeed: z.number().min(1).max(2000),
   baseDamage: z.number().int().min(0).max(10000),
   weaponType: z.string().min(1).max(50),
-  abilityType: z.string().max(50).nullable().optional(),
-  abilityCooldownS: z.number().int().min(0).max(120).optional(),
+  abilityId: z.number().int().positive().nullable().optional(),
   spriteUrl: z.string().max(500).nullable().optional(),
   battleSpriteUrl: z.string().max(500).nullable().optional(),
   bulletSpriteUrl: z.string().max(500).nullable().optional(),
@@ -100,6 +103,21 @@ type CharCreate = z.infer<typeof charCreateSchema>;
 
 const charPatchSchema = charCreateSchema.partial().extend({ isActive: z.boolean().optional() }).omit({ slug: true });
 type CharPatch = z.infer<typeof charPatchSchema>;
+
+const abilityCreateSchema = z.object({
+  slug: z.string().min(1).max(50),
+  name: z.string().min(1).max(100),
+  description: z.string().max(500).optional(),
+  type: z.enum(['dash', 'blink', 'shield', 'slow', 'triple_shot', 'bomb', 'heal']),
+  cooldownMs: z.number().int().min(500).max(60000),
+  damageAmount: z.number().int().min(0).max(10000).optional(),
+  durationMs: z.number().int().min(0).max(30000).optional(),
+  range: z.number().int().min(0).max(2000).optional(),
+});
+type AbilityCreate = z.infer<typeof abilityCreateSchema>;
+
+const abilityPatchSchema = abilityCreateSchema.partial().omit({ slug: true });
+type AbilityPatch = z.infer<typeof abilityPatchSchema>;
 
 const weaponCreateSchema = z.object({
   slug: z.string().min(1).max(50),
@@ -399,5 +417,63 @@ export class AdminController {
   @Delete('settings/:key')
   deleteSetting(@Param('key') key: string) {
     return this.admin.deleteSetting(key);
+  }
+
+  // Abilities CRUD
+  @Get('abilities')
+  listAbilities() {
+    return this.admin.listAbilities();
+  }
+
+  @Post('abilities')
+  createAbility(@Body(new ZodValidationPipe(abilityCreateSchema)) body: AbilityCreate) {
+    return this.admin.createAbility(body);
+  }
+
+  @Patch('abilities/:id')
+  patchAbility(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ZodValidationPipe(abilityPatchSchema)) body: AbilityPatch,
+  ) {
+    return this.admin.updateAbility(id, body);
+  }
+
+  @Delete('abilities/:id')
+  deleteAbility(@Param('id', ParseIntPipe) id: number) {
+    return this.admin.deleteAbility(id);
+  }
+
+  @Post('abilities/:id/icon')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_BYTES } }))
+  async uploadAbilityIcon(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: UploadedMulterFile | undefined,
+  ) {
+    if (!file) throw new BadRequestException('no file');
+    if (!ALLOWED_MIME.has(file.mimetype)) throw new BadRequestException('unsupported mime');
+    if (file.size > MAX_BYTES) throw new BadRequestException('file too large');
+    const ext = extname(file.originalname).toLowerCase() || extFromMime(file.mimetype);
+    const filename = `ability_${id}_icon${ext}`;
+    writeFileSync(join(ensureDir('abilities'), filename), file.buffer);
+    const url = `/uploads/abilities/${filename}?v=${Date.now()}`;
+    await this.admin.updateAbility(id, { iconUrl: url });
+    return { ok: true, url };
+  }
+
+  @Post('abilities/:id/sound')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_BYTES } }))
+  async uploadAbilitySound(
+    @Param('id', ParseIntPipe) id: number,
+    @UploadedFile() file: UploadedMulterFile | undefined,
+  ) {
+    if (!file) throw new BadRequestException('no file');
+    if (!ALLOWED_MIME_SOUND.has(file.mimetype)) throw new BadRequestException('unsupported mime');
+    if (file.size > MAX_BYTES) throw new BadRequestException('file too large');
+    const ext = extname(file.originalname).toLowerCase() || extFromMime(file.mimetype);
+    const filename = `ability_${id}_sound${ext}`;
+    writeFileSync(join(ensureDir('abilities'), filename), file.buffer);
+    const url = `/uploads/abilities/${filename}?v=${Date.now()}`;
+    await this.admin.updateAbility(id, { soundUrl: url });
+    return { ok: true, url };
   }
 }

@@ -214,8 +214,7 @@ export class AdminService {
     baseSpeed: number;
     baseDamage: number;
     weaponType: string;
-    abilityType?: string | null;
-    abilityCooldownS?: number;
+    abilityId?: number | null;
     spriteUrl?: string | null;
     battleSpriteUrl?: string | null;
     bulletSpriteUrl?: string | null;
@@ -230,8 +229,7 @@ export class AdminService {
         baseSpeed: input.baseSpeed,
         baseDamage: input.baseDamage,
         weaponType: input.weaponType,
-        abilityType: input.abilityType ?? null,
-        abilityCooldownS: input.abilityCooldownS ?? 10,
+        abilityId: input.abilityId ?? null,
         spriteUrl: input.spriteUrl ?? null,
         battleSpriteUrl: input.battleSpriteUrl ?? null,
         bulletSpriteUrl: input.bulletSpriteUrl ?? null,
@@ -259,8 +257,7 @@ export class AdminService {
     baseSpeed: number;
     baseDamage: number;
     weaponType: string;
-    abilityType: string | null;
-    abilityCooldownS: number;
+    abilityId: number | null;
     isActive: boolean;
     spriteUrl: string | null;
     battleSpriteUrl: string | null;
@@ -274,8 +271,7 @@ export class AdminService {
     if (patch.baseSpeed !== undefined) data.baseSpeed = patch.baseSpeed;
     if (patch.baseDamage !== undefined) data.baseDamage = patch.baseDamage;
     if (patch.weaponType !== undefined) data.weaponType = patch.weaponType;
-    if (patch.abilityType !== undefined) data.abilityType = patch.abilityType;
-    if (patch.abilityCooldownS !== undefined) data.abilityCooldownS = patch.abilityCooldownS;
+    if (patch.abilityId !== undefined) data.ability = patch.abilityId ? { connect: { id: patch.abilityId } } : { disconnect: true };
     if (patch.isActive !== undefined) data.isActive = patch.isActive;
     if (patch.spriteUrl !== undefined) data.spriteUrl = patch.spriteUrl;
     if (patch.battleSpriteUrl !== undefined) data.battleSpriteUrl = patch.battleSpriteUrl;
@@ -286,7 +282,67 @@ export class AdminService {
   }
 
   async listCharacters() {
-    return this.prisma.character.findMany({ orderBy: { id: 'asc' } });
+    return this.prisma.character.findMany({
+      orderBy: { id: 'asc' },
+      include: { ability: true },
+    });
+  }
+
+  // ───────────────────────── Abilities ─────────────────────────
+  async listAbilities() {
+    return this.prisma.ability.findMany({ orderBy: { id: 'asc' } });
+  }
+
+  async createAbility(input: {
+    slug: string;
+    name: string;
+    description?: string;
+    type: string;
+    cooldownMs: number;
+    damageAmount?: number;
+    durationMs?: number;
+    range?: number;
+  }) {
+    return this.prisma.ability.create({
+      data: {
+        slug: input.slug,
+        name: input.name,
+        description: input.description ?? '',
+        type: input.type,
+        cooldownMs: input.cooldownMs,
+        damageAmount: input.damageAmount ?? 0,
+        durationMs: input.durationMs ?? 0,
+        range: input.range ?? 0,
+      },
+    });
+  }
+
+  async updateAbility(id: number, patch: Partial<{
+    name: string;
+    description: string;
+    type: string;
+    cooldownMs: number;
+    damageAmount: number;
+    durationMs: number;
+    range: number;
+    soundUrl: string | null;
+    iconUrl: string | null;
+  }>) {
+    const data: Prisma.AbilityUpdateInput = {};
+    if (patch.name !== undefined) data.name = patch.name;
+    if (patch.description !== undefined) data.description = patch.description;
+    if (patch.type !== undefined) data.type = patch.type;
+    if (patch.cooldownMs !== undefined) data.cooldownMs = patch.cooldownMs;
+    if (patch.damageAmount !== undefined) data.damageAmount = patch.damageAmount;
+    if (patch.durationMs !== undefined) data.durationMs = patch.durationMs;
+    if (patch.range !== undefined) data.range = patch.range;
+    if (patch.soundUrl !== undefined) data.soundUrl = patch.soundUrl;
+    if (patch.iconUrl !== undefined) data.iconUrl = patch.iconUrl;
+    return this.prisma.ability.update({ where: { id }, data });
+  }
+
+  async deleteAbility(id: number) {
+    return this.prisma.ability.delete({ where: { id } });
   }
 
   // ───────────────────────── Weapons ─────────────────────────
