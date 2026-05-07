@@ -232,9 +232,7 @@ export function MatchPage() {
             <div className="font-display text-lg text-white">HP {hp.opp}</div>
           </div>
         </div>
-        <div className="mt-2 text-center text-xs text-white/50">
-          {cdMs > 0 ? `${t('match.ability_cd')}: ${cdS}s` : t('match.ability_ready')}
-        </div>
+
         {error && <div className="mt-3 text-center text-red-400">{error}</div>}
         {/* Timer — bottom-center, away from opponent spawn */}
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2">
@@ -301,9 +299,52 @@ export function MatchPage() {
       <button
         ref={abRef}
         type="button"
-        className="pointer-events-auto absolute bottom-32 right-12 h-16 w-16 select-none rounded-full bg-gradient-to-b from-[#a774ff] to-[#7a3eff] font-display text-lg text-white shadow-[0_5px_0_#4d1fb8,0_6px_14px_rgba(138,79,255,0.45)] active:translate-y-[2px] active:shadow-[0_3px_0_#4d1fb8]"
+        className="pointer-events-auto absolute bottom-32 right-12 h-16 w-16 select-none rounded-full bg-gradient-to-b from-[#a774ff] to-[#7a3eff] overflow-hidden shadow-[0_5px_0_#4d1fb8,0_6px_14px_rgba(138,79,255,0.45)] active:translate-y-[2px] active:shadow-[0_3px_0_#4d1fb8] flex items-center justify-center"
       >
-        Q
+        {/* Ability icon or fallback letter */}
+        {welcome?.you.ability?.iconUrl ? (
+          <img
+            src={welcome.you.ability.iconUrl}
+            className="h-full w-full object-cover"
+            alt=""
+            draggable={false}
+          />
+        ) : (
+          <span className="font-display text-lg text-white">Q</span>
+        )}
+        {/* Dark overlay when on cooldown */}
+        {cdMs > 0 && (
+          <div className="absolute inset-0 rounded-full bg-black/55 pointer-events-none" />
+        )}
+        {/* Circular cooldown arc — draws remaining CD (shrinks clockwise as CD expires) */}
+        {cdMs > 0 && (
+          <svg
+            className="absolute inset-0 -rotate-90 pointer-events-none"
+            viewBox="0 0 64 64"
+          >
+            <circle
+              cx="32"
+              cy="32"
+              r="28"
+              fill="none"
+              stroke="rgba(200,160,255,0.9)"
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeDasharray="175.93"
+              strokeDashoffset={175.93 * (1 - cdMs / (welcome?.you.ability?.cooldownMs ?? 8000))}
+            />
+          </svg>
+        )}
+        {/* Seconds remaining */}
+        {cdMs > 0 && (
+          <span className="absolute inset-0 flex items-center justify-center text-sm font-bold text-white drop-shadow-[0_1px_3px_rgba(0,0,0,1)] pointer-events-none">
+            {Math.ceil(cdMs / 1000)}
+          </span>
+        )}
+        {/* Ready glow ring */}
+        {cdMs === 0 && (
+          <div className="absolute inset-0 rounded-full ring-2 ring-[#c8a0ff]/60 pointer-events-none" />
+        )}
       </button>
     </div>
   );
