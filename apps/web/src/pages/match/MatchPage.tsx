@@ -208,7 +208,10 @@ export function MatchPage() {
       if (inputTimer) clearInterval(inputTimer);
       if (pingDisplayTimer) clearInterval(pingDisplayTimer);
       cleanupControls?.();
-      client?.leave();
+      // Do NOT call client.leave() here. Component unmount happens for many
+      // reasons (back nav, tab switch, route change) and is not a reliable
+      // signal of an intentional forfeit. We just close the socket; the
+      // server grants a reconnect grace window so the player can return.
       client?.close();
       renderer?.destroy();
     };

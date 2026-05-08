@@ -71,7 +71,7 @@ export interface ConnectedClient {
 
 const SNAPSHOT_RATE_HZ = 30;
 /** Milliseconds a disconnected player has to reconnect before losing. */
-const RECONNECT_TIMEOUT_MS = 10_000;
+const RECONNECT_TIMEOUT_MS = 15_000;
 
 export class Match {
   readonly matchId: string;
@@ -271,6 +271,15 @@ export class Match {
     const now = Date.now();
     const dt = Math.min(100, now - this.lastTick); // cap spiral-of-death
     this.lastTick = now;
+
+    // Keep the AFK timer alive for any player currently inside their reconnect
+    // window — otherwise the sim's AFK detection (~10 s) would forfeit them
+    // before the reconnect grace period (15 s) elapses.
+    if (this.reconnectTimers.size > 0) {
+      for (const userId of this.reconnectTimers.keys()) {
+        this.sim.refreshInputAt(userId, now);
+      }
+    }
 
     if (this.bot) this.bot.step(now);
 

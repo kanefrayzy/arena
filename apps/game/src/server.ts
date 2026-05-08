@@ -116,8 +116,17 @@ app.ws<SocketUserData>('/ws/match', {
     try {
       payload = jwt.verify(token, INTERNAL_SECRET) as MatchTokenPayload;
     } catch (e) {
-      log.warn({ err: (e as Error).message }, 'token verify failed');
-      if (!aborted) res.cork(() => res.writeStatus('401').end('bad token'));
+      const err = e as Error & { name?: string };
+      const expired = err.name === 'TokenExpiredError';
+      log.warn({ err: err.message, expired }, 'token verify failed');
+      if (!aborted) {
+        res.cork(() =>
+          res
+            .writeStatus(expired ? '401 Token Expired' : '401 Unauthorized')
+            .writeHeader('Content-Type', 'application/json')
+            .end(JSON.stringify({ code: expired ? 'TOKEN_EXPIRED' : 'BAD_TOKEN' })),
+        );
+      }
       return;
     }
 
@@ -197,7 +206,11 @@ app.ws<SocketUserData>('/ws/match', {
         match.handlePing(ud.userId, frame.payload as CPing);
         break;
       case MSG.C_LEAVE:
-        match.detachClient(ud.userId, Date.now(), true);
+        // Closing the socket triggers the 'close' handler, which grants the
+        // standard reconnect window. Treating C_LEAVE as a graceful close
+        // (instead of an immediate forfeit) means a player who briefly
+        // backgrounds/back-navigates the app can still reconnect within
+        // the reconnect grace period and resume the match.
         try {
           ws.end(1000, 'bye');
         } catch {
