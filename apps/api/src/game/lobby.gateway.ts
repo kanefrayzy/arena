@@ -5,6 +5,7 @@ import type { IncomingMessage } from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { QUEUE_TIMEOUT_FIRST_OFFER_MS } from '@arena/shared';
 import { QueueService } from './queue.service';
+import { RedisService } from '../common/redis/redis.module';
 import { MATCH_FOUND_CHANNEL, type MatchFoundEvent } from './match-creation.service';
 
 const ACCESS_COOKIE = 'arena_access';
@@ -50,6 +51,7 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly jwt: JwtService,
     private readonly queue: QueueService,
+    private readonly redis: RedisService,
   ) {}
 
   onModuleInit(): void {
@@ -196,6 +198,16 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
     for (const [, sock] of this.clients) {
       const state = await this.queue.getState(sock.userId);
       if (!state) {
+        // Recovery path: a match may have been created but the pub/sub message
+        // was lost (the user's lobby WS was momentarily disconnected).
+        // Re-deliver from the persisted pending-match key before sending 'idle'
+        // so the player is never stuck with a frozen timer while their opponent
+        // is already in the match instance waiting alone.
+        const redelivered = await this.tryRedeliverPendingMatch(sock).catch((e) => {
+          this.log.warn(`pending-match redeliver failed for user ${sock.userId}: ${(e as Error).message}`);
+          return false;
+        });
+        if (redelivered) continue;
         if (sock.longWaitNotified) sock.longWaitNotified = false;
         this.send(sock, { type: 'queue:status', state: 'idle' });
         continue;
@@ -236,8 +248,9 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
   }
 
   private async deliverPendingMatch(sock: AuthedSocket): Promise<void> {
-    if (!this.sub) return;
-    const raw = await this.sub.get(`lobby:pending-match:${sock.userId}`);
+    // NOTE: must use the regular Redis client, NOT `this.sub`. ioredis blocks
+    // GET/DEL on a connection that is in subscriber mode.
+    const raw = await this.redis.client.get(`lobby:pending-match:${sock.userId}`);
     if (!raw) return;
     try {
       const ev = JSON.parse(raw) as MatchFoundEvent;
@@ -249,10 +262,43 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
         opponent: ev.opponent,
         room: ev.room,
       });
-      await this.sub.del(`lobby:pending-match:${sock.userId}`);
+      await this.redis.client.del(`lobby:pending-match:${sock.userId}`);
       this.log.log(`delivered pending match ${ev.matchId} to user ${sock.userId} on reconnect`);
     } catch {
       // ignore parse errors
     }
+  }
+
+  /**
+   * Defense-in-depth: invoked from the periodic status tick when the user is
+   * no longer in the queue. If a pending match exists in Redis we re-deliver
+   * it instead of falsely telling the client it's idle. Returns true when a
+   * redelivery happened.
+   */
+  private async tryRedeliverPendingMatch(sock: AuthedSocket): Promise<boolean> {
+    const key = `lobby:pending-match:${sock.userId}`;
+    const raw = await this.redis.client.get(key);
+    if (!raw) return false;
+    let ev: MatchFoundEvent;
+    try {
+      ev = JSON.parse(raw) as MatchFoundEvent;
+    } catch {
+      // Corrupt payload — drop it so we don't loop.
+      await this.redis.client.del(key).catch(() => undefined);
+      return false;
+    }
+    this.send(sock, {
+      type: 'match:found',
+      matchId: ev.matchId,
+      matchToken: ev.matchToken,
+      gameWsUrl: ev.gameWsUrl,
+      opponent: ev.opponent,
+      room: ev.room,
+    });
+    // Delete after redelivery so we don't spam the client every second; the
+    // initial publish path keeps the key for the 60s TTL as a backup.
+    await this.redis.client.del(key).catch(() => undefined);
+    this.log.log(`redelivered pending match ${ev.matchId} to user ${sock.userId} via status tick`);
+    return true;
   }
 }

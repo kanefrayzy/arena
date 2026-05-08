@@ -14,6 +14,8 @@ export function QueuePage() {
   const [longWait, setLongWait] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const joinedRef = useRef(false);
+  const sawSearchingRef = useRef(false);
+  const navigatedRef = useRef(false);
 
   useEffect(() => {
     if (!joinedRef.current) {
@@ -36,10 +38,25 @@ export function QueuePage() {
     lobby.connect();
     const off = lobby.on((ev: LobbyEvent) => {
       if (ev.type === 'queue:status') {
-        if (ev.state === 'idle') return;
+        if (ev.state === 'idle') {
+          // Server says we're not in the queue anymore. If we already saw a
+          // 'searching' tick, this means we silently fell out without a
+          // 'match:found' (e.g. the server lost the publish event). Don't
+          // freeze the timer — bail out to home with a friendly error so the
+          // user can retry instead of staring at a stuck spinner.
+          if (sawSearchingRef.current && !navigatedRef.current) {
+            navigatedRef.current = true;
+            setError(t('queue.lost_connection'));
+            window.setTimeout(() => nav('/home'), 1500);
+          }
+          return;
+        }
+        sawSearchingRef.current = true;
         setWaitMs(ev.waitMs ?? 0);
         setLongWait(ev.state === 'long_wait');
       } else if (ev.type === 'match:found') {
+        if (navigatedRef.current) return; // idempotent: handle redelivery
+        navigatedRef.current = true;
         sessionStorage.setItem(
           `match:${ev.matchId}`,
           JSON.stringify({ matchToken: ev.matchToken, gameWsUrl: ev.gameWsUrl, opponent: ev.opponent, room: ev.room }),

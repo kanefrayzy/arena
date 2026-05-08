@@ -26,6 +26,7 @@
   "queue.long_wait": "Соперников мало — подождём ещё немного",
   "queue.cancel": "Отменить",
   "queue.insufficient_balance": "Недостаточно средств для входа в очередь",
+  "queue.lost_connection": "Соединение потеряно, попробуйте ещё раз",
   "match.timer": "Время",
   "match.ability_cd": "Способность",
   "match.ability_ready": "Способность готова (Q)",

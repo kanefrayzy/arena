@@ -26,6 +26,7 @@
   "queue.long_wait": "Few opponents around — please wait",
   "queue.cancel": "Cancel",
   "queue.insufficient_balance": "Insufficient balance for this queue",
+  "queue.lost_connection": "Connection lost, please try again",
   "match.timer": "Time",
   "match.ability_cd": "Ability",
   "match.ability_ready": "Ability ready (Q)",
