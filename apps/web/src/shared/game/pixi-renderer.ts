@@ -131,9 +131,11 @@ export class PixiRenderer {
     this.app.stage.addChild(this.world);
     this.world.addChild(this.bgLayer);
     this.world.addChild(this.fxLayer);
-    await this.loadSprites();
-    // Guard: app may have been destroyed while loadSprites() was awaiting (user navigated away).
-    if (!this.app.ticker) return;
+    // Sprite assets are loaded in the background. Players are drawn with
+    // fallback Graphics shapes until their textures arrive — this prevents
+    // the renderer from blocking startup on slow asset downloads, which would
+    // make the player stare at a blank background while snapshots are dropped.
+    void this.loadSprites().catch(() => undefined);
     this.drawArena();
     this.app.ticker.add(() => this.tick(this.app.ticker!.deltaMS));
     window.addEventListener('resize', this.handleResize);

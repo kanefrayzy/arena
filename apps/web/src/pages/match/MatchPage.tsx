@@ -75,9 +75,22 @@ export function MatchPage() {
       };
 
       let youId = 0;
-      // Buffer the welcome message if it arrives before the renderer is ready.
+      // Buffer messages if they arrive before the renderer is ready. We always
+      // process HUD state (HP/timer/cooldown) immediately so the player sees
+      // the match is alive even while sprite assets are still loading; only the
+      // visual snapshot application is deferred.
       let pendingWelcome: SWelcome | null = null;
+      let pendingSnapshot: SSnapshot | null = null;
       let rendererReady = false;
+      let welcomedRef = false;
+      // Safety net: if the server never sends welcome (NO_MATCH/seed gone),
+      // bail out to home instead of leaving the user staring at a blue screen.
+      const welcomeTimeout = window.setTimeout(() => {
+        if (!welcomedRef && !cancelled) {
+          sessionStorage.removeItem(`match:${matchId}`);
+          nav('/home');
+        }
+      }, 12_000);
 
       // ── Connect to game server IMMEDIATELY (before renderer finishes loading).
       //    This cancels the server-side 10-second reconnect timer right away so the
@@ -106,6 +119,8 @@ export function MatchPage() {
 
       client = new MatchClient(wsUrl, {
         onWelcome: (msg) => {
+          welcomedRef = true;
+          window.clearTimeout(welcomeTimeout);
           setWelcome(msg);
           youId = msg.you.id;
           if (rendererReady) {
@@ -156,14 +171,20 @@ export function MatchPage() {
           // is idempotent (guarded by countdownStartedRef), so calling it here
           // is safe even when the welcome `else` branch already kicked it off.
           if (!countdownStartedRef.current) startCountdown();
-          // Skip snapshots until the renderer has finished initialising.
-          if (!rendererReady) return;
-          renderer!.applySnapshot(msg);
+          // HUD updates ALWAYS run, even if the renderer isn't ready yet —
+          // otherwise the player sees a frozen 0-second timer and HP bars
+          // while sprite assets are still downloading. The visual snapshot is
+          // buffered and applied as soon as the renderer is ready.
           const me = msg.players.find((p) => p.id === youId);
           const opp = msg.players.find((p) => p.id !== youId);
           if (me) setCdMs(me.abilityCdMs);
           setHp({ you: me?.hp ?? 0, opp: opp?.hp ?? 0 });
           setRemainingMs(msg.remainingMs);
+          if (!rendererReady) {
+            pendingSnapshot = msg;
+            return;
+          }
+          renderer!.applySnapshot(msg);
         },
         onMatchEnd: (msg: SMatchEnd) => {
           const youWon = msg.winnerId === youId;
@@ -180,6 +201,15 @@ export function MatchPage() {
           }
         },
         onError: (code, message) => {
+          // Terminal errors from the game server: the match doesn't exist on
+          // this node, the token is bad/expired, or we aren't a participant.
+          // Don't leave the user on a blue screen — clear the stash and bail.
+          if (code === 'NO_MATCH' || code === 'FORBIDDEN' || code === 'TOKEN_EXPIRED' || code === 'BAD_TOKEN') {
+            window.clearTimeout(welcomeTimeout);
+            sessionStorage.removeItem(`match:${matchId}`);
+            nav('/home');
+            return;
+          }
           setError(`${code}: ${message}`);
         },
         onClose: () => {
@@ -201,6 +231,12 @@ export function MatchPage() {
       if (pendingWelcome) {
         renderer.setIdentity(pendingWelcome);
         pendingWelcome = null;
+      }
+      // Drain the most recent buffered snapshot so players appear on the map
+      // immediately, instead of having to wait for the next 33 ms tick.
+      if (pendingSnapshot) {
+        renderer.applySnapshot(pendingSnapshot);
+        pendingSnapshot = null;
       }
 
       cleanupControls = controls.attach(host, joyRef.current!, fireRef.current!, abRef.current!);
