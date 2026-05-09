@@ -150,6 +150,12 @@ export function MatchPage() {
           setLost(true);
         },
         onSnapshot: (msg: SSnapshot) => {
+          // Snapshots arriving = match has begun. This is the ground truth and
+          // a robust fallback in case S_MATCH_BEGIN was lost or arrived before
+          // the handler was wired (e.g. flaky network, stale tab). startCountdown
+          // is idempotent (guarded by countdownStartedRef), so calling it here
+          // is safe even when the welcome `else` branch already kicked it off.
+          if (!countdownStartedRef.current) startCountdown();
           // Skip snapshots until the renderer has finished initialising.
           if (!rendererReady) return;
           renderer!.applySnapshot(msg);
