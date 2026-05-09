@@ -44,11 +44,24 @@
       <h1><span class="accent">Arena</span>1v1</h1>
       <p>Нет соединения с сервером. Игра работает в реальном времени, поэтому offline-режим невозможен.</p>
       <p>Проверьте подключение и нажмите «Повторить».</p>
-      <button onclick="location.reload()">Повторить</button>
+      <button onclick="retry()">Повторить</button>
     </div>
     <script>
+      function retry() {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            Promise.all(regs.map(function(r) { return r.unregister(); })).then(function() {
+              window.location.replace('/');
+            });
+          }).catch(function() {
+            window.location.replace('/');
+          });
+        } else {
+          window.location.replace('/');
+        }
+      }
       // auto-retry when network comes back
-      window.addEventListener('online', () => location.reload());
+      window.addEventListener('online', retry);
     </script>
   </body>
 </html>
