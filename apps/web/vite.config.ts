@@ -74,4 +74,9 @@ export default defineConfig({
   optimizeDeps: {
     include: ['@arena/protocol', '@arena/shared', '@msgpack/msgpack'],
   },
+  build: {
+    commonjsOptions: {
+      include: [/@arena\/protocol/, /@arena\/shared/, /node_modules/],
+    },
+  },
 });
