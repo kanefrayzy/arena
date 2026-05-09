@@ -139,7 +139,10 @@ export class Match {
   }
 
   isFinished(): boolean {
-    return this.sim.finished;
+    // True after either a normal finalize() or a forced abort() — both make
+    // the match unrecoverable, so callers (server.ts close handler) can drop
+    // the in-memory instance and cleanup the Redis seed.
+    return this.finishCalled || this.sim.finished;
   }
 
   attachClient(userId: number, ws: ClientSocket): void {

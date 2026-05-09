@@ -228,7 +228,17 @@ app.ws<SocketUserData>('/ws/match', {
     if (!match) return;
     match.detachClient(ud.userId, Date.now());
     if (match.isFinished()) {
-      setTimeout(() => matches.delete(ud.matchId), 5000);
+      // Drop the in-memory instance AND the Redis seed so the matchId is
+      // no longer reattachable. Without seed deletion, a stale browser tab
+      // could otherwise reconnect after the 5 s grace and spawn a brand-new
+      // simulation under the same matchId, leaving the user staring at an
+      // empty map of a "ghost" match.
+      setTimeout(() => {
+        matches.delete(ud.matchId);
+        redis.del(`match:seed:${ud.matchId}`).catch((e) => {
+          log.warn({ err: (e as Error).message, matchId: ud.matchId }, 'seed cleanup failed');
+        });
+      }, 5000);
     }
   },
 });

@@ -25,7 +25,11 @@ export class MatchTokenService {
   sign(payload: MatchTokenPayload): string {
     return this.jwt.sign(payload, {
       secret: process.env.INTERNAL_SECRET ?? 'dev-internal',
-      expiresIn: '5m',
+      // 30 minutes — comfortably covers the longest realistic match flow:
+      // initial load + 90 s sim + reconnect after a tab background / lock-screen
+      // / OS-level wifi reroute / etc. The DB-backed lobby recovery hands out
+      // fresh tokens whenever needed, so longer here is purely defensive.
+      expiresIn: '30m',
     });
   }
 }

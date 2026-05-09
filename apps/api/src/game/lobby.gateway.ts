@@ -6,6 +6,8 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { QUEUE_TIMEOUT_FIRST_OFFER_MS } from '@arena/shared';
 import { QueueService } from './queue.service';
 import { RedisService } from '../common/redis/redis.module';
+import { PrismaService } from '../common/prisma/prisma.module';
+import { MatchTokenService } from './match-token.service';
 import { MATCH_FOUND_CHANNEL, type MatchFoundEvent } from './match-creation.service';
 
 const ACCESS_COOKIE = 'arena_access';
@@ -52,6 +54,8 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
     private readonly jwt: JwtService,
     private readonly queue: QueueService,
     private readonly redis: RedisService,
+    private readonly prisma: PrismaService,
+    private readonly tokens: MatchTokenService,
   ) {}
 
   onModuleInit(): void {
@@ -162,8 +166,24 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
     // Send initial idle status
     this.send(sock, { type: 'queue:status', state: 'idle' });
 
-    // Deliver any missed match:found event (race condition: WS was not connected when matchmaker ran)
-    this.deliverPendingMatch(sock).catch(() => undefined);
+    // Recovery cascade — three layers, each catches a different failure mode:
+    //   1. lobby:pending-match Redis key (fresh, 60 s TTL) — set by matchmaker.
+    //   2. DB lookup for any active (PENDING/RUNNING) match — survives Redis
+    //      restarts, key expirations, server restarts, and tab/page reloads.
+    //      This is the durable safety net that prevents players from getting
+    //      lost between the queue and an in-flight match.
+    void this.recoverActiveMatch(sock);
+  }
+
+  /** Try Redis pending-match first, fall back to DB lookup. */
+  private async recoverActiveMatch(sock: AuthedSocket): Promise<void> {
+    const delivered = await this.deliverPendingMatch(sock).catch(() => false);
+    if (delivered) return;
+    await this.deliverActiveMatchFromDb(sock).catch((e) => {
+      this.log.warn(
+        `active-match db lookup failed for user ${sock.userId}: ${(e as Error).message}`,
+      );
+    });
   }
 
   private onMessage(sock: AuthedSocket, raw: string): void {
@@ -208,6 +228,13 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
           return false;
         });
         if (redelivered) continue;
+        // DB-backed safety net: catches every scenario where the Redis
+        // pending-match key is gone (expired, redelivered, Redis restart).
+        const dbDelivered = await this.deliverActiveMatchFromDb(sock).catch((e) => {
+          this.log.warn(`db active-match redeliver failed for user ${sock.userId}: ${(e as Error).message}`);
+          return false;
+        });
+        if (dbDelivered) continue;
         if (sock.longWaitNotified) sock.longWaitNotified = false;
         this.send(sock, { type: 'queue:status', state: 'idle' });
         continue;
@@ -247,11 +274,11 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
     // The key has a 60-second TTL and is deleted by deliverPendingMatch on re-delivery.
   }
 
-  private async deliverPendingMatch(sock: AuthedSocket): Promise<void> {
+  private async deliverPendingMatch(sock: AuthedSocket): Promise<boolean> {
     // NOTE: must use the regular Redis client, NOT `this.sub`. ioredis blocks
     // GET/DEL on a connection that is in subscriber mode.
     const raw = await this.redis.client.get(`lobby:pending-match:${sock.userId}`);
-    if (!raw) return;
+    if (!raw) return false;
     try {
       const ev = JSON.parse(raw) as MatchFoundEvent;
       this.send(sock, {
@@ -264,9 +291,53 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
       });
       await this.redis.client.del(`lobby:pending-match:${sock.userId}`);
       this.log.log(`delivered pending match ${ev.matchId} to user ${sock.userId} on reconnect`);
+      return true;
     } catch {
-      // ignore parse errors
+      return false;
     }
+  }
+
+  /**
+   * Durable recovery: query DB for any non-terminal match the user is in and
+   * re-emit match:found with a freshly-signed match token. Catches every
+   * scenario where the Redis pending-match key is gone (TTL expired, Redis
+   * restart, redelivered already, tab opened in a new browser, etc.).
+   */
+  private async deliverActiveMatchFromDb(sock: AuthedSocket): Promise<boolean> {
+    const match = await this.prisma.match.findFirst({
+      where: {
+        OR: [{ player1Id: sock.userId }, { player2Id: sock.userId }],
+        status: { in: ['PENDING', 'RUNNING'] },
+      },
+      orderBy: { id: 'desc' },
+      include: {
+        player1: { select: { id: true, username: true } },
+        player2: { select: { id: true, username: true } },
+        room: { select: { id: true, mode: true, stakeUsd: true } },
+      },
+    });
+    if (!match) return false;
+    // Confirm the game-server seed is still alive — otherwise the user can
+    // never actually attach to the match instance, so we should NOT lure them
+    // onto a dead match page.
+    const seedExists = await this.redis.client.exists(`match:seed:${match.id}`);
+    if (!seedExists) return false;
+    const opponent = match.player1Id === sock.userId ? match.player2 : match.player1;
+    const gameWsUrl = process.env.GAME_PUBLIC_WS_URL ?? 'ws://localhost/ws/match';
+    this.send(sock, {
+      type: 'match:found',
+      matchId: match.id,
+      matchToken: this.tokens.sign({ matchId: match.id, userId: sock.userId }),
+      gameWsUrl,
+      opponent: { id: opponent.id, username: opponent.username },
+      room: {
+        id: match.room.id,
+        mode: match.room.mode,
+        ...(match.room.stakeUsd ? { stakeUsd: String(match.room.stakeUsd) } : {}),
+      },
+    });
+    this.log.log(`recovered active match ${match.id} for user ${sock.userId} from DB`);
+    return true;
   }
 
   /**
