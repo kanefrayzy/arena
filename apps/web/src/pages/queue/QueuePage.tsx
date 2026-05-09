@@ -29,6 +29,7 @@ export function QueuePage() {
   const [error, setError] = useState<string | null>(null);
   const joinedRef = useRef(false);
   const sawSearchingRef = useRef(false);
+  const idleAfterSearchCountRef = useRef(0);
   const navigatedRef = useRef(false);
   const baseWaitMsRef = useRef(0);
   const baseAtRef = useRef(Date.now());
@@ -72,18 +73,22 @@ export function QueuePage() {
       lastWsEventAtRef.current = Date.now();
       if (ev.type === 'queue:status') {
         if (ev.state === 'idle') {
-          // Server says we're not in the queue anymore. If we already saw a
-          // 'searching' tick, this means we silently fell out without a
-          // 'match:found' (e.g. the server lost the publish event). Don't
-          // freeze the timer — bail out to home with a friendly error so the
-          // user can retry instead of staring at a stuck spinner.
+          // Server says we're not in the queue anymore. Count consecutive idle
+          // ticks before erroring — a single idle can be a transient race
+          // between matchmaker dequeueing the user and the match being persisted
+          // to DB (status tick fires between those two events). Require 3
+          // consecutive idle ticks (~3 s) before concluding "connection lost".
           if (sawSearchingRef.current && !navigatedRef.current) {
-            navigatedRef.current = true;
-            setError(t('queue.lost_connection'));
-            window.setTimeout(() => nav('/home'), 1500);
+            idleAfterSearchCountRef.current += 1;
+            if (idleAfterSearchCountRef.current >= 3) {
+              navigatedRef.current = true;
+              setError(t('queue.lost_connection'));
+              window.setTimeout(() => nav('/home'), 1500);
+            }
           }
           return;
         }
+        idleAfterSearchCountRef.current = 0;
         sawSearchingRef.current = true;
         baseWaitMsRef.current = ev.waitMs ?? 0;
         baseAtRef.current = Date.now();

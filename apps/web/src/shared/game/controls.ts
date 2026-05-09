@@ -31,6 +31,8 @@ export class Controls {
   /** Manual tap-to-aim: set when user taps canvas area outside joystick/buttons. */
   private tapAngle: number | null = null;
   private tapAngleFrame = 0;
+  /** One-shot fire triggered by a canvas tap (tap-to-shoot). Consumed in read(). */
+  private tapFire = false;
 
   /** Player position in canvas (CSS) pixels — used to compute aim angle. */
   playerCanvasX = 0;
@@ -155,12 +157,13 @@ export class Controls {
       const hitFire = t.clientX >= fireRect.left && t.clientX <= fireRect.right && t.clientY >= fireRect.top && t.clientY <= fireRect.bottom;
       const hitAbil = t.clientX >= abilRect.left && t.clientX <= abilRect.right && t.clientY >= abilRect.top && t.clientY <= abilRect.bottom;
       if (hitJoy || hitFire || hitAbil) return;
-      // Aim toward tap
+      // Aim toward tap and trigger a one-shot fire
       const rect = canvas.getBoundingClientRect();
       const ax = t.clientX - rect.left - this.playerCanvasX;
       const ay = t.clientY - rect.top - this.playerCanvasY;
       this.tapAngle = Math.atan2(ay, ax);
       this.tapAngleFrame = 0;
+      this.tapFire = true;
     };
     canvas.addEventListener('touchstart', canvasTapStart, { passive: true });
 
@@ -219,7 +222,10 @@ export class Controls {
       angle = Math.atan2(dy, dx);
     }
 
-    const fire = this.mouseDown || this.keys.has('Space') || this.fireTouch;
+    // tapFire: one-shot — consume immediately so only one input frame fires
+    const tapFired = this.tapFire;
+    this.tapFire = false;
+    const fire = this.mouseDown || this.keys.has('Space') || this.fireTouch || tapFired;
     const ability = this.abilityHeld || this.abilityTouch;
 
     // Use viewScale/canvas to silence unused warnings — needed if we add zoom later
