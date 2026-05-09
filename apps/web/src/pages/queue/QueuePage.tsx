@@ -73,19 +73,11 @@ export function QueuePage() {
       lastWsEventAtRef.current = Date.now();
       if (ev.type === 'queue:status') {
         if (ev.state === 'idle') {
-          // Server says we're not in the queue anymore. Count consecutive idle
-          // ticks before erroring — a single idle can be a transient race
-          // between matchmaker dequeueing the user and the match being persisted
-          // to DB (status tick fires between those two events). Require 3
-          // consecutive idle ticks (~3 s) before concluding "connection lost".
-          if (sawSearchingRef.current && !navigatedRef.current) {
-            idleAfterSearchCountRef.current += 1;
-            if (idleAfterSearchCountRef.current >= 3) {
-              navigatedRef.current = true;
-              setError(t('queue.lost_connection'));
-              window.setTimeout(() => nav('/home'), 1500);
-            }
-          }
+          // Server says we're not in the queue. After page reload the lobby WS
+          // reconnects and may briefly deliver 'idle' before the server
+          // re-delivers match:found. We silently ignore idle ticks here —
+          // the HTTP fallback poll will handle the case where the user
+          // genuinely fell out of the queue.
           return;
         }
         idleAfterSearchCountRef.current = 0;

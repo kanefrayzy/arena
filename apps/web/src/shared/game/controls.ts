@@ -131,6 +131,7 @@ export class Controls {
     };
     fireBtn.addEventListener('touchstart', fireDown, { passive: false });
     fireBtn.addEventListener('touchend', fireUp, { passive: false });
+    fireBtn.addEventListener('touchcancel', fireUp, { passive: false });
     fireBtn.addEventListener('mousedown', fireDown);
     fireBtn.addEventListener('mouseup', fireUp);
 
@@ -144,6 +145,7 @@ export class Controls {
     };
     abilityBtn.addEventListener('touchstart', abilityDown, { passive: false });
     abilityBtn.addEventListener('touchend', abilityUp, { passive: false });
+    abilityBtn.addEventListener('touchcancel', abilityUp, { passive: false });
     abilityBtn.addEventListener('mousedown', abilityDown);
     abilityBtn.addEventListener('mouseup', abilityUp);
 
