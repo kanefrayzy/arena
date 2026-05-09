@@ -23,7 +23,7 @@ export function startSW(): void {
       });
     },
     onOfflineReady() {
-      toast.success('Готово к offline', 'Базовая оболочка приложения закэширована.');
+      // silent
     },
     onRegisterError(err: unknown) {
       // eslint-disable-next-line no-console

@@ -45,7 +45,7 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
 
   // Static serve uploaded sprites at /uploads/...
-  const uploadsRoot = join(process.cwd(), 'uploads');
+  const uploadsRoot = join(process.cwd(), 'apps', 'api', 'uploads');
   if (!existsSync(uploadsRoot)) mkdirSync(uploadsRoot, { recursive: true });
   app.use('/uploads', expressStatic(uploadsRoot, { maxAge: '7d', immutable: false }));
 
