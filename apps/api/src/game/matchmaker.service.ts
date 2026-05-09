@@ -116,11 +116,16 @@ export class MatchmakerService implements OnModuleInit, OnModuleDestroy {
           room,
         });
       } catch (e) {
-        this.log.error(`pair create failed: ${(e as Error).message}`);
-        // Re-queue both players so they don't get stuck without a match or a queue slot.
-        const qMode = mode.toLowerCase() as QueueMode;
-        await this.queue.join(a.userId, qMode, roomId).catch(() => undefined);
-        await this.queue.join(b.userId, qMode, roomId).catch(() => undefined);
+        const msg = (e as Error).message ?? '';
+        this.log.error(`pair create failed: ${msg}`);
+        // Don't re-queue on balance errors — those players can't pay and would
+        // loop forever. They'll get 'idle' from the lobby WS and the client
+        // will redirect them home.
+        if (!msg.includes('insufficient_balance')) {
+          const qMode = mode.toLowerCase() as QueueMode;
+          await this.queue.join(a.userId, qMode, roomId).catch(() => undefined);
+          await this.queue.join(b.userId, qMode, roomId).catch(() => undefined);
+        }
       }
     }
 

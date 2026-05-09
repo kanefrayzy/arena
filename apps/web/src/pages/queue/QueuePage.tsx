@@ -73,11 +73,18 @@ export function QueuePage() {
       lastWsEventAtRef.current = Date.now();
       if (ev.type === 'queue:status') {
         if (ev.state === 'idle') {
-          // Server says we're not in the queue. After page reload the lobby WS
-          // reconnects and may briefly deliver 'idle' before the server
-          // re-delivers match:found. We silently ignore idle ticks here —
-          // the HTTP fallback poll will handle the case where the user
-          // genuinely fell out of the queue.
+          // Server says we're not in the queue.
+          // If we were previously searching and now kicked out (e.g. match
+          // creation failed due to insufficient balance), count consecutive
+          // idle ticks and redirect home after 3 (~3s).
+          if (sawSearchingRef.current) {
+            idleAfterSearchCountRef.current += 1;
+            if (idleAfterSearchCountRef.current >= 3 && !navigatedRef.current) {
+              navigatedRef.current = true;
+              setError(t('queue.insufficient_balance'));
+              window.setTimeout(() => nav('/home'), 2000);
+            }
+          }
           return;
         }
         idleAfterSearchCountRef.current = 0;

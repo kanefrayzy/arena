@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../shared/api/client';
@@ -6,6 +6,9 @@ import { api } from '../../shared/api/client';
 export function SplashPage() {
   const nav = useNavigate();
   const [checking, setChecking] = useState(true);
+  const [logoFailed, setLogoFailed] = useState(false);
+  // Cache-bust key so a newly-uploaded logo shows without a hard refresh.
+  const cbRef = useRef(`?v=${Math.floor(Date.now() / 60_000)}`);
 
   useEffect(() => {
     void api.get('/auth/me')
@@ -24,9 +27,18 @@ export function SplashPage() {
       <div className="pointer-events-none absolute bottom-20 left-10 h-40 w-40 rounded-full bg-game-cyan/20 blur-3xl" />
 
       <div className="relative animate-pop-in">
-        <h1 className="game-title text-7xl text-game-yellow drop-shadow-[0_4px_0_rgba(0,0,0,0.5)]">
-          {t('splash.title')}
-        </h1>
+        {logoFailed ? (
+          <h1 className="game-title text-7xl text-game-yellow drop-shadow-[0_4px_0_rgba(0,0,0,0.5)]">
+            {t('splash.title')}
+          </h1>
+        ) : (
+          <img
+            src={`/uploads/branding/logo.png${cbRef.current}`}
+            onError={() => setLogoFailed(true)}
+            alt={t('splash.title')}
+            className="mx-auto max-h-32 w-auto object-contain drop-shadow-[0_4px_16px_rgba(0,0,0,0.6)]"
+          />
+        )}
         <div className="mx-auto mt-2 h-1 w-24 rounded-full bg-game-yellow/60" />
         <p className="mt-4 font-display text-base uppercase tracking-widest text-white/70">
           {t('splash.subtitle')}
