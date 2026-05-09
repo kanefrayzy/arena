@@ -90,8 +90,8 @@ export function BrandingTab() {
               url={url}
               busy={busy === slot}
               copied={copied === url}
-              onUpload={(f) => upload(slot, f)}
-              onCopy={url ? () => copyUrl(url) : undefined}
+              onUpload={(f) => { void upload(slot, f); }}
+              {...(url !== null ? { onCopy: () => copyUrl(url) } : {})}
             />
           );
         })}
