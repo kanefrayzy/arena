@@ -447,14 +447,14 @@ export function MatchPage() {
       <button
         ref={fireRef}
         type="button"
-        className="pointer-events-auto absolute bottom-6 right-6 h-24 w-24 select-none rounded-full bg-gradient-to-b from-[#ffe066]/50 to-[#f5b800]/50 font-display text-lg uppercase text-[#1a1450]/80 shadow-[0_6px_0_rgba(184,130,0,0.4),0_8px_18px_rgba(255,209,59,0.25)] active:translate-y-[3px] active:shadow-[0_3px_0_rgba(184,130,0,0.4)] backdrop-blur-sm border border-[#ffe066]/30"
+        className="pointer-events-auto absolute bottom-6 right-6 h-24 w-24 select-none rounded-full bg-gradient-to-b from-[#ffe066]/25 to-[#f5b800]/25 font-display text-lg uppercase text-white/60 shadow-[0_4px_0_rgba(184,130,0,0.2)] active:translate-y-[3px] active:shadow-[0_2px_0_rgba(184,130,0,0.2)] backdrop-blur-sm border border-[#ffe066]/20"
       >
         FIRE
       </button>
       <button
         ref={abRef}
         type="button"
-        className="pointer-events-auto absolute bottom-32 right-12 h-16 w-16 select-none rounded-full bg-gradient-to-b from-[#a774ff]/50 to-[#7a3eff]/50 overflow-hidden shadow-[0_5px_0_rgba(77,31,184,0.4),0_6px_14px_rgba(138,79,255,0.25)] active:translate-y-[2px] active:shadow-[0_3px_0_rgba(77,31,184,0.4)] backdrop-blur-sm border border-[#a774ff]/30 flex items-center justify-center"
+        className="pointer-events-auto absolute bottom-32 right-12 h-16 w-16 select-none rounded-full bg-gradient-to-b from-[#a774ff]/25 to-[#7a3eff]/25 overflow-hidden shadow-[0_4px_0_rgba(77,31,184,0.2)] active:translate-y-[2px] active:shadow-[0_2px_0_rgba(77,31,184,0.2)] backdrop-blur-sm border border-[#a774ff]/20 flex items-center justify-center"
       >
         {/* Ability icon or fallback letter */}
         {welcome?.you.ability?.iconUrl ? (
