@@ -38,4 +38,4 @@ WORKDIR /workspace
 COPY --from=build /workspace ./
 EXPOSE 3000
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["sh", "-c", "pnpm --filter @arena/api prisma:deploy && node apps/api/dist/main.js"]
+CMD ["sh", "-c", "if [ -z \"$(ls -A apps/api/prisma/migrations 2>/dev/null)\" ]; then pnpm --filter @arena/api exec prisma db push --schema=./prisma/schema.prisma --skip-generate --accept-data-loss; else pnpm --filter @arena/api prisma:deploy; fi && pnpm --filter @arena/api prisma:seed || true && node apps/api/dist/main.js"]
