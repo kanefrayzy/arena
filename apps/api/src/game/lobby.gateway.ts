@@ -163,26 +163,32 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
     ws.on('error', () => undefined);
     ws.on('message', (data) => this.onMessage(sock, data.toString()));
 
-    // Send initial idle status
-    this.send(sock, { type: 'queue:status', state: 'idle' });
-
     // Recovery cascade — three layers, each catches a different failure mode:
-    //   1. lobby:pending-match Redis key (fresh, 60 s TTL) — set by matchmaker.
+    //   1. lobby:pending-match Redis key (fresh, 300 s TTL) — set by matchmaker.
     //   2. DB lookup for any active (PENDING/RUNNING) match — survives Redis
     //      restarts, key expirations, server restarts, and tab/page reloads.
     //      This is the durable safety net that prevents players from getting
     //      lost between the queue and an in-flight match.
-    void this.recoverActiveMatch(sock);
+    //
+    // Recover BEFORE sending initial 'idle' so a player who just had a match
+    // created (publish raced their connect) doesn't see a confusing idle frame
+    // before the match:found push. The recovery sends match:found itself if a
+    // match is found; we still emit idle as the baseline state when nothing
+    // was recovered, so QueuePage knows the WS is alive.
+    void this.recoverActiveMatch(sock).then((delivered) => {
+      if (!delivered) this.send(sock, { type: 'queue:status', state: 'idle' });
+    });
   }
 
-  /** Try Redis pending-match first, fall back to DB lookup. */
-  private async recoverActiveMatch(sock: AuthedSocket): Promise<void> {
+  /** Try Redis pending-match first, fall back to DB lookup. Returns true if a match:found was sent. */
+  private async recoverActiveMatch(sock: AuthedSocket): Promise<boolean> {
     const delivered = await this.deliverPendingMatch(sock).catch(() => false);
-    if (delivered) return;
-    await this.deliverActiveMatchFromDb(sock).catch((e) => {
+    if (delivered) return true;
+    return this.deliverActiveMatchFromDb(sock).catch((e) => {
       this.log.warn(
         `active-match db lookup failed for user ${sock.userId}: ${(e as Error).message}`,
       );
+      return false;
     });
   }
 

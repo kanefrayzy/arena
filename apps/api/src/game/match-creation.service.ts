@@ -147,11 +147,14 @@ export class MatchCreationService {
       };
       // Store as fallback for players whose lobby WS was not connected at this exact moment.
       // The lobby gateway reads this on (re)connect and delivers it, then deletes the key.
+      // 5 min TTL is comfortably longer than any realistic reconnect/cold-load window
+      // and well under the match seed lifetime (10 min), so a player who briefly loses
+      // their connection at the worst possible moment can still recover into the match.
       await this.redis.client.set(
         `lobby:pending-match:${self.id}`,
         JSON.stringify(ev),
         'EX',
-        60,
+        300,
       );
       await this.redis.client.publish(MATCH_FOUND_CHANNEL, JSON.stringify(ev));
     }

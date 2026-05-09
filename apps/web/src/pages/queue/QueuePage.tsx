@@ -4,18 +4,35 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../../shared/api/client';
 import { lobby, type LobbyEvent } from '../../shared/ws/lobby';
 
+interface QueueStatusResponse {
+  inQueue: boolean;
+  mode?: string;
+  roomId?: number;
+  waitMs?: number;
+  activeMatch?: {
+    matchId: string;
+    matchToken: string;
+    gameWsUrl: string;
+    opponent: { id: number; username: string };
+    room: { id: number; mode: 'FREE' | 'CASUAL' | 'STAKE'; stakeUsd?: string };
+  };
+}
+
 export function QueuePage() {
   const { t } = useTranslation();
   const nav = useNavigate();
   const [params] = useSearchParams();
   const mode = (params.get('mode') ?? 'free') as 'free' | 'casual' | 'stake';
   const roomId = params.get('roomId');
-  const [waitMs, setWaitMs] = useState(0);
+  const [seconds, setSeconds] = useState(0);
   const [longWait, setLongWait] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const joinedRef = useRef(false);
   const sawSearchingRef = useRef(false);
   const navigatedRef = useRef(false);
+  const baseWaitMsRef = useRef(0);
+  const baseAtRef = useRef(Date.now());
+  const lastWsEventAtRef = useRef(Date.now());
 
   useEffect(() => {
     if (!joinedRef.current) {
@@ -35,8 +52,24 @@ export function QueuePage() {
       })();
     }
 
+    const navigateToMatch = (m: NonNullable<QueueStatusResponse['activeMatch']>) => {
+      if (navigatedRef.current) return;
+      navigatedRef.current = true;
+      sessionStorage.setItem(
+        `match:${m.matchId}`,
+        JSON.stringify({
+          matchToken: m.matchToken,
+          gameWsUrl: m.gameWsUrl,
+          opponent: m.opponent,
+          room: m.room,
+        }),
+      );
+      nav(`/match/${m.matchId}`);
+    };
+
     lobby.connect();
     const off = lobby.on((ev: LobbyEvent) => {
+      lastWsEventAtRef.current = Date.now();
       if (ev.type === 'queue:status') {
         if (ev.state === 'idle') {
           // Server says we're not in the queue anymore. If we already saw a
@@ -52,23 +85,74 @@ export function QueuePage() {
           return;
         }
         sawSearchingRef.current = true;
-        setWaitMs(ev.waitMs ?? 0);
+        baseWaitMsRef.current = ev.waitMs ?? 0;
+        baseAtRef.current = Date.now();
         setLongWait(ev.state === 'long_wait');
       } else if (ev.type === 'match:found') {
-        if (navigatedRef.current) return; // idempotent: handle redelivery
-        navigatedRef.current = true;
-        sessionStorage.setItem(
-          `match:${ev.matchId}`,
-          JSON.stringify({ matchToken: ev.matchToken, gameWsUrl: ev.gameWsUrl, opponent: ev.opponent, room: ev.room }),
-        );
-        nav(`/match/${ev.matchId}`);
+        navigateToMatch({
+          matchId: ev.matchId,
+          matchToken: ev.matchToken,
+          gameWsUrl: ev.gameWsUrl,
+          opponent: ev.opponent,
+          room: ev.room,
+        });
       }
     });
 
+    // Local display ticker — independent of server pushes so the UI never
+    // appears frozen at "0s" even if the lobby WS goes silent for a moment.
+    const displayTimer = window.setInterval(() => {
+      const now = Date.now();
+      const ms = baseWaitMsRef.current + (now - baseAtRef.current);
+      setSeconds(Math.floor(ms / 1000));
+    }, 250);
+
+    // HTTP fallback: poll /queue/status if the lobby WS hasn't said anything
+    // useful for a while. Catches every scenario where the WS push was lost
+    // (Redis pub/sub flake, lobby socket flap, server restart) so the player
+    // is never stranded watching a frozen spinner. Also auto-bails to /home if
+    // the user is no longer in queue and no active match exists.
+    let consecutiveMissing = 0;
+    const httpFallback = window.setInterval(() => {
+      if (navigatedRef.current) return;
+      const silentMs = Date.now() - lastWsEventAtRef.current;
+      // Only poll once we've been WS-silent for >4s (avoid hammering API on healthy path).
+      if (silentMs < 4000) return;
+      void (async () => {
+        try {
+          const res = await api.get<QueueStatusResponse>('/queue/status');
+          if (navigatedRef.current) return;
+          if (res.activeMatch) {
+            navigateToMatch(res.activeMatch);
+            return;
+          }
+          if (res.inQueue) {
+            sawSearchingRef.current = true;
+            baseWaitMsRef.current = res.waitMs ?? 0;
+            baseAtRef.current = Date.now();
+            consecutiveMissing = 0;
+            return;
+          }
+          // Neither queued nor in a match. After 2 consecutive misses (~6s)
+          // give up and send the player home with an explanation.
+          consecutiveMissing += 1;
+          if (consecutiveMissing >= 2 && !navigatedRef.current) {
+            navigatedRef.current = true;
+            setError(t('queue.lost_connection'));
+            window.setTimeout(() => nav('/home'), 1500);
+          }
+        } catch {
+          /* ignore transient HTTP errors */
+        }
+      })();
+    }, 3000);
+
     return () => {
       off();
+      window.clearInterval(displayTimer);
+      window.clearInterval(httpFallback);
     };
-  }, [mode, nav]);
+  }, [mode, nav, roomId, t]);
 
   const cancel = async () => {
     try {
@@ -78,8 +162,6 @@ export function QueuePage() {
     }
     nav('/home');
   };
-
-  const seconds = Math.floor(waitMs / 1000);
 
   return (
     <div className="relative flex h-full flex-col items-center justify-center gap-8 overflow-hidden p-6">

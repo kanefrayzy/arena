@@ -171,6 +171,10 @@ export function MatchPage() {
           // is idempotent (guarded by countdownStartedRef), so calling it here
           // is safe even when the welcome `else` branch already kicked it off.
           if (!countdownStartedRef.current) startCountdown();
+          // Defensive: if the overlay is somehow still up by the time real
+          // gameplay snapshots are flowing, force-hide it. Snapshots are the
+          // ground truth that the opponent is here and the simulation is live.
+          setWaitingForOpp(false);
           // HUD updates ALWAYS run, even if the renderer isn't ready yet —
           // otherwise the player sees a frozen 0-second timer and HP bars
           // while sprite assets are still downloading. The visual snapshot is
