@@ -198,7 +198,14 @@ export function MatchPage() {
           // that follows S_MATCH_END races with the disconnect-toast timeout
           // — if onClose's nav('/home') wins, sessionStorage was never set
           // and the result page sees a blank screen).
-          sessionStorage.setItem(`result:${matchId}`, JSON.stringify({ ...msg, opponent: info.opponent, room: info.room }));
+          //
+          // We also include `youId` because ResultPage is reached via plain
+          // navigation (no guard) and after a mid-match page refresh the
+          // global auth store may not yet be populated — useAuth().me would
+          // be null and the page would render `null` (“blue” screen). With
+          // youId baked into the result payload the page can render without
+          // depending on the auth store.
+          sessionStorage.setItem(`result:${matchId}`, JSON.stringify({ ...msg, opponent: info.opponent, room: info.room, youId }));
           if (msg.reason === 'disconnect') {
             // Tell the player whose perspective they're seeing this from:
             // if YOU lost on disconnect, it's YOUR connection that dropped

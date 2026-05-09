@@ -22,7 +22,7 @@ export class MatchesController {
     const items = await this.prisma.match.findMany({
       where: {
         OR: [{ player1Id: userId }, { player2Id: userId }],
-        status: { in: ['FINISHED', 'CANCELLED'] },
+        status: 'FINISHED',
       },
       orderBy: { startedAt: 'desc' },
       take,

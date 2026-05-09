@@ -10,6 +10,10 @@ interface ResultData {
   score: Record<string, number>;
   opponent: { id: number; username: string };
   room?: { id: number; mode: 'FREE' | 'CASUAL' | 'STAKE'; stakeUsd?: string };
+  /** Embedded by MatchPage so the result page renders even when the global
+   *  auth store hasn't bootstrapped yet (e.g. after a mid-match page refresh
+   *  the user lands on /result without ever passing through HomePage). */
+  youId?: number;
 }
 
 export function ResultPage() {
@@ -29,9 +33,13 @@ export function ResultPage() {
     setData(JSON.parse(raw) as ResultData);
   }, [id, nav]);
 
-  if (!data || !me) return null;
+  if (!data) return null;
 
-  const youId = me.id;
+  // Prefer the youId baked into the result payload; fall back to the auth
+  // store (regular happy-path navigation from HomePage). If neither is
+  // available we still render the result with no "you" identification rather
+  // than a blank screen.
+  const youId = data.youId ?? me?.id ?? -1;
   const youHp = data.score[String(youId)] ?? 0;
   const oppHp = data.score[String(data.opponent.id)] ?? 0;
   const outcome: 'win' | 'loss' | 'draw' =

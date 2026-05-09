@@ -31,6 +31,11 @@ export class QueueService {
   async join(userId: number, mode: QueueMode, roomId?: number): Promise<UserQueueState> {
     // Prevent double-queueing
     await this.leave(userId);
+    // Clear the recently-cancelled marker set by leave() above. Without this
+    // the matchmaker would skip the user for up to 10 seconds on every
+    // join-after-cancel, making a quick Cancel → Search retry feel like a
+    // 10-second hang before the actual pairing happens.
+    await this.redis.client.del(`mm:cancelled:${userId}`).catch(() => 0);
 
     const key = queueKey(mode, roomId);
     const now = Date.now();
