@@ -1,0 +1,32 @@
+{
+	email {$ADMIN_EMAIL}
+}
+
+{$DOMAIN} {
+	encode gzip zstd
+
+	@api path /api/*
+	handle @api {
+		reverse_proxy api:3000
+	}
+
+	@uploads path /uploads/*
+	handle @uploads {
+		reverse_proxy api:3000
+	}
+
+	@lobby path /ws/lobby /ws/lobby/*
+	handle @lobby {
+		reverse_proxy api:3000
+	}
+
+	@match path /ws/match /ws/match/*
+	handle @match {
+		reverse_proxy game:3001
+	}
+
+	# Static frontend (nginx prod build)
+	handle {
+		reverse_proxy web:80
+	}
+}
