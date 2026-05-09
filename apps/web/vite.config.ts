@@ -76,7 +76,8 @@ export default defineConfig({
   },
   build: {
     commonjsOptions: {
-      include: [/@arena\/protocol/, /@arena\/shared/, /node_modules/],
+      include: [/packages[\\/](protocol|shared)[\\/]/, /node_modules/],
+      transformMixedEsModules: true,
     },
   },
 });
