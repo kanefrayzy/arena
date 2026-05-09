@@ -378,6 +378,16 @@ export class PixiRenderer {
       }
     }
     await Promise.all(tasks);
+    // Re-paint the arena now that bg_tile (and other map textures) may have
+    // arrived — init() drew it earlier with the procedural fallback because
+    // sprite loading is intentionally non-blocking. Without this re-call the
+    // tiled background sprite never appears even after it finishes loading.
+    try {
+      this.drawArena();
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[renderer] drawArena after loadSprites failed', e);
+    }
   }
 
   private handleEvent(ev: SnapshotEvent): void {

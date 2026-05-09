@@ -27,6 +27,10 @@ interface SocketUserData {
   matchId: string;
   userId: number;
   authed: boolean;
+  /** The wrapper passed to Match.attachClient. Set in `open` once the match
+   *  resolves. Used by `close` to disambiguate a stale OLD-socket close event
+   *  from a real disconnect after a page-refresh reconnect. */
+  wrapper?: { send: (d: ArrayBuffer | Uint8Array, b: boolean, c?: boolean) => void; close: () => void };
 }
 
 const matches = new Map<string, Match>();
@@ -164,8 +168,8 @@ app.ws<SocketUserData>('/ws/match', {
         }
         return;
       }
-      match.attachClient(ud.userId, {
-        send: (data, isBinary, compress) => {
+      const wrapper = {
+        send: (data: ArrayBuffer | Uint8Array, isBinary: boolean, compress?: boolean) => {
           try {
             ws.send(data as Uint8Array, isBinary, compress);
           } catch {
@@ -179,7 +183,12 @@ app.ws<SocketUserData>('/ws/match', {
             /* ignore */
           }
         },
-      });
+      };
+      // Remember which wrapper this socket owns so the close handler can
+      // distinguish a real disconnect from a stale close arriving after a
+      // page-refresh reconnect has already replaced the entry.
+      ud.wrapper = wrapper;
+      match.attachClient(ud.userId, wrapper);
     });
   },
   message: (ws, message, isBinary) => {
@@ -226,7 +235,10 @@ app.ws<SocketUserData>('/ws/match', {
     log.info({ matchId: ud.matchId, userId: ud.userId, code }, 'ws close');
     const match = matches.get(ud.matchId);
     if (!match) return;
-    match.detachClient(ud.userId, Date.now());
+    // Pass the wrapper we registered with attachClient so Match can ignore
+    // stale close events from a socket that has already been replaced (page
+    // refresh races: new ws attaches before old ws's close event fires).
+    match.detachClient(ud.userId, ud.wrapper ?? null, Date.now());
     if (match.isFinished()) {
       // Drop the in-memory instance AND the Redis seed so the matchId is
       // no longer reattachable. Without seed deletion, a stale browser tab

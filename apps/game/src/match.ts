@@ -226,12 +226,22 @@ export class Match {
 
   /**
    * Remove a client socket.
+   * @param ws - the socket whose close event fired. Used to ignore stale closes
+   *   from a socket that has already been replaced by a fresh reconnect (page
+   *   refresh): the old socket's close event arrives AFTER attachClient has
+   *   stored the new wrapper, so without this check we would kick the freshly
+   *   reconnected player and forfeit them on a phantom disconnect.
    * @param explicit - true when the player deliberately quit (C_LEAVE).
    *   When false (unexpected close / page refresh) a 10-second reconnect window is granted.
    */
-  detachClient(userId: number, now: number, explicit = false): void {
+  detachClient(userId: number, ws: ClientSocket | null, now: number, explicit = false): void {
     const c = this.clients.get(userId);
     if (!c) return;
+    if (ws && c.ws !== ws) {
+      // Stale close from a socket that has already been replaced — ignore.
+      log.info({ matchId: this.matchId, userId }, 'detach: ignoring stale close');
+      return;
+    }
     this.clients.delete(userId);
     log.info({ matchId: this.matchId, userId, explicit }, 'client detached');
     if (this.sim.finished) return;
