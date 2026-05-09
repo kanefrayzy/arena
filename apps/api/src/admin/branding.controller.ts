@@ -69,7 +69,7 @@ export class BrandingController {
     }
     for (const row of rows) {
       const slot = row.key.replace('branding.', '');
-      if (slot in BRANDING_SLOTS) map[slot] = row.value as string;
+      if (slot in BRANDING_SLOTS) map[slot] = typeof row.value === 'string' ? row.value : String(row.value);
     }
     return { slots: BRANDING_SLOTS, branding: map };
   }
