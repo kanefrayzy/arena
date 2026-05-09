@@ -237,6 +237,36 @@ export class Sim {
       p.y = clamp(p.y, PLAYER_RADIUS, MAP_HEIGHT - PLAYER_RADIUS);
     }
 
+    // Player-player collision resolution — prevent characters from overlapping.
+    {
+      const pArr = [...this.players.values()];
+      if (pArr.length === 2) {
+        const [a, b] = pArr as [PlayerState, PlayerState];
+        const minDist = PLAYER_RADIUS * 2;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const dist2 = dx * dx + dy * dy;
+        if (dist2 < minDist * minDist) {
+          const dist = dist2 > 1e-6 ? Math.sqrt(dist2) : 0;
+          let nx: number;
+          let ny: number;
+          if (dist > 1e-6) {
+            nx = dx / dist;
+            ny = dy / dist;
+          } else {
+            // Exact overlap: push apart along X axis
+            nx = 1;
+            ny = 0;
+          }
+          const push = (minDist - (dist > 1e-6 ? dist : 0)) / 2;
+          a.x = clamp(a.x - nx * push, PLAYER_RADIUS, MAP_WIDTH - PLAYER_RADIUS);
+          a.y = clamp(a.y - ny * push, PLAYER_RADIUS, MAP_HEIGHT - PLAYER_RADIUS);
+          b.x = clamp(b.x + nx * push, PLAYER_RADIUS, MAP_WIDTH - PLAYER_RADIUS);
+          b.y = clamp(b.y + ny * push, PLAYER_RADIUS, MAP_HEIGHT - PLAYER_RADIUS);
+        }
+      }
+    }
+
     // Bullets
     for (const [bid, b] of this.bullets) {
       b.x += b.vx * dtS;
