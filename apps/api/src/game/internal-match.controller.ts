@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, Logger, Post, UseGuards } from '
 import { Prisma } from '@prisma/client';
 import { BOT_USER_ID } from '@arena/shared';
 import { PrismaService } from '../common/prisma/prisma.module';
+import { RedisService } from '../common/redis/redis.module';
 import { LedgerService } from '../wallet/ledger.service';
 import { HmacGuard } from './hmac.guard';
 
@@ -32,6 +33,7 @@ export class InternalMatchController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ledger: LedgerService,
+    private readonly redis: RedisService,
   ) {}
 
   @Post('start')
@@ -96,6 +98,10 @@ export class InternalMatchController {
     }
 
     this.log.log(`match ${body.matchId} finished (winner=${body.winnerId}, reason=${body.reason})`);
+    // Drop any leftover lobby:pending-match keys for both players. Their TTL
+    // (300 s) outlives the match itself, and a stale key delivered to a
+    // reconnecting lobby socket would dispatch the player into a dead match.
+    await this.cleanupLobbyKeys(match.player1Id, match.player2Id);
     return { ok: true };
   }
 
@@ -126,6 +132,21 @@ export class InternalMatchController {
     }
 
     this.log.warn(`match ${body.matchId} aborted: ${body.reason}`);
+    if (match) {
+      await this.cleanupLobbyKeys(match.player1Id, match.player2Id);
+    }
     return { ok: true };
+  }
+
+  /** Best-effort cleanup of lobby:pending-match keys for both participants. */
+  private async cleanupLobbyKeys(p1: number, p2: number): Promise<void> {
+    try {
+      await Promise.all([
+        this.redis.client.del(`lobby:pending-match:${p1}`),
+        this.redis.client.del(`lobby:pending-match:${p2}`),
+      ]);
+    } catch (e) {
+      this.log.warn(`cleanupLobbyKeys failed: ${(e as Error).message}`);
+    }
   }
 }

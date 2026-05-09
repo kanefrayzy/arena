@@ -287,6 +287,18 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
     if (!raw) return false;
     try {
       const ev = JSON.parse(raw) as MatchFoundEvent;
+      // Liveness check — a `lobby:pending-match` key has a 300 s TTL and
+      // outlives a typical short match. Without verifying that the seed is
+      // still alive AND the DB row isn't already terminal, we'd happily
+      // dispatch a player into a dead match (game-server returns NO_MATCH,
+      // user bounced back to /home) while their freshly-paired opponent sits
+      // alone on “waiting for opponent” and forfeits on the no-show timer.
+      const stillAlive = await this.isPendingMatchAlive(ev.matchId);
+      if (!stillAlive) {
+        await this.redis.client.del(`lobby:pending-match:${sock.userId}`).catch(() => 0);
+        this.log.warn(`stale pending match ${ev.matchId} for user ${sock.userId} — cleaned up`);
+        return false;
+      }
       this.send(sock, {
         type: 'match:found',
         matchId: ev.matchId,
@@ -301,6 +313,19 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
     } catch {
       return false;
     }
+  }
+
+  /** Returns true iff the match seed is still in Redis AND the DB row is in
+   *  a non-terminal state. Used by both pending-match delivery paths. */
+  private async isPendingMatchAlive(matchId: string): Promise<boolean> {
+    const seedExists = await this.redis.client.exists(`match:seed:${matchId}`);
+    if (!seedExists) return false;
+    const row = await this.prisma.match.findUnique({
+      where: { id: matchId },
+      select: { status: true },
+    });
+    if (!row) return false;
+    return row.status === 'PENDING' || row.status === 'RUNNING';
   }
 
   /**
@@ -361,6 +386,13 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
       ev = JSON.parse(raw) as MatchFoundEvent;
     } catch {
       // Corrupt payload — drop it so we don't loop.
+      await this.redis.client.del(key).catch(() => undefined);
+      return false;
+    }
+    // Same liveness gate as deliverPendingMatch — don't dispatch into a dead
+    // match just because the key hasn't TTL'd out yet.
+    const stillAlive = await this.isPendingMatchAlive(ev.matchId);
+    if (!stillAlive) {
       await this.redis.client.del(key).catch(() => undefined);
       return false;
     }

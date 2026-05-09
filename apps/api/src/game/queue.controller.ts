@@ -104,16 +104,31 @@ export class QueueController {
           opponent: { id: number; username: string };
           room: { id: number; mode: 'FREE' | 'CASUAL' | 'STAKE'; stakeUsd?: string };
         };
-        return {
-          inQueue: false,
-          activeMatch: {
-            matchId: ev.matchId,
-            matchToken: ev.matchToken,
-            gameWsUrl: ev.gameWsUrl,
-            opponent: ev.opponent,
-            room: ev.room,
-          },
-        };
+        // Verify the match is still alive before redirecting the client into
+        // it. The pending-match key has a 300 s TTL and CAN survive past the
+        // match itself (finish/abort don't clean it up). Returning a dead
+        // match here would send the player to /match/<dead> only to be
+        // bounced back by the game-server's NO_MATCH response.
+        const seedExists = await this.redis.client.exists(`match:seed:${ev.matchId}`);
+        const row = seedExists
+          ? await this.prisma.match.findUnique({ where: { id: ev.matchId }, select: { status: true } })
+          : null;
+        const alive = !!row && (row.status === 'PENDING' || row.status === 'RUNNING');
+        if (alive) {
+          return {
+            inQueue: false,
+            activeMatch: {
+              matchId: ev.matchId,
+              matchToken: ev.matchToken,
+              gameWsUrl: ev.gameWsUrl,
+              opponent: ev.opponent,
+              room: ev.room,
+            },
+          };
+        }
+        // Stale — drop the key so subsequent requests fall through to the DB
+        // path or report idle.
+        await this.redis.client.del(`lobby:pending-match:${userId}`).catch(() => 0);
       } catch {
         /* fall through */
       }
