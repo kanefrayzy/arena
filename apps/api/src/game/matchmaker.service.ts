@@ -77,7 +77,20 @@ export class MatchmakerService implements OnModuleInit, OnModuleDestroy {
 
   private async processQueue(key: string): Promise<void> {
     const { mode, roomId } = this.resolveQueueKeyToRoomId(key);
-    const waiters = await this.queue.snapshot(key, 100);
+    let waiters = await this.queue.snapshot(key, 100);
+
+    // Drop anyone who hit Cancel between the queue snapshot and now. Without
+    // this filter a user who joins+cancels in quick succession can still be
+    // paired (their leave() removes them from the zset, but if processQueue
+    // had already cached the snapshot it doesn't see the removal). The user
+    // would be on /home while their unaware opponent was sent into a match
+    // alone and forfeited on the no-show timer.
+    if (waiters.length > 0) {
+      const flags = await Promise.all(
+        waiters.map((w) => this.queue.isCancelled(w.userId)),
+      );
+      waiters = waiters.filter((_, i) => !flags[i]);
+    }
 
     // Pair off 2-by-2.
     while (waiters.length >= 2) {

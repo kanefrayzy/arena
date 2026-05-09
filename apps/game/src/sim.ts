@@ -158,6 +158,21 @@ export class Sim {
     if (p) p.lastInputAt = now;
   }
 
+  /**
+   * Reset the input-sequence counter so a freshly-reconnected MatchClient
+   * (which starts at seq=1) isn't treated as out-of-order. Without this every
+   * input from the new client is dropped by setInput's `seq <= lastInputSeq`
+   * guard, lastInputAt never updates, and the SIM kicks the reconnected
+   * player on its 10s AFK timer.
+   */
+  resetInputSeq(playerId: number): void {
+    const p = this.players.get(playerId);
+    if (p) {
+      p.lastInputSeq = 0;
+      this.pendingInputs.delete(playerId);
+    }
+  }
+
   /** Advance simulation by `dt` ms. Mutates state, populates `events`. */
   step(dt: number, now: number): void {
     if (this.finished) return;

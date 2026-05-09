@@ -53,6 +53,17 @@ export class QueueService {
 
   async leave(userId: number): Promise<boolean> {
     const data = await this.redis.client.hgetall(userKey(userId));
+    // Set a short-lived "recently cancelled" marker even when the user wasn't
+    // in the queue at exactly this instant — the matchmaker may have already
+    // pulled them into a snapshot and be milliseconds away from creating a
+    // match. processQueue() consults this key just before pairing, and
+    // match-creation also consults it before publishing match:found, so a
+    // user who clicked Cancel cannot end up forfeiting a match they didn't
+    // know was being created.
+    await this.redis.client.set(`mm:cancelled:${userId}`, '1', 'EX', 10);
+    // Best-effort: also drop any pending-match key the matchmaker may have
+    // racily set after leave() removed the user from the queue.
+    await this.redis.client.del(`lobby:pending-match:${userId}`).catch(() => 0);
     if (!data || !data.queueKey) return false;
     await this.redis.client
       .multi()
@@ -98,5 +109,13 @@ export class QueueService {
       m.del(userKey(uid));
     }
     await m.exec();
+  }
+
+  /** True iff the user pressed Cancel within the last few seconds. The
+   *  matchmaker uses this to skip pairing them when their leave() raced with
+   *  the snapshot/createMatch path. */
+  async isCancelled(userId: number): Promise<boolean> {
+    const v = await this.redis.client.get(`mm:cancelled:${userId}`);
+    return v === '1';
   }
 }

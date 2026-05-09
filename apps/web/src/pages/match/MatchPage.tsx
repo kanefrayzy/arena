@@ -193,14 +193,21 @@ export function MatchPage() {
         onMatchEnd: (msg: SMatchEnd) => {
           const youWon = msg.winnerId === youId;
           sfx.matchEnd(youWon);
+          // Stash the result IMMEDIATELY so the result page can render even
+          // if MatchPage unmounts before any delay timer fires (the WS close
+          // that follows S_MATCH_END races with the disconnect-toast timeout
+          // — if onClose's nav('/home') wins, sessionStorage was never set
+          // and the result page sees a blank screen).
+          sessionStorage.setItem(`result:${matchId}`, JSON.stringify({ ...msg, opponent: info.opponent, room: info.room }));
           if (msg.reason === 'disconnect') {
-            setDisconnectMsg('Противник отключился');
+            // Tell the player whose perspective they're seeing this from:
+            // if YOU lost on disconnect, it's YOUR connection that dropped
+            // (page refresh / network), not the opponent's.
+            setDisconnectMsg(youWon ? 'Противник отключился' : 'Соединение потеряно');
             window.setTimeout(() => {
-              sessionStorage.setItem(`result:${matchId}`, JSON.stringify({ ...msg, opponent: info.opponent, room: info.room }));
               nav(`/result/${matchId}`);
             }, 2000);
           } else {
-            sessionStorage.setItem(`result:${matchId}`, JSON.stringify({ ...msg, opponent: info.opponent, room: info.room }));
             nav(`/result/${matchId}`);
           }
         },

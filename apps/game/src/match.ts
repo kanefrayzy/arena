@@ -166,6 +166,12 @@ export class Match {
     // Reset AFK timer so a reconnecting player doesn't get kicked
     // before they have a chance to send their first input.
     this.sim.refreshInputAt(userId, Date.now());
+    // Reset the input-sequence counter. The browser-side MatchClient is a
+    // fresh instance after a page refresh and starts numbering inputs from 1
+    // again — if we keep the old high-water mark, every new input fails the
+    // `seq <= lastInputSeq` guard in sim.setInput, lastInputAt never advances,
+    // and the SIM forfeits the reconnected player on its 10 s AFK timer.
+    this.sim.resetInputSeq(userId);
     this.sendWelcome(userId);
     if (this.sim.finished && this.sim.result) {
       // Match already over — deliver the result immediately so the reconnecting
