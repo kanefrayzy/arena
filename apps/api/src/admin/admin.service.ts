@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException, StreamableFile } from '@nestjs/common';
+import { createReadStream, existsSync } from 'node:fs';
 import { Prisma } from '@prisma/client';
 import { SYSTEM_USER_ID } from '@arena/shared';
 import { PrismaService } from '../common/prisma/prisma.module';
@@ -473,8 +474,20 @@ export class AdminService {
         stakeUsd: m.stakeUsd.toString(),
         startedAt: m.startedAt?.toISOString() ?? null,
         finishedAt: m.finishedAt?.toISOString() ?? null,
+        replayUrl: m.replayUrl ?? null,
       })),
     };
+  }
+
+  async getReplayStream(matchId: string): Promise<StreamableFile> {
+    const m = await this.prisma.match.findUnique({ where: { id: matchId } });
+    if (!m) throw new NotFoundException({ code: 'MATCH_NOT_FOUND', message: 'match not found' });
+    if (!m.replayUrl) throw new NotFoundException({ code: 'NO_REPLAY', message: 'replay not recorded' });
+    if (!existsSync(m.replayUrl)) throw new NotFoundException({ code: 'REPLAY_FILE_MISSING', message: 'replay file not on disk' });
+    return new StreamableFile(createReadStream(m.replayUrl), {
+      type: 'application/gzip',
+      disposition: `attachment; filename="${matchId}.bin.gz"`,
+    });
   }
 
   /** Force-finish: set winner manually + settle (or refund both via null winner). */

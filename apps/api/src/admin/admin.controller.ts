@@ -3,12 +3,14 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Param,
   ParseIntPipe,
   Patch,
   Post,
   Query,
   Req,
+  StreamableFile,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -382,6 +384,12 @@ export class AdminController {
     @Req() req: Request,
   ) {
     return this.admin.refundMatch(id, this.adminId(req), body.reason);
+  }
+
+  @Get('matches/:id/replay')
+  @Header('Content-Type', 'application/gzip')
+  getReplay(@Param('id') id: string): Promise<StreamableFile> {
+    return this.admin.getReplayStream(id);
   }
 
   // Payments
