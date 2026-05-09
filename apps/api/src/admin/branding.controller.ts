@@ -39,7 +39,7 @@ const ALLOWED_MIME = new Set([
 const MAX_BYTES = 2 * 1024 * 1024; // 2 MB
 
 function uploadDir(): string {
-  const dir = join(process.cwd(), 'uploads', 'branding');
+  const dir = join(process.cwd(), 'apps', 'api', 'uploads', 'branding');
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   return dir;
 }

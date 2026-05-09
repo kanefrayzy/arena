@@ -317,7 +317,7 @@ interface ReplayMeta {
   tickRate: number;
   durationMs: number;
   obstacles: { x: number; y: number; w: number; h: number; kind?: string }[];
-  players: { id: number; username: string }[];
+  players: { id: number; username: string; characterId?: number; skinId?: number }[];
 }
 
 interface ReplaySnapshot {
@@ -329,13 +329,26 @@ interface ReplaySnapshot {
 interface ReplayData {
   meta: ReplayMeta;
   snapshots: ReplaySnapshot[];
+  /** characterId → battle sprite URL */
+  spriteUrls: Record<number, string>;
 }
 
 async function loadReplayData(matchId: string): Promise<ReplayData> {
-  const res = await fetch(`/api/admin/matches/${matchId}/replay`, { credentials: 'include' });
+  const [res, charsRes] = await Promise.all([
+    fetch(`/api/admin/matches/${matchId}/replay`, { credentials: 'include' }),
+    fetch('/api/content/characters', { credentials: 'include' }),
+  ]);
   if (!res.ok) {
     const j = await res.json().catch(() => null) as { error?: { message?: string } } | null;
     throw new Error(j?.error?.message ?? `HTTP ${res.status}`);
+  }
+  // Build characterId → spriteUrl map
+  const spriteUrls: Record<number, string> = {};
+  if (charsRes.ok) {
+    const chars = await charsRes.json().catch(() => []) as { id: number; battleSpriteUrl?: string | null }[];
+    for (const c of chars) {
+      if (c.battleSpriteUrl) spriteUrls[c.id] = c.battleSpriteUrl;
+    }
   }
   const ds = new DecompressionStream('gzip');
   const reader = res.body!.pipeThrough(ds).getReader();
@@ -378,12 +391,17 @@ async function loadReplayData(matchId: string): Promise<ReplayData> {
     }
   }
   if (!meta) throw new Error('replay meta missing');
-  return { meta, snapshots };
+  return { meta, snapshots, spriteUrls };
 }
 
 const OBS_COLOR: Record<string, string> = { crate: '#8b6914', barrel: '#4a7a8a', wall: '#555e6b' };
 
-function drawFrame(canvas: HTMLCanvasElement, data: ReplayData, frameIdx: number) {
+function drawFrame(
+  canvas: HTMLCanvasElement,
+  data: ReplayData,
+  frameIdx: number,
+  imgCache: Record<number, HTMLImageElement>,
+) {
   const { meta, snapshots } = data;
   const snap = snapshots[frameIdx];
   if (!snap) return;
@@ -409,14 +427,34 @@ function drawFrame(canvas: HTMLCanvasElement, data: ReplayData, frameIdx: number
   const p1id = meta.players[0]?.id;
   for (const p of snap.players) {
     const r = Math.max(6, 22 * scale);
-    const color = p.id === p1id ? '#4a9eff' : '#ff4a4a';
+    const isP1 = p.id === p1id;
+    const color = isP1 ? '#4a9eff' : '#ff4a4a';
+    // Look up characterId for this player from meta
+    const charId = meta.players.find((pl) => pl.id === p.id)?.characterId;
+    const img = charId !== undefined ? imgCache[charId] : undefined;
+    // Shadow
     ctx.beginPath(); ctx.arc(wx(p.x), wy(p.y), r + 1, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fill();
-    ctx.beginPath(); ctx.arc(wx(p.x), wy(p.y), r, 0, Math.PI * 2);
-    ctx.fillStyle = color; ctx.fill();
-    ctx.beginPath(); ctx.moveTo(wx(p.x), wy(p.y));
-    ctx.lineTo(wx(p.x) + Math.cos(p.angle) * r * 1.4, wy(p.y) + Math.sin(p.angle) * r * 1.4);
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = Math.max(1, 2 * scale); ctx.stroke();
+    if (img?.complete && img.naturalWidth > 0) {
+      // Draw sprite rotated toward facing direction
+      const d = r * 2;
+      ctx.save();
+      ctx.translate(wx(p.x), wy(p.y));
+      ctx.rotate(p.angle + Math.PI / 2);
+      // Tint ring
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.strokeStyle = color; ctx.lineWidth = Math.max(1.5, 2.5 * scale); ctx.stroke();
+      // Clip to circle
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.clip();
+      ctx.drawImage(img, -d / 2, -d / 2, d, d);
+      ctx.restore();
+    } else {
+      ctx.beginPath(); ctx.arc(wx(p.x), wy(p.y), r, 0, Math.PI * 2);
+      ctx.fillStyle = color; ctx.fill();
+      ctx.beginPath(); ctx.moveTo(wx(p.x), wy(p.y));
+      ctx.lineTo(wx(p.x) + Math.cos(p.angle) * r * 1.4, wy(p.y) + Math.sin(p.angle) * r * 1.4);
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = Math.max(1, 2 * scale); ctx.stroke();
+    }
     const bW = r * 2.4; const bH = Math.max(3, 4 * scale);
     const bx = wx(p.x) - bW / 2; const by = wy(p.y) - r - bH - 3 * scale;
     ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(bx, by, bW, bH);
@@ -441,10 +479,20 @@ function ReplayModal({ match, onClose }: { match: Match; onClose: () => void }) 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const lastTickRef = useRef<number>(0);
+  const imgCacheRef = useRef<Record<number, HTMLImageElement>>({});
 
   useEffect(() => {
     loadReplayData(match.id)
-      .then((d) => { setData(d); setFrame(0); })
+      .then((d) => {
+        setData(d);
+        setFrame(0);
+        // Preload character sprites
+        for (const [charIdStr, url] of Object.entries(d.spriteUrls)) {
+          const img = new Image();
+          img.src = url;
+          imgCacheRef.current[Number(charIdStr)] = img;
+        }
+      })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : 'ошибка загрузки'))
       .finally(() => setLoading(false));
     return () => cancelAnimationFrame(rafRef.current);
@@ -452,7 +500,7 @@ function ReplayModal({ match, onClose }: { match: Match; onClose: () => void }) 
 
   useEffect(() => {
     if (!data || !canvasRef.current) return;
-    drawFrame(canvasRef.current, data, frame);
+    drawFrame(canvasRef.current, data, frame, imgCacheRef.current);
   }, [data, frame]);
 
   useEffect(() => {
