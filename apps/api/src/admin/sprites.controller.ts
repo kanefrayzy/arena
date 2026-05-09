@@ -35,6 +35,7 @@ export const SPRITE_SLOTS = {
   barrel: { label: 'Бочка', w: 80, h: 80, hint: 'Металлическая бочка top-down' },
   wall: { label: 'Стена', w: 80, h: 80, hint: 'Каменный/бетонный блок' },
   bg_tile: { label: 'Фон (плитка)', w: 80, h: 80, hint: 'Бесшовная плитка пола 80×80' },
+  crosshair: { label: 'Прицел (курсор)', w: 32, h: 32, hint: 'PNG/WebP с прозрачным фоном, центр = точка прицела' },
 } as const;
 
 export type SpriteSlot = keyof typeof SPRITE_SLOTS;

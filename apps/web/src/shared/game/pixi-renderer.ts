@@ -100,6 +100,29 @@ export class PixiRenderer {
   private shakeAmp = 0;
   /** Whether audio has been unlocked by a user gesture. */
   private audioUnlocked = false;
+  /** Crosshair overlay layer (on top of everything, not inside world). */
+  private crosshairLayer: Container | null = null;
+  private crosshairGfx: Graphics | null = null;
+  private crosshairSprite: Sprite | null = null;
+  private crosshairMouseX = -999;
+  private crosshairMouseY = -999;
+  private readonly onMouseMove = (e: MouseEvent): void => {
+    const rect = this.app.canvas.getBoundingClientRect();
+    this.crosshairMouseX = e.clientX - rect.left;
+    this.crosshairMouseY = e.clientY - rect.top;
+    if (this.crosshairLayer) {
+      this.crosshairLayer.x = this.crosshairMouseX;
+      this.crosshairLayer.y = this.crosshairMouseY;
+    }
+  };
+  private readonly onMouseEnter = (): void => {
+    if (this.crosshairLayer) this.crosshairLayer.visible = true;
+    this.app.canvas.style.cursor = 'none';
+  };
+  private readonly onMouseLeave = (): void => {
+    if (this.crosshairLayer) this.crosshairLayer.visible = false;
+    this.app.canvas.style.cursor = '';
+  };
   private readonly unlockAudio = (): void => {
     if (this.audioUnlocked) return;
     this.audioUnlocked = true;
@@ -137,11 +160,15 @@ export class PixiRenderer {
     // make the player stare at a blank background while snapshots are dropped.
     void this.loadSprites().catch(() => undefined);
     this.drawArena();
+    this.initCrosshair();
     this.app.ticker.add(() => this.tick(this.app.ticker!.deltaMS));
     window.addEventListener('resize', this.handleResize);
     // Unlock audio on first user interaction (required by browsers).
     document.addEventListener('pointerdown', this.unlockAudio);
     document.addEventListener('keydown', this.unlockAudio);
+    this.app.canvas.addEventListener('mousemove', this.onMouseMove);
+    this.app.canvas.addEventListener('mouseenter', this.onMouseEnter);
+    this.app.canvas.addEventListener('mouseleave', this.onMouseLeave);
     this.handleResize();
   }
 
@@ -149,6 +176,9 @@ export class PixiRenderer {
     window.removeEventListener('resize', this.handleResize);
     document.removeEventListener('pointerdown', this.unlockAudio);
     document.removeEventListener('keydown', this.unlockAudio);
+    this.app.canvas.removeEventListener('mousemove', this.onMouseMove);
+    this.app.canvas.removeEventListener('mouseenter', this.onMouseEnter);
+    this.app.canvas.removeEventListener('mouseleave', this.onMouseLeave);
     try {
       this.app.destroy(true, { children: true });
     } catch {
@@ -332,6 +362,56 @@ export class PixiRenderer {
     return { ...ev, y: MAP_HEIGHT - Number(ev.y) };
   }
 
+  private initCrosshair(): void {
+    this.crosshairLayer = new Container();
+    this.crosshairLayer.visible = false;
+    this.crosshairLayer.eventMode = 'none';
+    // Add directly to stage (not world) so it stays fixed over the canvas, unaffected by camera.
+    this.app.stage.addChild(this.crosshairLayer);
+
+    // Fallback procedural crosshair (shown until/unless a sprite is loaded).
+    const g = new Graphics();
+    this.drawCrosshairGfx(g);
+    this.crosshairLayer.addChild(g);
+    this.crosshairGfx = g;
+  }
+
+  private drawCrosshairGfx(g: Graphics): void {
+    const S = 14; // half-line length
+    const R = 5;  // gap radius
+    const W = 1.5;
+    g.clear();
+    // Horizontal lines
+    g.moveTo(-S, 0).lineTo(-R, 0).stroke({ color: 0xffffff, alpha: 0.9, width: W });
+    g.moveTo(R, 0).lineTo(S, 0).stroke({ color: 0xffffff, alpha: 0.9, width: W });
+    // Vertical lines
+    g.moveTo(0, -S).lineTo(0, -R).stroke({ color: 0xffffff, alpha: 0.9, width: W });
+    g.moveTo(0, R).lineTo(0, S).stroke({ color: 0xffffff, alpha: 0.9, width: W });
+    // Center dot
+    g.circle(0, 0, 1.5).fill({ color: 0xffffff, alpha: 0.95 });
+    // Outer circle
+    g.circle(0, 0, R + 1).stroke({ color: 0xffffff, alpha: 0.3, width: 1 });
+  }
+
+  private applyCrosshairTexture(tex: Texture): void {
+    if (!this.crosshairLayer) return;
+    // Remove old sprite if any
+    if (this.crosshairSprite) {
+      this.crosshairSprite.destroy();
+      this.crosshairSprite = null;
+    }
+    // Hide fallback gfx
+    if (this.crosshairGfx) this.crosshairGfx.visible = false;
+
+    const sp = new Sprite(tex);
+    sp.anchor.set(0.5);
+    const size = Math.min(tex.width, tex.height);
+    const targetPx = 32;
+    sp.scale.set(targetPx / size);
+    this.crosshairLayer.addChild(sp);
+    this.crosshairSprite = sp;
+  }
+
   private async loadSprites(): Promise<void> {
     let registry: Record<string, SpriteRegistryRow> = {};
     try {
@@ -378,6 +458,19 @@ export class PixiRenderer {
       }
     }
     await Promise.all(tasks);
+    // Load crosshair texture if slot is present in the registry.
+    const chRow = registry['crosshair'];
+    if (chRow && !chRow.url.toLowerCase().endsWith('.gif')) {
+      try {
+        const chTex = await Assets.load<Texture>(chRow.url);
+        this.applyCrosshairTexture(chTex);
+        // eslint-disable-next-line no-console
+        console.info('[renderer] crosshair texture loaded');
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('[renderer] failed to load crosshair texture', e);
+      }
+    }
     // Re-paint the arena now that bg_tile (and other map textures) may have
     // arrived — init() drew it earlier with the procedural fallback because
     // sprite loading is intentionally non-blocking. Without this re-call the
