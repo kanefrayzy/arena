@@ -1,15 +1,21 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../shared/api/client';
 
 export function SplashPage() {
   const nav = useNavigate();
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    void api.get('/auth/me').then(() => nav('/home', { replace: true })).catch(() => {/* not logged in */});
+    void api.get('/auth/me')
+      .then(() => nav('/home', { replace: true }))
+      .catch(() => setChecking(false));
   }, [nav]);
   const { t } = useTranslation();
+
+  if (checking) return null;
+
   return (
     <div className="relative flex h-full flex-col items-center justify-center gap-10 overflow-hidden px-6 text-center">
       {/* decorative blobs */}

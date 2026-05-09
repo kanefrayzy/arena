@@ -8,12 +8,19 @@ export function SettingsPage() {
   const { t } = useTranslation();
   const nav = useNavigate();
   const me = useAuth((s) => s.me);
+  const setMe = useAuth((s) => s.setMe);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const logout = async () => {
+    try { await api.post('/auth/logout', {}); } catch { /* ignore */ }
+    setMe(null);
+    nav('/', { replace: true });
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -122,6 +129,14 @@ export function SettingsPage() {
             {busy ? '…' : t('settings.save')}
           </button>
         </form>
+
+        <button
+          type="button"
+          onClick={() => void logout()}
+          className="game-btn game-btn-red w-full"
+        >
+          {t('settings.logout')}
+        </button>
       </main>
     </div>
   );

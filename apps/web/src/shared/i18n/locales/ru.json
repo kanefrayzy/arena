@@ -99,5 +99,6 @@
   "settings.password_changed": "Пароль изменён",
   "settings.password_mismatch": "Пароли не совпадают",
   "settings.password_too_short": "Пароль должен быть не менее 8 символов",
-  "settings.wrong_password": "Неверный текущий пароль"
+  "settings.wrong_password": "Неверный текущий пароль",
+  "settings.logout": "Выйти из аккаунта"
 }

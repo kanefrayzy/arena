@@ -99,5 +99,6 @@
   "settings.password_changed": "Password changed",
   "settings.password_mismatch": "Passwords don't match",
   "settings.password_too_short": "Password must be at least 8 characters",
-  "settings.wrong_password": "Current password is incorrect"
+  "settings.wrong_password": "Current password is incorrect",
+  "settings.logout": "Log out"
 }
