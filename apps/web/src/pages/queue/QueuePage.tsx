@@ -167,29 +167,54 @@ export function QueuePage() {
     <div className="relative flex h-full flex-col items-center justify-center gap-8 overflow-hidden p-6">
       <div className="pointer-events-none absolute -top-32 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-game-purple/40 blur-3xl" />
 
-      <div className="game-chip game-chip-yellow text-base">
-        {t(`home.mode.${mode}`)}
-      </div>
+      {error ? (
+        <>
+          <div className="game-card flex w-full max-w-xs flex-col items-center gap-4 p-6 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-game-red/20 text-4xl">
+              🚫
+            </div>
+            <div className="font-display text-base uppercase text-white">{error}</div>
+            <button
+              type="button"
+              onClick={() => nav('/wallet')}
+              className="game-btn game-btn-yellow w-full"
+            >
+              {t('wallet.deposit')}
+            </button>
+            <button
+              type="button"
+              onClick={() => nav('/home')}
+              className="game-btn game-btn-ghost w-full"
+            >
+              {t('result.back')}
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="game-chip game-chip-yellow text-base">
+            {t(`home.mode.${mode}`)}
+          </div>
 
-      <div className="relative flex h-44 w-44 items-center justify-center">
-        {/* outer rings */}
-        <div className="absolute inset-0 animate-ping rounded-full bg-game-yellow/25" />
-        <div className="absolute inset-3 animate-pulse rounded-full bg-game-yellow/40" />
-        {/* core */}
-        <div className="relative flex h-32 w-32 items-center justify-center rounded-full bg-gradient-to-b from-[#ffe066] to-[#f5b800] shadow-[0_8px_0_#b88200,0_0_40px_rgba(255,209,59,0.6)]">
-          <div className="font-display text-4xl text-[#1a1450]">{seconds}s</div>
-        </div>
-      </div>
+          <div className="relative flex h-44 w-44 items-center justify-center">
+            {/* outer rings */}
+            <div className="absolute inset-0 animate-ping rounded-full bg-game-yellow/25" />
+            <div className="absolute inset-3 animate-pulse rounded-full bg-game-yellow/40" />
+            {/* core */}
+            <div className="relative flex h-32 w-32 items-center justify-center rounded-full bg-gradient-to-b from-[#ffe066] to-[#f5b800] shadow-[0_8px_0_#b88200,0_0_40px_rgba(255,209,59,0.6)]">
+              <div className="font-display text-4xl text-[#1a1450]">{seconds}s</div>
+            </div>
+          </div>
 
-      <div className="font-display text-xl uppercase tracking-wide text-white/90">
-        {t(longWait ? 'queue.long_wait' : 'queue.searching')}
-      </div>
+          <div className="font-display text-xl uppercase tracking-wide text-white/90">
+            {t(longWait ? 'queue.long_wait' : 'queue.searching')}
+          </div>
 
-      {error && <div className="text-sm font-semibold text-game-red">{error}</div>}
-
-      <button type="button" onClick={cancel} className="game-btn game-btn-red">
-        {t('queue.cancel')}
-      </button>
+          <button type="button" onClick={cancel} className="game-btn game-btn-red">
+            {t('queue.cancel')}
+          </button>
+        </>
+      )}
     </div>
   );
 }

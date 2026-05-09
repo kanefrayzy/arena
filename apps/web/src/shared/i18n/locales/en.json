@@ -79,6 +79,7 @@
   "loadout.damage": "Damage",
   "loadout.ability": "Ability",
   "loadout.equipped": "In use",
+  "loadout.equip": "Select",
   "loadout.empty": "No characters — buy one in the Shop",
   "shop.title": "Shop",
   "shop.back": "Back",

@@ -299,10 +299,10 @@ function CharInfoModal({
             onClick={() => void onEquip()}
             className={
               'game-btn w-full py-3 font-display text-base uppercase tracking-widest transition disabled:opacity-60 ' +
-              (equipped ? 'game-btn-ghost cursor-default' : 'game-btn-primary')
+              (equipped ? 'game-btn-green cursor-default' : 'game-btn-yellow')
             }
           >
-            {equipped ? `✓ ${t('loadout.equipped')}` : t('loadout.equip') || 'Equip'}
+            {equipped ? `✓ ${t('loadout.equipped')}` : t('loadout.equip')}
           </button>
         </div>
       </div>

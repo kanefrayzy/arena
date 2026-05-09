@@ -97,6 +97,12 @@ export class MatchmakerService implements OnModuleInit, OnModuleDestroy {
       const a = waiters.shift();
       const b = waiters.shift();
       if (!a || !b) break;
+      // Guard against self-match (e.g. two browser tabs with the same account).
+      if (a.userId === b.userId) {
+        // Put b back and move on – can't pair a player with themselves.
+        waiters.unshift(b);
+        break;
+      }
       const room = await this.pickRoom(mode, roomId);
       if (!room) {
         this.log.warn(`no room for ${key}, skipping pair`);
