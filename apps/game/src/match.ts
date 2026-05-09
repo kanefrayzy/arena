@@ -72,6 +72,9 @@ export interface ConnectedClient {
 const SNAPSHOT_RATE_HZ = 30;
 /** Milliseconds a disconnected player has to reconnect before losing. */
 const RECONNECT_TIMEOUT_MS = 15_000;
+/** Milliseconds the second player has to connect before the first one is awarded a walkover.
+ *  Must be < the match-token TTL (5 min) and > a slow mobile cold-load (~10-20 s). */
+const OPPONENT_NO_SHOW_MS = 45_000;
 
 export class Match {
   readonly matchId: string;
@@ -82,6 +85,9 @@ export class Match {
   private timer: NodeJS.Timeout | null = null;
   /** Pending reconnect timeouts keyed by userId. Cleared on re-attach or match end. */
   private reconnectTimers: Map<number, NodeJS.Timeout> = new Map();
+  /** Fires when the second player fails to connect in time. Cleared when the match starts
+   *  or when the match ends for any other reason. */
+  private noShowTimer: NodeJS.Timeout | null = null;
   private lastTick = 0;
   private snapshotAccum = 0;
   private finishCalled = false;
@@ -178,7 +184,40 @@ export class Match {
         }
       }
     } else {
+      // Arm the no-show timer the first time someone arrives at a PvP match.
+      this.armNoShowTimer();
       this.maybeStart();
+    }
+  }
+
+  /** Start a one-shot timer that forfeits the absent player if the opponent never connects. */
+  private armNoShowTimer(): void {
+    if (this.seed.isBotMatch) return;
+    if (this.noShowTimer) return;
+    if (this.startNotified) return;
+    this.noShowTimer = setTimeout(() => {
+      this.noShowTimer = null;
+      if (this.startNotified || this.sim.finished) return;
+      const presentIds = new Set(this.clients.keys());
+      const absent = [...this.sim.players.values()].find((p) => !presentIds.has(p.id));
+      if (!absent) return;
+      log.warn(
+        { matchId: this.matchId, absentUserId: absent.id, presentCount: presentIds.size },
+        'opponent no-show — forfeit',
+      );
+      // Mark sim finished with a 'disconnect' result.
+      this.sim.markDisconnect(absent.id, Date.now());
+      // The tick loop hasn't started, so finalize() won't be triggered automatically.
+      this.finalize().catch((e) => {
+        log.error({ err: (e as Error).message, matchId: this.matchId }, 'no-show finalize failed');
+      });
+    }, OPPONENT_NO_SHOW_MS);
+  }
+
+  private clearNoShowTimer(): void {
+    if (this.noShowTimer) {
+      clearTimeout(this.noShowTimer);
+      this.noShowTimer = null;
     }
   }
 
@@ -211,7 +250,10 @@ export class Match {
         }
       }, RECONNECT_TIMEOUT_MS);
       this.reconnectTimers.set(userId, t);
-      log.info({ matchId: this.matchId, userId }, 'reconnect window started (10 s)');
+      log.info(
+        { matchId: this.matchId, userId, ms: RECONNECT_TIMEOUT_MS },
+        'reconnect window started',
+      );
     }
   }
 
@@ -258,13 +300,27 @@ export class Match {
     this.lastTick = now;
     if (!this.startNotified) {
       this.startNotified = true;
+      this.clearNoShowTimer();
       this.api.post('/internal/match/start', { matchId: this.matchId }).catch((e) => {
         log.error({ err: e.message, matchId: this.matchId }, '/internal/match/start failed');
       });
+      // Tell every connected client the countdown should begin now.
+      // Both players see the 3-2-1-FIGHT animation in sync.
+      this.broadcast(MSG.S_MATCH_BEGIN, {});
     }
     const stepMs = Math.round(1000 / this.seed.tickRate);
     this.timer = setInterval(() => this.tick(stepMs), stepMs);
     log.info({ matchId: this.matchId, tickRate: this.seed.tickRate }, 'match started');
+  }
+
+  private broadcast(tag: number, payload: unknown): void {
+    for (const c of this.clients.values()) {
+      try {
+        c.ws.send(encodeMsg(tag as never, payload), true);
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   private tick(stepMs: number): void {
@@ -382,6 +438,7 @@ export class Match {
     // Cancel all reconnect timers — match is over.
     for (const t of this.reconnectTimers.values()) clearTimeout(t);
     this.reconnectTimers.clear();
+    this.clearNoShowTimer();
 
     const result = this.sim.result;
     if (!result) return;
@@ -491,6 +548,10 @@ export class Match {
       // Tell the client whether the match has ever started (reconnect scenario).
       // Using startNotified (not timer) so the flag stays true even after finalize().
       started: this.startNotified,
+      // True iff we're still waiting for the other human to connect.
+      // Bot matches never wait. After startNotified flips, this is always false.
+      waitingForOpponent:
+        !this.seed.isBotMatch && !this.startNotified && this.clients.size < 2,
     };
     try {
       c.ws.send(encodeMsg(MSG.S_WELCOME, welcome), true);
@@ -507,6 +568,7 @@ export class Match {
     this.timer = null;
     for (const t of this.reconnectTimers.values()) clearTimeout(t);
     this.reconnectTimers.clear();
+    this.clearNoShowTimer();
     await this.replay.end(this.sim.elapsedMs, { aborted: true, reason }).catch(() => undefined);
     await this.api
       .post('/internal/match/abort', { matchId: this.matchId, reason })

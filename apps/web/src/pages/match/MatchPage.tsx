@@ -32,7 +32,15 @@ export function MatchPage() {
   const [countdown, setCountdown] = useState<number | null>(null); // 3,2,1,0(FIGHT) or null
   const [ping, setPing] = useState(0);
   const [disconnectMsg, setDisconnectMsg] = useState<string | null>(null);
+  /** True between welcome (waitingForOpponent=true) and S_MATCH_BEGIN. */
+  const [waitingForOpp, setWaitingForOpp] = useState(false);
+  /** Set to attempt# (1+) while a reconnect is in flight; null otherwise. */
+  const [reconnecting, setReconnecting] = useState<number | null>(null);
+  /** True after all reconnect attempts have failed and the user must go home. */
+  const [lost, setLost] = useState(false);
   const inputBlockedRef = useRef(true);
+  const countdownStartedRef = useRef(false);
+  const lostRef = useRef(false);
 
   useEffect(() => {
     if (!matchId) return;
@@ -74,6 +82,28 @@ export function MatchPage() {
       // ── Connect to game server IMMEDIATELY (before renderer finishes loading).
       //    This cancels the server-side 10-second reconnect timer right away so the
       //    match isn't ended while the renderer is still initialising.
+      const startCountdown = () => {
+        if (countdownStartedRef.current) return;
+        countdownStartedRef.current = true;
+        setWaitingForOpp(false);
+        inputBlockedRef.current = true;
+        setCountdown(3);
+        sfx.unlockAudio();
+        sfx.matchStartTick(3);
+        let n = 3;
+        const tick = window.setInterval(() => {
+          n -= 1;
+          setCountdown(n);
+          if (n > 0) sfx.matchStartTick(n);
+          else {
+            sfx.matchStartTick(0);
+            inputBlockedRef.current = false;
+            window.setTimeout(() => setCountdown(null), 700);
+            window.clearInterval(tick);
+          }
+        }, 1000);
+      };
+
       client = new MatchClient(wsUrl, {
         onWelcome: (msg) => {
           setWelcome(msg);
@@ -85,28 +115,39 @@ export function MatchPage() {
           }
           if (msg.started) {
             // Reconnecting to already-running match — skip countdown, unlock immediately.
+            setWaitingForOpp(false);
             inputBlockedRef.current = false;
+            setCountdown(null);
+            countdownStartedRef.current = true; // never re-trigger
+            sfx.unlockAudio();
+          } else if ((msg as SWelcome & { waitingForOpponent?: boolean }).waitingForOpponent) {
+            // First to arrive — opponent still loading. Show overlay; do not start
+            // the countdown until the server says S_MATCH_BEGIN.
+            setWaitingForOpp(true);
+            inputBlockedRef.current = true;
             setCountdown(null);
             sfx.unlockAudio();
           } else {
-            // Fresh match start: VS countdown 3-2-1-FIGHT then unlock input.
-            inputBlockedRef.current = true;
-            setCountdown(3);
-            sfx.unlockAudio();
-            sfx.matchStartTick(3);
-            let n = 3;
-            const tick = window.setInterval(() => {
-              n -= 1;
-              setCountdown(n);
-              if (n > 0) sfx.matchStartTick(n);
-              else {
-                sfx.matchStartTick(0);
-                inputBlockedRef.current = false;
-                window.setTimeout(() => setCountdown(null), 700);
-                window.clearInterval(tick);
-              }
-            }, 1000);
+            // Both already attached server-side at welcome time (e.g. nearly-simultaneous
+            // joins). S_MATCH_BEGIN will follow almost immediately, but if it's already
+            // been delivered we kick the countdown now.
+            startCountdown();
           }
+        },
+        onMatchBegin: () => {
+          // Both players are connected — start the synced countdown.
+          startCountdown();
+        },
+        onReconnecting: (attempt) => {
+          setReconnecting(attempt);
+        },
+        onReconnected: () => {
+          setReconnecting(null);
+        },
+        onReconnectGaveUp: () => {
+          setReconnecting(null);
+          lostRef.current = true;
+          setLost(true);
         },
         onSnapshot: (msg: SSnapshot) => {
           // Skip snapshots until the renderer has finished initialising.
@@ -136,8 +177,9 @@ export function MatchPage() {
           setError(`${code}: ${message}`);
         },
         onClose: () => {
-          // server closed; if we don't have a result yet, go home
-          if (!sessionStorage.getItem(`result:${matchId}`)) {
+          // server closed; if we don't have a result yet AND we aren't already
+          // showing the "connection lost" screen (which has its own button), go home.
+          if (!sessionStorage.getItem(`result:${matchId}`) && !lostRef.current) {
             nav('/home');
           }
         },
@@ -263,6 +305,56 @@ export function MatchPage() {
           </div>
         )}
       </div>
+      {/* Waiting for opponent overlay */}
+      {waitingForOpp && countdown === null && !lost && reconnecting === null && (
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-black/55 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative h-16 w-16">
+              <div className="absolute inset-0 animate-ping rounded-full bg-game-yellow/30" />
+              <div className="absolute inset-2 rounded-full bg-gradient-to-b from-[#ffe066] to-[#f5b800] shadow-[0_0_24px_rgba(255,209,59,0.5)]" />
+            </div>
+            <div className="font-display text-2xl uppercase tracking-wide text-white">
+              Ожидание противника…
+            </div>
+            <div className="text-sm text-white/60">Подключаем второго игрока</div>
+          </div>
+        </div>
+      )}
+      {/* Reconnecting overlay */}
+      {reconnecting !== null && !lost && (
+        <div className="pointer-events-auto absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4 rounded-2xl border border-game-yellow/40 bg-black/80 px-8 py-6">
+            <div className="h-10 w-10 animate-spin rounded-full border-2 border-game-yellow border-t-transparent" />
+            <div className="font-display text-xl uppercase tracking-wide text-game-yellow">
+              Соединение прервано
+            </div>
+            <div className="text-sm text-white/70">
+              Переподключение… попытка {reconnecting}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Connection lost (retries exhausted) */}
+      {lost && (
+        <div className="pointer-events-auto absolute inset-0 flex flex-col items-center justify-center bg-black/85 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-5 rounded-2xl border border-rose-400/40 bg-black/90 px-8 py-7 text-center">
+            <div className="text-4xl">📡</div>
+            <div className="font-display text-2xl uppercase tracking-wide text-rose-300">
+              Соединение потеряно
+            </div>
+            <div className="max-w-xs text-sm text-white/70">
+              Не удалось переподключиться к серверу. Проверьте интернет.
+            </div>
+            <button
+              type="button"
+              onClick={() => nav('/home')}
+              className="game-btn game-btn-yellow"
+            >
+              На главную
+            </button>
+          </div>
+        </div>
+      )}
       {/* VS countdown overlay */}
       {countdown !== null && welcome && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm">

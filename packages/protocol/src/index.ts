@@ -19,6 +19,9 @@ export const MSG = {
   S_MATCH_END: 0x13,
   S_PONG: 0x14,
   S_ERROR: 0x15,
+  /** Sent once both players are connected and the simulation is about to begin.
+   *  Client uses this as the trigger for the 3-2-1-FIGHT countdown. No payload. */
+  S_MATCH_BEGIN: 0x16,
 } as const;
 
 export type MsgTag = (typeof MSG)[keyof typeof MSG];
@@ -103,6 +106,10 @@ export interface SWelcome {
   obstacles: Obstacle[];
   /** True when reconnecting to an already-running match; client should skip the pre-game countdown. */
   started?: boolean;
+  /** True when this player is the first to arrive and the opponent hasn't connected yet.
+   *  Client should display a "waiting for opponent" overlay and NOT start the countdown
+   *  until S_MATCH_BEGIN arrives. */
+  waitingForOpponent?: boolean;
 }
 
 export interface SnapshotPlayer {
