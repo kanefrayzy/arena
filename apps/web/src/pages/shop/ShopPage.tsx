@@ -153,7 +153,7 @@ interface CardProps {
 function Card(p: CardProps) {
   const priceNum = p.priceUsd != null && p.priceUsd !== '' ? parseFloat(p.priceUsd) : 0;
   const isFree = priceNum <= 0;
-  const isWebm = p.spriteUrl?.split('?')[0].toLowerCase().endsWith('.webm') ?? false;
+  const isWebm = (p.spriteUrl?.split('?')[0] ?? '').toLowerCase().endsWith('.webm');
   return (
     <div className="game-card relative flex flex-col items-center gap-2 p-3">
       <div className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-2xl bg-black/40">

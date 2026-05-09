@@ -195,8 +195,10 @@ export class PixiRenderer {
     for (const wp of [welcome.you, welcome.opponent]) {
       if (wp.characterSpriteUrl) {
         if (wp.characterSpriteUrl.toLowerCase().endsWith('.gif')) {
-          AnimatedGIF.fromURL(wp.characterSpriteUrl)
-            .then((gif) => {
+          fetch(wp.characterSpriteUrl)
+            .then((r) => r.arrayBuffer())
+            .then((buf) => AnimatedGIF.fromBuffer(buf))
+            .then((gif: AnimatedGIF) => {
               gif.loop = true;
               gif.play();
               this.playerCharGif.set(wp.id, gif);
@@ -427,7 +429,7 @@ export class PixiRenderer {
     for (const slot of Object.keys(registry) as SpriteSlot[]) {
       const row = registry[slot];
       if (!row) continue;
-      const isGif = row.url.split('?')[0].toLowerCase().endsWith('.gif');
+      const isGif = (row.url.split('?')[0] ?? '').toLowerCase().endsWith('.gif');
       if (isGif) {
         tasks.push(
           fetch(row.url)

@@ -353,7 +353,7 @@ function StatCell({ label, value, color, mono = true }: { label: string; value: 
 }
 
 function SpritePreviewThumb({ url }: { url: string }) {
-  const isWebm = url.split('?')[0].toLowerCase().endsWith('.webm');
+  const isWebm = (url.split('?')[0] ?? '').toLowerCase().endsWith('.webm');
   return (
     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-black/40 ring-1 ring-white/10">
       {isWebm
@@ -365,7 +365,7 @@ function SpritePreviewThumb({ url }: { url: string }) {
 }
 
 function SpriteCell({ url, alt }: { url: string | null; alt: string }) {
-  const isWebm = url?.split('?')[0].toLowerCase().endsWith('.webm') ?? false;
+  const isWebm = (url?.split('?')[0] ?? '').toLowerCase().endsWith('.webm');
   return (
     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-black/40">
       {url ? (

@@ -100,7 +100,7 @@ export function WalletPage() {
         const r = await api.post<{ address: string; destTag?: string | null; currency: string }>(
           '/payments/crypto-address', { currency: selected.currency },
         );
-        setReqs({ paymentId: '', status: 'STATIC', crypto: { address: r.address, destTag: r.destTag ?? undefined, currency: r.currency } });
+        setReqs({ paymentId: '', status: 'STATIC', crypto: { address: r.address, ...(r.destTag != null ? { destTag: r.destTag } : {}), currency: r.currency } });
       } catch (e) {
         setErr(e instanceof ApiError ? e.code : (e as Error).message);
       } finally { setBusy(false); }
