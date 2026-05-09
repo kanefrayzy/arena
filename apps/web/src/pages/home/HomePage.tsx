@@ -58,28 +58,22 @@ export function HomePage() {
       try {
         const u = await api.get<Me>('/auth/me');
         setMe(u);
-        const w = await api.get<Wallet>('/wallet');
-        setWallet(w);
-        // Fetch unread notification count
-        try {
-          const nr = await api.get<{ items: unknown[]; unreadCount: number }>('/notifications?limit=1');
-          setUnreadNotifs(nr.unreadCount);
-        } catch { /* ignore */ }
-        // Resolve equipped character (or fall back to first available).
-        try {
-          const list = await api.get<{ characters: CharSummary[] }>('/characters');
-          let pick: CharSummary | null = list.characters[0] ?? null;
-          try {
-            const lo = await api.get<LoadoutResp>('/loadout/me');
-            const found = list.characters.find((c) => c.id === lo.characterId);
-            if (found) pick = found;
-          } catch {
-            /* no loadout yet */
-          }
-          setActiveChar(pick);
-        } catch {
-          /* ignore character fetch errors */
-        }
+        const [walletRes, notifsRes, charRes] = await Promise.allSettled([
+          api.get<Wallet>('/wallet'),
+          api.get<{ items: unknown[]; unreadCount: number }>('/notifications?limit=1'),
+          api.get<{ characters: CharSummary[] }>('/characters').then(async (list) => {
+            let pick: CharSummary | null = list.characters[0] ?? null;
+            try {
+              const lo = await api.get<LoadoutResp>('/loadout/me');
+              const found = list.characters.find((c) => c.id === lo.characterId);
+              if (found) pick = found;
+            } catch { /* no loadout yet */ }
+            return pick;
+          }),
+        ]);
+        if (walletRes.status === 'fulfilled') setWallet(walletRes.value);
+        if (notifsRes.status === 'fulfilled') setUnreadNotifs(notifsRes.value.unreadCount);
+        if (charRes.status === 'fulfilled') setActiveChar(charRes.value);
       } catch (e) {
         if (e instanceof ApiError && e.status === 401) nav('/');
       }

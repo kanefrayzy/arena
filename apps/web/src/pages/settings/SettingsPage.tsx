@@ -5,7 +5,7 @@ import { api, ApiError } from '../../shared/api/client';
 import { useAuth } from '../../shared/store/auth';
 
 export function SettingsPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const nav = useNavigate();
   const me = useAuth((s) => s.me);
   const setMe = useAuth((s) => s.setMe);
@@ -81,6 +81,28 @@ export function SettingsPage() {
             </div>
           </div>
         )}
+
+        <div className="game-card flex flex-col gap-3 p-4">
+          <h3 className="font-display text-base uppercase text-game-yellow">
+            {t('settings.language')}
+          </h3>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => void i18n.changeLanguage('ru')}
+              className={'game-btn game-btn-sm flex-1 ' + (i18n.language.startsWith('ru') ? 'game-btn-yellow' : 'game-btn-ghost')}
+            >
+              🇷🇺 Русский
+            </button>
+            <button
+              type="button"
+              onClick={() => void i18n.changeLanguage('en')}
+              className={'game-btn game-btn-sm flex-1 ' + (i18n.language.startsWith('en') ? 'game-btn-yellow' : 'game-btn-ghost')}
+            >
+              🇬🇧 English
+            </button>
+          </div>
+        </div>
 
         <form onSubmit={submit} className="game-card flex flex-col gap-3 p-4 animate-pop-in">
           <h3 className="font-display text-base uppercase text-game-yellow">

@@ -192,9 +192,9 @@ function Card(p: CardProps) {
         <div className="font-display text-base text-game-yellow">${p.priceUsd}</div>
       )}
       {p.owned ? (
-        <div className="game-chip mt-1 w-full justify-center text-white/80">
+        <button type="button" disabled className="game-btn game-btn-green game-btn-sm w-full mt-1 cursor-default opacity-90">
           ✓ {p.ownedLabel}
-        </div>
+        </button>
       ) : (
         <button
           type="button"

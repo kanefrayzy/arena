@@ -100,5 +100,6 @@
   "settings.password_mismatch": "Пароли не совпадают",
   "settings.password_too_short": "Пароль должен быть не менее 8 символов",
   "settings.wrong_password": "Неверный текущий пароль",
-  "settings.logout": "Выйти из аккаунта"
+  "settings.logout": "Выйти из аккаунта",
+  "settings.language": "Язык интерфейса"
 }
