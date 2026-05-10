@@ -49,7 +49,7 @@ export function LanguagesTab() {
       setCode(''); setName(''); setFlag('');
       await load();
     } catch (e) {
-      setError(e instanceof ApiError ? JSON.stringify((e as ApiError).body ?? e.message) : (e as Error).message);
+      setError(e instanceof ApiError ? e.message : (e as Error).message);
     } finally {
       setBusy(false);
     }
