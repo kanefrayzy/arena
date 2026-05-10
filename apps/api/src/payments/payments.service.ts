@@ -280,16 +280,28 @@ export class PaymentsService {
   // Webhooks ------------------------------------------------------------
 
   async handleBetraDepositCallback(payload: any, signature?: string, rawBody?: Buffer) {
+    // Real Betra webhooks (observed in prod) use the wrapped format
+    //   { event: "deposit.updated", data: { id, order_id, status, amount, ... }, timestamp }
+    // with HMAC-SHA256 over the raw body in the X-Signature header — same as
+    // the documented payout webhook. The flat docs example is outdated.
+    const data = payload?.data && typeof payload.data === 'object' ? payload.data : payload;
     this.log.log(
-      `Betra deposit-callback received: order_id=${payload?.order_id} status=${payload?.status} ` +
-      `id=${payload?.id} ts=${payload?.timestamp} hasHeaderSig=${!!signature} hasBodySig=${!!payload?.signature} ` +
+      `Betra deposit-callback received: event=${payload?.event} order_id=${data?.order_id} status=${data?.status} ` +
+      `id=${data?.id} ts=${payload?.timestamp ?? data?.timestamp} hasHeaderSig=${!!signature} hasBodySig=${!!payload?.signature} ` +
       `keys=${Object.keys(payload ?? {}).join(',')}`,
     );
-    if (!this.betra.verifyDepositSignature(payload, rawBody, signature)) {
+    // Prefer header signature (real Betra behavior). Fall back to legacy body signature for resilience.
+    const okSig = (rawBody && signature && this.betra.verifyHeaderSignature(rawBody, signature))
+               || this.betra.verifyDepositSignature(data, rawBody, signature);
+    if (!okSig) {
       throw new BadRequestException('invalid signature');
     }
-    const orderId = String(payload.order_id);
-    const status = String(payload.status);
+    const orderId = String(data?.order_id ?? '');
+    const status = String(data?.status ?? '');
+    if (!orderId) {
+      this.log.warn(`Betra callback missing order_id (event=${payload?.event}) — ignored`);
+      return { ok: true };
+    }
     const payment = await this.prisma.payment.findUnique({ where: { id: orderId } });
     if (!payment) {
       this.log.warn(`Betra callback for unknown order_id=${orderId} (no Payment row)`);
