@@ -18,8 +18,12 @@ export class PaymentWebhookController {
 
   @Post('betra/deposit-callback')
   @HttpCode(200)
-  async betraDeposit(@Body() body: any) {
-    return this.payments.handleBetraDepositCallback(body);
+  async betraDeposit(
+    @Body() body: any,
+    @Headers('x-signature') sig: string | undefined,
+    @Req() req: RawRequest,
+  ) {
+    return this.payments.handleBetraDepositCallback(body, sig, req.rawBody);
   }
 
   @Post('betra/payout-callback')

@@ -134,18 +134,63 @@ export class BetraService {
     return { id: d.id, status: d.status };
   }
 
-  /** Verify deposit-callback signature: HMAC_SHA256(id+order_id+status+timestamp, secret). */
-  verifyDepositSignature(payload: { id: number | string; order_id: string; status: string; timestamp: number | string; signature?: string }): boolean {
-    if (!SECRET) return false;
-    const sigData = `${payload.id}${payload.order_id}${payload.status}${payload.timestamp}`;
-    const expected = createHmac('sha256', SECRET).update(sigData).digest('hex');
-    const received = String(payload.signature ?? '');
-    if (expected.length !== received.length) return false;
-    try {
-      return timingSafeEqual(Buffer.from(expected), Buffer.from(received));
-    } catch {
+  /**
+   * Verify deposit-callback signature. Tries multiple schemes Betra may use:
+   *   A) X-Signature header HMAC_SHA256 over raw body (same as payout).
+   *   B) `signature` field in body computed as HMAC_SHA256(id+order_id+status+timestamp, secret).
+   *   C) `signature` field in body computed as HMAC_SHA256(rawBody-without-signature-field, secret).
+   * Logs (sanitized) on mismatch so we can adapt to provider's actual scheme.
+   */
+  verifyDepositSignature(
+    payload: { id?: number | string; order_id?: string; status?: string; timestamp?: number | string; signature?: string } & Record<string, unknown>,
+    rawBody?: Buffer | string,
+    headerSig?: string,
+  ): boolean {
+    if (!SECRET) {
+      this.log.error('BETRA_SECRET not configured — cannot verify deposit callbacks');
       return false;
     }
+
+    const tryEqual = (expectedHex: string, receivedHex: string): boolean => {
+      if (!receivedHex) return false;
+      const a = Buffer.from(expectedHex, 'utf8');
+      const b = Buffer.from(receivedHex.toLowerCase(), 'utf8');
+      if (a.length !== b.length) return false;
+      try { return timingSafeEqual(a, b); } catch { return false; }
+    };
+
+    // Scheme A: X-Signature header over raw body.
+    if (rawBody && headerSig) {
+      const expA = createHmac('sha256', SECRET).update(rawBody).digest('hex');
+      if (tryEqual(expA, headerSig)) return true;
+    }
+
+    // Scheme B: concatenated fields in body.
+    const sigB = `${payload.id ?? ''}${payload.order_id ?? ''}${payload.status ?? ''}${payload.timestamp ?? ''}`;
+    const expB = createHmac('sha256', SECRET).update(sigB).digest('hex');
+    const received = String(payload.signature ?? '');
+    if (tryEqual(expB, received)) return true;
+
+    // Scheme C: HMAC over body JSON minus the `signature` field.
+    if (rawBody) {
+      try {
+        const obj = JSON.parse(typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8'));
+        delete obj.signature;
+        const canon = JSON.stringify(obj);
+        const expC = createHmac('sha256', SECRET).update(canon).digest('hex');
+        if (tryEqual(expC, received)) return true;
+      } catch { /* not JSON */ }
+    }
+
+    // Diagnostic log (sanitized): keep first 8 chars of each candidate hash.
+    this.log.warn(
+      `Betra deposit-callback signature mismatch. ` +
+      `received=${received.slice(0, 12)}… header=${(headerSig ?? '').slice(0, 12)}… ` +
+      `expA(raw+header)=${(rawBody && headerSig ? createHmac('sha256', SECRET).update(rawBody).digest('hex') : '').slice(0, 12)}… ` +
+      `expB(fields)=${expB.slice(0, 12)}… ` +
+      `payload-keys=${Object.keys(payload).join(',')}`,
+    );
+    return false;
   }
 
   /** Verify payout-callback or any X-Signature header against raw body. */

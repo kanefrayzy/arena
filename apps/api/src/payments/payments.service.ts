@@ -279,8 +279,8 @@ export class PaymentsService {
 
   // Webhooks ------------------------------------------------------------
 
-  async handleBetraDepositCallback(payload: any) {
-    if (!this.betra.verifyDepositSignature(payload)) {
+  async handleBetraDepositCallback(payload: any, signature?: string, rawBody?: Buffer) {
+    if (!this.betra.verifyDepositSignature(payload, rawBody, signature)) {
       throw new BadRequestException('invalid signature');
     }
     const orderId = String(payload.order_id);
