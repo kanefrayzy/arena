@@ -415,20 +415,77 @@ export function MatchPage() {
           </div>
         </div>
       )}
-      {/* VS countdown overlay */}
+      {/* VS / countdown intro — Brawl-Stars-style portrait clash */}
       {countdown !== null && welcome && (
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="flex items-center gap-6 text-2xl md:text-4xl font-bold mb-6">
-            <span className="text-[#4ad29a]">{welcome.you.username}</span>
-            <span className="text-white/60 text-3xl md:text-5xl">VS</span>
-            <span className="text-[#e06c75]">{welcome.opponent.username}</span>
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          {/* Animated darkening background w/ diagonal sweep */}
+          <div className="absolute inset-0 bg-gradient-to-br from-black/85 via-black/60 to-black/85 backdrop-blur-md" />
+          <div className="absolute -inset-x-1/4 top-1/2 h-40 -translate-y-1/2 -rotate-6 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-[shimmer_2.5s_linear_infinite]" />
+          {/* Radial spotlights */}
+          <div className="absolute -left-20 top-1/2 h-72 w-72 -translate-y-1/2 rounded-full bg-emerald-400/30 blur-3xl animate-pulse" />
+          <div className="absolute -right-20 top-1/2 h-72 w-72 -translate-y-1/2 rounded-full bg-rose-500/30 blur-3xl animate-pulse" />
+
+          {/* Portrait clash row */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="relative flex w-full max-w-3xl items-center justify-between px-6 md:px-12">
+              {/* YOU — slides from left */}
+              <div className="flex flex-col items-center gap-2 animate-slide-in-left">
+                <div className="relative h-28 w-28 md:h-36 md:w-36 rounded-3xl border-4 border-emerald-400 bg-gradient-to-br from-emerald-400/40 to-emerald-700/20 shadow-[0_0_40px_rgba(74,210,154,0.55)] overflow-hidden">
+                  {welcome.you.characterSpriteUrl ? (
+                    <img src={welcome.you.characterSpriteUrl} alt="" className="h-full w-full object-cover" draggable={false} />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-5xl">🤺</div>
+                  )}
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/30 to-transparent" />
+                </div>
+                <div className="rounded-full bg-emerald-500/90 px-3 py-0.5 text-sm font-black uppercase tracking-wide text-emerald-950 shadow-[0_2px_0_rgba(0,0,0,0.4)] max-w-[8rem] truncate">
+                  {welcome.you.username}
+                </div>
+              </div>
+
+              {/* VS badge — pops in */}
+              <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 animate-pop-vs">
+                <div className="relative flex h-20 w-20 md:h-24 md:w-24 items-center justify-center rounded-full bg-gradient-to-br from-yellow-300 via-amber-400 to-orange-500 shadow-[0_0_50px_rgba(255,200,40,0.8)] ring-4 ring-yellow-200/60">
+                  <span className="font-display text-2xl md:text-3xl font-black tracking-tight text-amber-950 drop-shadow-[0_2px_0_rgba(255,255,255,0.5)]">VS</span>
+                  <span className="absolute inset-0 animate-ping rounded-full bg-yellow-300/40" />
+                </div>
+              </div>
+
+              {/* OPP — slides from right */}
+              <div className="flex flex-col items-center gap-2 animate-slide-in-right">
+                <div className="relative h-28 w-28 md:h-36 md:w-36 rounded-3xl border-4 border-rose-400 bg-gradient-to-br from-rose-400/40 to-rose-700/20 shadow-[0_0_40px_rgba(224,108,117,0.55)] overflow-hidden">
+                  {welcome.opponent.characterSpriteUrl ? (
+                    <img src={welcome.opponent.characterSpriteUrl} alt="" className="h-full w-full object-cover" draggable={false} />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-5xl">👤</div>
+                  )}
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-white/30 to-transparent" />
+                </div>
+                <div className="rounded-full bg-rose-500/90 px-3 py-0.5 text-sm font-black uppercase tracking-wide text-rose-950 shadow-[0_2px_0_rgba(0,0,0,0.4)] max-w-[8rem] truncate">
+                  {welcome.opponent.username}
+                </div>
+              </div>
+            </div>
           </div>
-          <div
-            key={countdown}
-            className="text-7xl md:text-9xl font-black animate-[ping_0.7s_ease-out] tabular-nums"
-            style={{ color: countdown === 0 ? '#f5c518' : '#fff' }}
-          >
-            {countdown === 0 ? 'FIGHT!' : countdown}
+
+          {/* Countdown number — bottom */}
+          <div className="absolute inset-x-0 bottom-[18%] flex flex-col items-center justify-center">
+            <div
+              key={countdown}
+              className="font-display animate-count-pop tabular-nums"
+              style={{
+                fontSize: countdown === 0 ? '5rem' : '7rem',
+                lineHeight: 1,
+                color: countdown === 0 ? '#f5c518' : '#fff',
+                textShadow: countdown === 0
+                  ? '0 0 30px rgba(245,197,24,0.9), 0 4px 0 rgba(0,0,0,0.4)'
+                  : '0 0 25px rgba(255,255,255,0.6), 0 4px 0 rgba(0,0,0,0.4)',
+                fontWeight: 900,
+                letterSpacing: countdown === 0 ? '0.05em' : '0',
+              }}
+            >
+              {countdown === 0 ? 'FIGHT!' : countdown}
+            </div>
           </div>
         </div>
       )}

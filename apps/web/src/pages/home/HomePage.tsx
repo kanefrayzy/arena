@@ -169,50 +169,35 @@ export function HomePage() {
         {/* ── CHARACTER AREA (flex-1) ── */}
         <div className="relative flex flex-1 overflow-hidden">
 
-          {/* History — top-left as rich card */}
+          {/* History — Brawl-Stars-style round icon button */}
           <button
             type="button"
             onClick={() => setShowHistory(true)}
-            className="absolute left-3 top-2 z-20 group flex items-center gap-2 rounded-2xl border border-game-yellow/40 bg-gradient-to-br from-game-yellow/15 via-black/40 to-black/40 px-3 py-2 text-game-yellow shadow-[0_4px_18px_rgba(0,0,0,0.45)] backdrop-blur transition active:scale-95 hover:border-game-yellow/70 hover:from-game-yellow/25"
+            className="absolute left-3 top-2 z-20 group h-14 w-14 rounded-2xl border-b-4 border-amber-700/80 bg-gradient-to-b from-amber-300 via-amber-400 to-amber-600 text-amber-950 shadow-[0_4px_0_rgba(0,0,0,0.35),inset_0_2px_0_rgba(255,255,255,0.55)] transition active:translate-y-1 active:border-b-2 active:shadow-[0_2px_0_rgba(0,0,0,0.35),inset_0_2px_0_rgba(255,255,255,0.55)]"
             aria-label="История матчей"
           >
-            <svg viewBox="0 0 24 24" className="h-5 w-5 transition-transform group-hover:rotate-12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+            <span className="pointer-events-none absolute inset-x-1.5 top-1 h-2 rounded-full bg-white/55 blur-[1px]" />
+            <svg viewBox="0 0 24 24" className="relative mx-auto h-7 w-7 transition-transform group-hover:scale-110" fill="currentColor" aria-hidden>
+              <path d="M12 2.5l2.7 5.5 6 .9-4.35 4.25 1 6L12 16.3 6.65 19.15l1-6L3.3 8.9l6-.9L12 2.5z" />
             </svg>
-            <div className="flex flex-col items-start leading-tight">
-              <span className="text-[10px] font-medium uppercase tracking-wider text-white/55">{t('home.history')}</span>
-              <span className="font-mono text-xs text-white/90">
-                {me.wins ?? 0}<span className="text-emerald-300">W</span>
-                <span className="mx-0.5 text-white/30">·</span>
-                {me.losses ?? 0}<span className="text-rose-300">L</span>
-              </span>
-            </div>
           </button>
 
-          {/* Notifications — top-right as rich card */}
+          {/* Notifications — Brawl-Stars-style round icon button */}
           <button
             type="button"
             onClick={() => setShowNotifs(true)}
-            className="absolute right-3 top-2 z-20 group flex items-center gap-2 rounded-2xl border border-game-cyan/40 bg-gradient-to-br from-game-cyan/15 via-black/40 to-black/40 px-3 py-2 text-game-cyan shadow-[0_4px_18px_rgba(0,0,0,0.45)] backdrop-blur transition active:scale-95 hover:border-game-cyan/70 hover:from-game-cyan/25"
+            className="absolute right-3 top-2 z-20 group h-14 w-14 rounded-2xl border-b-4 border-cyan-800/80 bg-gradient-to-b from-cyan-300 via-cyan-400 to-cyan-600 text-cyan-950 shadow-[0_4px_0_rgba(0,0,0,0.35),inset_0_2px_0_rgba(255,255,255,0.55)] transition active:translate-y-1 active:border-b-2 active:shadow-[0_2px_0_rgba(0,0,0,0.35),inset_0_2px_0_rgba(255,255,255,0.55)]"
             aria-label="Уведомления"
           >
-            <div className="relative">
-              <svg viewBox="0 0 24 24" className={'h-5 w-5 ' + (unreadNotifs > 0 ? 'animate-bell' : '')} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-              </svg>
-              {unreadNotifs > 0 && (
-                <span className="absolute -top-1 -right-1.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">
-                  {unreadNotifs > 9 ? '9+' : unreadNotifs}
-                </span>
-              )}
-            </div>
-            <div className="flex flex-col items-start leading-tight">
-              <span className="text-[10px] font-medium uppercase tracking-wider text-white/55">{t('home.alerts')}</span>
-              <span className="font-mono text-xs text-white/90">
-                {unreadNotifs > 0 ? `+${unreadNotifs} ${t('home.new')}` : t('home.read_all')}
+            <span className="pointer-events-none absolute inset-x-1.5 top-1 h-2 rounded-full bg-white/55 blur-[1px]" />
+            <svg viewBox="0 0 24 24" className={'relative mx-auto h-7 w-7 ' + (unreadNotifs > 0 ? 'animate-bell' : '')} fill="currentColor" aria-hidden>
+              <path d="M12 2a2 2 0 00-2 2v.6C7.16 5.4 5 8 5 11v3.5L3.3 17a1 1 0 00.85 1.5h15.7A1 1 0 0020.7 17L19 14.5V11c0-3-2.16-5.6-5-6.4V4a2 2 0 00-2-2zm-2.2 18a2.2 2.2 0 004.4 0H9.8z" />
+            </svg>
+            {unreadNotifs > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full border-2 border-white/90 bg-rose-500 px-1 text-[10px] font-black text-white shadow-[0_2px_0_rgba(0,0,0,0.35)]">
+                {unreadNotifs > 9 ? '9+' : unreadNotifs}
               </span>
-            </div>
+            )}
           </button>
 
           {/* Character — fills entire area */}
@@ -387,25 +372,18 @@ function tierFor(cup: number): { tier: RankTier; next: RankTier | null } {
 }
 
 function RankBadge({ cup }: { cup: number }) {
-  const { tier, next } = tierFor(cup);
-  const span = next ? next.min - tier.min : 1;
-  const progress = next ? Math.min(100, Math.max(0, ((cup - tier.min) / span) * 100)) : 100;
+  const { tier } = tierFor(cup);
   return (
     <div
       className={
-        'group relative inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-mono ' +
-        'bg-gradient-to-r ' + tier.glow + ' ring-1 ' + tier.ring + ' ' + tier.text + ' shadow-[0_2px_8px_rgba(0,0,0,0.35)]'
+        'group relative inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-mono ' +
+        'bg-gradient-to-r ' + tier.glow + ' ring-1 ' + tier.ring + ' ' + tier.text +
+        ' shadow-[0_2px_10px_rgba(0,0,0,0.4)]'
       }
-      title={`${tier.name} · ${cup} cup${next ? ` · до ${next.name}: ${next.min - cup}` : ''}`}
+      title={`${tier.name} · ${cup} \uD83C\uDFC6`}
     >
-      <span aria-hidden="true" className="text-[13px] leading-none">{tier.emoji}</span>
-      <span className="font-semibold tracking-wide">{tier.name}</span>
-      <span className="text-white/40">·</span>
-      <span className="font-mono text-white/90">{cup}</span>
-      {/* progress dot row */}
-      <span className="ml-0.5 inline-block h-1 w-8 overflow-hidden rounded-full bg-white/10 align-middle">
-        <span className="block h-full rounded-full bg-current opacity-80" style={{ width: `${progress}%` }} />
-      </span>
+      <span aria-hidden="true" className="text-[14px] leading-none drop-shadow-[0_1px_0_rgba(0,0,0,0.4)]">🏆</span>
+      <span className="font-bold tabular-nums text-white">{cup}</span>
     </div>
   );
 }
