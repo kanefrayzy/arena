@@ -3,9 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../../shared/api/client';
 import { useAuth } from '../../shared/store/auth';
+import { LanguageSelector } from './LanguageSelector';
 
 export function SettingsPage() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const nav = useNavigate();
   const me = useAuth((s) => s.me);
   const setMe = useAuth((s) => s.setMe);
@@ -86,22 +87,7 @@ export function SettingsPage() {
           <h3 className="font-display text-base uppercase text-game-yellow">
             {t('settings.language')}
           </h3>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => void i18n.changeLanguage('ru')}
-              className={'game-btn game-btn-sm flex-1 ' + (i18n.language.startsWith('ru') ? 'game-btn-yellow' : 'game-btn-ghost')}
-            >
-              🇷🇺 Русский
-            </button>
-            <button
-              type="button"
-              onClick={() => void i18n.changeLanguage('en')}
-              className={'game-btn game-btn-sm flex-1 ' + (i18n.language.startsWith('en') ? 'game-btn-yellow' : 'game-btn-ghost')}
-            >
-              🇬🇧 English
-            </button>
-          </div>
+          <LanguageSelector />
         </div>
 
         <form onSubmit={submit} className="game-card flex flex-col gap-3 p-4 animate-pop-in">

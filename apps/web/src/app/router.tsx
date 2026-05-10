@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { DesktopAmbience } from './DesktopAmbience';
 import { SplashPage } from '../pages/splash/SplashPage';
 import { LoginPage } from '../pages/login/LoginPage';
 import { RegisterPage } from '../pages/register/RegisterPage';
@@ -15,7 +16,11 @@ import { SettingsPage } from '../pages/settings/SettingsPage';
 export function AppRouter() {
   return (
     <div className="flex h-full w-full items-center justify-center bg-black">
-      <div className="relative h-full w-full overflow-hidden bg-bg shadow-2xl sm:h-[100dvh] sm:max-h-[100dvh] sm:w-auto sm:max-w-full" style={{ aspectRatio: '9 / 16' }}>
+      <DesktopAmbience />
+      <div
+        className="relative h-full w-full overflow-hidden bg-bg shadow-2xl sm:h-[100dvh] sm:max-h-[100dvh] sm:w-auto sm:max-w-full sm:rounded-[2rem] sm:ring-1 sm:ring-white/10 sm:[box-shadow:0_0_60px_rgba(138,79,255,0.35),0_0_120px_rgba(62,224,255,0.15),0_30px_80px_rgba(0,0,0,0.6)]"
+        style={{ aspectRatio: '9 / 16' }}
+      >
         <Routes>
           <Route path="/" element={<SplashPage />} />
           <Route path="/login" element={<LoginPage />} />

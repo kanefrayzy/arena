@@ -64,6 +64,19 @@ export class MatchCreationService {
       meta.botUsername = pickBotName();
     }
 
+    // CASUAL "free ranked" toggle — when rooms.casualEnabled=true, override
+    // the room's stake to zero so we don't lock balances or settle a pot.
+    // The mode/room selection still matches MMR-tracked CASUAL rooms.
+    let effectiveStake: string = input.room.stakeUsd ? String(input.room.stakeUsd) : '0';
+    if (input.room.mode === 'CASUAL') {
+      const setting = await this.prisma.setting.findUnique({ where: { key: 'rooms.casualEnabled' } });
+      const casualFree = !!setting && (setting.value === true || (setting.value as unknown) === 'true');
+      if (casualFree) {
+        effectiveStake = '0';
+        meta.casualFree = true;
+      }
+    }
+
     // Resolve loadouts (character+skin) for both players. Bot: pick first active char/default skin.
     const p1Loadout = await this.resolveLoadout(input.player1Id);
     const p2Loadout = input.isBotMatch
@@ -73,7 +86,7 @@ export class MatchCreationService {
     const match = await this.prisma.match.create({
       data: {
         roomId: input.room.id,
-        stakeUsd: input.room.stakeUsd ?? 0,
+        stakeUsd: effectiveStake,
         player1Id: input.player1Id,
         player2Id: input.player2Id,
         player1CharId: p1Loadout.characterId,
@@ -86,7 +99,7 @@ export class MatchCreationService {
     });
 
     // Lock stakes for paid (non-bot) matches. Bot matches are always free.
-    const stake = input.room.stakeUsd ? String(input.room.stakeUsd) : '0';
+    const stake = effectiveStake;
     if (!input.isBotMatch && Number(stake) > 0) {
       try {
         await this.ledger.lockStake(match.id, input.player1Id, stake);
@@ -139,7 +152,7 @@ export class MatchCreationService {
       matchId: match.id,
       mode: input.room.mode,
       roomId: input.room.id,
-      stakeUsd: input.room.stakeUsd ? String(input.room.stakeUsd) : undefined,
+      stakeUsd: Number(effectiveStake) > 0 ? effectiveStake : undefined,
       tickRate,
       durationMs: 90_000,
       isBotMatch: !!input.isBotMatch,
@@ -185,7 +198,7 @@ export class MatchCreationService {
         room: {
           id: input.room.id,
           mode: input.room.mode,
-          ...(input.room.stakeUsd ? { stakeUsd: String(input.room.stakeUsd) } : {}),
+          ...(Number(effectiveStake) > 0 ? { stakeUsd: effectiveStake } : {}),
         },
       };
       // Store as fallback for players whose lobby WS was not connected at this exact moment.

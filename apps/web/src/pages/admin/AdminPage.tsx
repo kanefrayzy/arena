@@ -16,8 +16,9 @@ import { SpritesTab } from './tabs/SpritesTab';
 import { AbilitiesTab } from './tabs/AbilitiesTab';
 import { BrandingTab } from './tabs/BrandingTab';
 import { ReportsTab } from './tabs/ReportsTab';
+import { LanguagesTab } from './tabs/LanguagesTab';
 
-type Tab = 'dash' | 'users' | 'rooms' | 'content' | 'matches' | 'payments' | 'withdrawals' | 'methods' | 'settings' | 'sprites' | 'abilities' | 'branding' | 'reports';
+type Tab = 'dash' | 'users' | 'rooms' | 'content' | 'matches' | 'payments' | 'withdrawals' | 'methods' | 'settings' | 'sprites' | 'abilities' | 'branding' | 'reports' | 'languages';
 
 const TABS: { key: Tab; label: string; desc: string; icon: string }[] = [
   { key: 'dash', label: 'Дашборд', desc: 'Ключевые метрики', icon: '▦' },
@@ -33,6 +34,7 @@ const TABS: { key: Tab; label: string; desc: string; icon: string }[] = [
   { key: 'methods', label: 'Методы оплаты', desc: 'Способы и иконки', icon: '◈' },
   { key: 'settings', label: 'Настройки', desc: 'Флаги и параметры', icon: '⚙' },
   { key: 'branding', label: 'Брендинг', desc: 'Лого, фавикон, иконки', icon: '🎨' },
+  { key: 'languages', label: 'Языки', desc: 'i18n + перевод', icon: '🌐' },
 ];
 
 export function AdminPage() {
@@ -172,6 +174,7 @@ export function AdminPage() {
             {tab === 'abilities' && <AbilitiesTab />}
             {tab === 'branding' && <BrandingTab />}
             {tab === 'reports' && <ReportsTab />}
+            {tab === 'languages' && <LanguagesTab />}
           </div>
         </main>
       </div>

@@ -15,6 +15,13 @@ async function bootstrap() {
     logger: ['error', 'warn', 'log'],
   });
 
+  // Trust the reverse proxy (Caddy) so that req.ip / req.ips reflect the
+  // X-Forwarded-For header. Without this, IPN whitelist checks (WestWallet
+  // 5.188.51.47) always reject because every request appears to come from
+  // Caddy's container IP.
+  const httpAdapter = app.getHttpAdapter().getInstance() as { set?: (k: string, v: unknown) => void };
+  httpAdapter.set?.('trust proxy', true);
+
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cookieParser(process.env.CSRF_SECRET ?? 'dev-cookie-secret'));
 
