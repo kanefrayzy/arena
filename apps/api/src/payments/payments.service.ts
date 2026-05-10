@@ -58,21 +58,23 @@ export class PaymentsService {
     }));
   }
 
-  async deposit(userId: number, methodSlug: string, amountRaw: string, opts?: { email?: string }): Promise<DepositResult> {
+  async deposit(userId: number, methodSlug: string, amountUsdRaw: string, opts?: { email?: string }): Promise<DepositResult> {
     const method = await this.prisma.paymentMethod.findUnique({ where: { slug: methodSlug } });
     if (!method || !method.isActive || !method.isDeposit) {
       throw new BadRequestException({ code: 'METHOD_NOT_AVAILABLE' });
     }
-    const amount = this.parseAmount(amountRaw);
-    if (method.minAmount && amount.lt(new Prisma.Decimal(method.minAmount.toString()))) {
-      throw new BadRequestException({ code: 'AMOUNT_TOO_LOW', min: method.minAmount.toString() });
-    }
-    if (method.maxAmount && amount.gt(new Prisma.Decimal(method.maxAmount.toString()))) {
-      throw new BadRequestException({ code: 'AMOUNT_TOO_HIGH', max: method.maxAmount.toString() });
-    }
-    const usdAmount = await this.toUsd(amount, method.usdRate, method.currency);
+    // Frontend always sends USD. Convert to method.currency for the provider.
+    const usdAmount = this.parseAmount(amountUsdRaw);
     if (usdAmount.lt(MIN_DEPOSIT_USD)) throw new BadRequestException({ code: 'AMOUNT_TOO_LOW' });
     if (usdAmount.gt(MAX_DEPOSIT_USD)) throw new BadRequestException({ code: 'AMOUNT_TOO_HIGH' });
+
+    const amount = this.fromUsdToNative(usdAmount, method.usdRate, method.currency);
+    if (method.minAmount && amount.lt(new Prisma.Decimal(method.minAmount.toString()))) {
+      throw new BadRequestException({ code: 'AMOUNT_TOO_LOW', min: method.minAmount.toString(), currency: method.currency });
+    }
+    if (method.maxAmount && amount.gt(new Prisma.Decimal(method.maxAmount.toString()))) {
+      throw new BadRequestException({ code: 'AMOUNT_TOO_HIGH', max: method.maxAmount.toString(), currency: method.currency });
+    }
 
     const orderId = randomUUID();
 
@@ -117,17 +119,22 @@ export class PaymentsService {
     throw new BadRequestException({ code: 'UNSUPPORTED_DEPOSIT_KIND' });
   }
 
-  async withdraw(userId: number, methodSlug: string, amountRaw: string, opts: { card?: string; address?: string; destTag?: string; receiverName?: string; receiverPhone?: string }): Promise<WithdrawResult> {
+  async withdraw(userId: number, methodSlug: string, amountUsdRaw: string, opts: { card?: string; address?: string; destTag?: string; receiverName?: string; receiverPhone?: string }): Promise<WithdrawResult> {
     const method = await this.prisma.paymentMethod.findUnique({ where: { slug: methodSlug } });
     if (!method || !method.isActive || !method.isWithdraw) {
       throw new BadRequestException({ code: 'METHOD_NOT_AVAILABLE' });
     }
-    const amount = this.parseAmount(amountRaw);
-    if (method.minAmount && amount.lt(new Prisma.Decimal(method.minAmount.toString()))) {
-      throw new BadRequestException({ code: 'AMOUNT_TOO_LOW', min: method.minAmount.toString() });
-    }
-    const usdAmount = await this.toUsd(amount, method.usdRate, method.currency);
+    // Frontend always sends USD.
+    const usdAmount = this.parseAmount(amountUsdRaw);
     if (usdAmount.lt(MIN_WITHDRAW_USD)) throw new BadRequestException({ code: 'AMOUNT_TOO_LOW' });
+
+    const amount = this.fromUsdToNative(usdAmount, method.usdRate, method.currency);
+    if (method.minAmount && amount.lt(new Prisma.Decimal(method.minAmount.toString()))) {
+      throw new BadRequestException({ code: 'AMOUNT_TOO_LOW', min: method.minAmount.toString(), currency: method.currency });
+    }
+    if (method.maxAmount && amount.gt(new Prisma.Decimal(method.maxAmount.toString()))) {
+      throw new BadRequestException({ code: 'AMOUNT_TOO_HIGH', max: method.maxAmount.toString(), currency: method.currency });
+    }
 
     const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
     if (!wallet) throw new BadRequestException({ code: 'WALLET_MISSING' });
@@ -307,7 +314,7 @@ export class PaymentsService {
 
     const method = await this.prisma.paymentMethod.findFirst({ where: { kind: 'westwallet', currency: tx.currency, isActive: true } });
     const amountRaw = new Prisma.Decimal(String(tx.amount));
-    const usdAmount = await this.toUsd(amountRaw, method?.usdRate ?? null, tx.currency);
+    const usdAmount = this.toUsd(amountRaw, method?.usdRate ?? null, tx.currency);
 
     const payment = await this.prisma.payment.create({
       data: {
@@ -383,8 +390,8 @@ export class PaymentsService {
     return amount.toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
   }
 
-  private async toUsd(amount: Prisma.Decimal, rate: Prisma.Decimal | null | undefined, currency?: string | null): Promise<Prisma.Decimal> {
-    // 1) Admin-defined fixed rate wins (e.g. crypto/manual override).
+  private toUsd(amount: Prisma.Decimal, rate: Prisma.Decimal | null | undefined, currency?: string | null): Prisma.Decimal {
+    // 1) Admin-defined fixed rate wins (e.g. crypto/manual override; rate = USD per native unit).
     if (rate) {
       return amount.mul(new Prisma.Decimal(rate.toString())).toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
     }
@@ -393,17 +400,32 @@ export class PaymentsService {
     if (cur === 'USD' || cur === 'USDT' || cur === 'USDC') {
       return amount.toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
     }
-    // 3) Fiat conversion via live FX rates.
-    try {
-      const usdNum = await this.exchange.toUsd(Number(amount.toString()), cur);
-      if (Number.isFinite(usdNum) && usdNum > 0) {
-        return new Prisma.Decimal(usdNum.toFixed(8)).toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
-      }
-    } catch (err) {
-      this.log.warn(`exchange convert failed for ${cur}: ${(err as Error).message}`);
+    // 3) Fiat conversion via cached FX rates.
+    const usdNum = this.exchange.toUsd(Number(amount.toString()), cur);
+    if (Number.isFinite(usdNum) && usdNum > 0) {
+      return new Prisma.Decimal(usdNum.toFixed(8)).toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
     }
-    // 4) Last resort: 1:1 (better than failing the payment).
+    // 4) Last resort: 1:1.
     return amount.toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
+  }
+
+  /** Convert USD amount to method.currency for storing as `amountRaw` and sending to provider. */
+  private fromUsdToNative(usdAmount: Prisma.Decimal, rate: Prisma.Decimal | null | undefined, currency?: string | null): Prisma.Decimal {
+    if (rate) {
+      // rate = USD per 1 native unit → native = usd / rate.
+      const r = new Prisma.Decimal(rate.toString());
+      if (r.lte(0)) return usdAmount.toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
+      return usdAmount.div(r).toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
+    }
+    const cur = (currency ?? 'USD').toUpperCase();
+    if (cur === 'USD' || cur === 'USDT' || cur === 'USDC') {
+      return usdAmount.toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
+    }
+    const nativeNum = this.exchange.fromUsd(Number(usdAmount.toString()), cur);
+    if (Number.isFinite(nativeNum) && nativeNum > 0) {
+      return new Prisma.Decimal(nativeNum.toFixed(8)).toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
+    }
+    return usdAmount.toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
   }
 
   private mapBetraDepositStatus(s: string): string {

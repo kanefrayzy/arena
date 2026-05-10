@@ -75,6 +75,7 @@ export function WalletPage() {
   const [withdrawSheetOpen, setWithdrawSheetOpen] = useState(false);
   const [withdrawSheetMin, setWithdrawSheetMin] = useState(false);
   const [withdrawDone, setWithdrawDone] = useState(false);
+  const [rates, setRates] = useState<Record<string, number>>({ USD: 1 });
 
   const reload = async () => {
     try {
@@ -84,6 +85,10 @@ export function WalletPage() {
       setMethods(m.items);
       const p = await api.get<{ items: PaymentItem[] }>('/payments/me?limit=50');
       setHistory(p.items);
+      try {
+        const r = await api.get<{ rates: Record<string, number> }>('/payments/rates');
+        if (r?.rates) setRates(r.rates);
+      } catch { /* ignore, fallback 1:1 */ }
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) nav('/');
     }
@@ -93,6 +98,24 @@ export function WalletPage() {
   const filtered = methods.filter((m) => (tab === 'deposit' ? m.isDeposit : tab === 'withdraw' ? m.isWithdraw : false));
   const selected = methods.find((m) => m.slug === methodSlug) ?? null;
   const isCrypto = selected?.kind === 'westwallet';
+
+  // Currency conversion helper: USD -> method.currency.
+  const usdToNative = (usd: number, cur?: string | null): number => {
+    if (!cur) return usd;
+    const c = cur.toUpperCase();
+    if (['USD', 'USDT', 'USDC', 'BUSD', 'DAI'].includes(c)) return usd;
+    const r = rates[c];
+    if (!r || !Number.isFinite(r) || r <= 0) return usd;
+    return usd * r;
+  };
+  const nativeToUsd = (native: number, cur?: string | null): number => {
+    if (!cur) return native;
+    const c = cur.toUpperCase();
+    if (['USD', 'USDT', 'USDC', 'BUSD', 'DAI'].includes(c)) return native;
+    const r = rates[c];
+    if (!r || !Number.isFinite(r) || r <= 0) return native;
+    return native / r;
+  };
 
   // Auto-fetch crypto address when a crypto deposit method is selected
   useEffect(() => {
@@ -133,7 +156,7 @@ export function WalletPage() {
       if (selected.kind === 'betra_payout') body.card = card;
       else if (selected.kind === 'westwallet') body.address = address;
       await api.post('/payments/withdraw', body);
-      setErr(null);      setWithdrawDone(true);      toast.success('Заявка отправлена', `Вывод ${amount} ${selected.currency} принят в обработку`);
+      setErr(null);      setWithdrawDone(true);      toast.success('Заявка отправлена', `Вывод $${amount} принят в обработку`);
       await reload();
     } catch (e) {
       setErr(e instanceof ApiError ? `${e.code}` : (e as Error).message);
@@ -260,6 +283,9 @@ export function WalletPage() {
           isCrypto={isCrypto}
           selected={selected}
           amount={amount}
+          nativeHint={usdToNative(Number(amount) || 0, selected.currency)}
+          minNativeUsd={selected.minAmount ? nativeToUsd(Number(selected.minAmount), selected.currency) : 0}
+          maxNativeUsd={selected.maxAmount ? nativeToUsd(Number(selected.maxAmount), selected.currency) : 0}
           onAmountChange={setAmount}
           onSubmit={submitDeposit}
           minimized={sheetMin}
@@ -275,6 +301,9 @@ export function WalletPage() {
           balance={wallet ? Number(wallet.balance) : 0}
           selected={selected}
           amount={amount}
+          nativeHint={usdToNative(Number(amount) || 0, selected.currency)}
+          minNativeUsd={selected.minAmount ? nativeToUsd(Number(selected.minAmount), selected.currency) : 0}
+          maxNativeUsd={selected.maxAmount ? nativeToUsd(Number(selected.maxAmount), selected.currency) : 0}
           card={card}
           address={address}
           onAmountChange={setAmount}
@@ -294,7 +323,8 @@ export function WalletPage() {
 }
 
 function DepositSheet({
-  reqs, busy, loadingErr, isCrypto, selected, amount, onAmountChange, onSubmit,
+  reqs, busy, loadingErr, isCrypto, selected, amount, nativeHint, minNativeUsd, maxNativeUsd,
+  onAmountChange, onSubmit,
   minimized, onMinimize, onClose,
 }: {
   reqs: DepositResponse | null;
@@ -303,6 +333,9 @@ function DepositSheet({
   isCrypto: boolean;
   selected: PaymentMethod;
   amount: string;
+  nativeHint: number;
+  minNativeUsd: number;
+  maxNativeUsd: number;
   onAmountChange: (v: string) => void;
   onSubmit: () => void;
   minimized: boolean;
@@ -400,15 +433,27 @@ function DepositSheet({
           {/* Amount input for non-crypto betra deposit */}
           {!reqs && !busy && !isCrypto && (
             <div className="flex flex-col gap-3 pt-2">
+              <label className="text-[10px] uppercase tracking-widest text-white/50">
+                Сумма пополнения ($)
+              </label>
               <input
                 inputMode="decimal"
                 value={amount}
                 onChange={(e) => onAmountChange(e.target.value.replace(/[^0-9.]/g, ''))}
                 className="game-input font-mono text-xl"
-                placeholder={`Сумма в ${selected.currency}`}
+                placeholder="$0.00"
               />
-              {selected.minAmount && (
-                <div className="text-xs text-white/50">Мин: {selected.minAmount} {selected.currency}</div>
+              {selected.currency && selected.currency !== 'USD' && Number(amount) > 0 && (
+                <div className="text-xs text-white/60">
+                  ≈ <span className="font-mono font-semibold text-white/90">{nativeHint.toFixed(2)} {selected.currency}</span> к оплате
+                </div>
+              )}
+              {(minNativeUsd > 0 || maxNativeUsd > 0) && (
+                <div className="text-xs text-white/50">
+                  {minNativeUsd > 0 && `Мин: $${minNativeUsd.toFixed(2)}`}
+                  {minNativeUsd > 0 && maxNativeUsd > 0 && ' · '}
+                  {maxNativeUsd > 0 && `Макс: $${maxNativeUsd.toFixed(2)}`}
+                </div>
               )}
               <button
                 type="button"
@@ -518,7 +563,7 @@ function CryptoView({ c, onCopy, copied }: { c: { address: string; destTag?: str
 
 // ─── Withdraw drawer (mirrors DepositSheet UX) ─────────────────────────────
 function WithdrawSheet({
-  busy, err, done, balance, selected, amount, card, address,
+  busy, err, done, balance, selected, amount, nativeHint, minNativeUsd, maxNativeUsd, card, address,
   onAmountChange, onCardChange, onAddressChange, onSubmit,
   minimized, onMinimize, onClose,
 }: {
@@ -528,6 +573,9 @@ function WithdrawSheet({
   balance: number;
   selected: PaymentMethod;
   amount: string;
+  nativeHint: number;
+  minNativeUsd: number;
+  maxNativeUsd: number;
   card: string;
   address: string;
   onAmountChange: (v: string) => void;
@@ -563,13 +611,11 @@ function WithdrawSheet({
 
   const isCrypto = selected.kind === 'westwallet';
   const isCard = selected.kind === 'betra_payout';
-  const min = selected.minAmount ? Number(selected.minAmount) : 0;
-  const max = selected.maxAmount ? Number(selected.maxAmount) : 0;
   const amt = Number(amount) || 0;
   const detailsOk = isCrypto ? address.trim().length >= 10 : isCard ? card.length >= 12 : true;
   const balanceOk = amt <= balance;
-  const minOk = !min || amt >= min;
-  const maxOk = !max || amt <= max;
+  const minOk = !minNativeUsd || amt >= minNativeUsd;
+  const maxOk = !maxNativeUsd || amt <= maxNativeUsd;
   const canSubmit = !busy && amt > 0 && detailsOk && balanceOk && minOk && maxOk;
 
   return (
@@ -628,27 +674,32 @@ function WithdrawSheet({
 
               <div>
                 <label className="mb-1 block text-[10px] uppercase tracking-widest text-white/50">
-                  {t('wallet.amount')} ({selected.currency})
+                  Сумма к выводу ($)
                 </label>
                 <input
                   inputMode="decimal"
                   value={amount}
                   onChange={(e) => onAmountChange(e.target.value.replace(/[^0-9.]/g, ''))}
                   className="game-input font-mono text-xl"
-                  placeholder={`0.00 ${selected.currency}`}
+                  placeholder="$0.00"
                 />
+                {selected.currency && selected.currency !== 'USD' && amt > 0 && (
+                  <div className="mt-1 text-xs text-white/60">
+                    ≈ <span className="font-mono font-semibold text-white/90">{nativeHint.toFixed(2)} {selected.currency}</span> к получению
+                  </div>
+                )}
                 <div className="mt-1 flex items-center justify-between text-[11px] text-white/50">
                   <span>
-                    {min > 0 && `Мин: ${min} ${selected.currency}`}
-                    {min > 0 && max > 0 && ' · '}
-                    {max > 0 && `Макс: ${max} ${selected.currency}`}
+                    {minNativeUsd > 0 && `Мин: $${minNativeUsd.toFixed(2)}`}
+                    {minNativeUsd > 0 && maxNativeUsd > 0 && ' · '}
+                    {maxNativeUsd > 0 && `Макс: $${maxNativeUsd.toFixed(2)}`}
                   </span>
                   <button
                     type="button"
                     onClick={() => onAmountChange(String(balance.toFixed(2)))}
                     className="text-game-yellow underline-offset-2 hover:underline"
                   >
-                    Все ({balance.toFixed(2)})
+                    Все (${balance.toFixed(2)})
                   </button>
                 </div>
               </div>

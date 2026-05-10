@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 import { PaymentsService } from './payments.service';
+import { ExchangeService } from '../common/exchange.service';
 
 const amountRe = /^\d+(\.\d{1,8})?$/;
 
@@ -37,11 +38,23 @@ interface AuthedRequest extends Request {
 @UseGuards(JwtAuthGuard)
 @Controller('payments')
 export class PaymentsController {
-  constructor(private readonly payments: PaymentsService) {}
+  constructor(
+    private readonly payments: PaymentsService,
+    private readonly exchange: ExchangeService,
+  ) {}
 
   @Get('methods')
   async methods() {
     return { items: await this.payments.listMethods() };
+  }
+
+  @Get('rates')
+  rates() {
+    return {
+      base: 'USD',
+      rates: this.exchange.getRates(),
+      updatedAt: this.exchange.getLastRefresh(),
+    };
   }
 
   @Post('deposit')
