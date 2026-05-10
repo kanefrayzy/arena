@@ -117,35 +117,51 @@ export function WalletPage() {
         const r = await api.get<{ rates: Record<string, number> }>('/payments/rates');
         if (r?.rates) setRates(r.rates);
       } catch { /* ignore, fallback 1:1 */ }
-      // Probe for an active pending deposit and auto-resume the sheet.
+      // Refresh just the lock state — without touching open sheets / tabs.
       try {
         type PendingResp =
           | { active: false }
-          | {
-              active: true; paymentId: string; expiresAt: string; methodSlug: string | null;
-              betra: BetraReqs | null;
-            };
+          | { active: true; paymentId: string; expiresAt: string; methodSlug: string | null; betra: BetraReqs | null };
         const pp = await api.get<PendingResp>('/payments/pending');
-        if (pp.active) {
-          setPending({ paymentId: pp.paymentId, expiresAt: pp.expiresAt });
-          if (pp.betra) {
-            setReqs({ paymentId: pp.paymentId, status: pp.betra.status, betra: pp.betra });
-            if (pp.methodSlug) setMethodSlug(pp.methodSlug);
-            setTab('deposit');
-            setSheetOpen(true);
-            setSheetMin(true);
-          }
-        } else {
-          setPending(null);
-        }
+        if (pp.active) setPending({ paymentId: pp.paymentId, expiresAt: pp.expiresAt });
+        else setPending(null);
       } catch { /* ignore */ }
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) nav('/');
     }
   };
-  useEffect(() => { void reload(); }, []);
 
-  const filtered = methods.filter((m) => (tab === 'deposit' ? m.isDeposit : tab === 'withdraw' ? m.isWithdraw : false));
+  // Auto-resume pending deposit only on initial mount — never after submit/cancel,
+  // so the user-visible sheet state is not overridden by background refreshes.
+  const resumePending = async () => {
+    try {
+      type PendingResp =
+        | { active: false }
+        | { active: true; paymentId: string; expiresAt: string; methodSlug: string | null; betra: BetraReqs | null };
+      const pp = await api.get<PendingResp>('/payments/pending');
+      if (pp.active) {
+        setPending({ paymentId: pp.paymentId, expiresAt: pp.expiresAt });
+        if (pp.betra) {
+          setReqs({ paymentId: pp.paymentId, status: pp.betra.status, betra: pp.betra });
+          if (pp.methodSlug) setMethodSlug(pp.methodSlug);
+          setTab('deposit');
+          setSheetOpen(true);
+          setSheetMin(true);
+        }
+      }
+    } catch { /* ignore */ }
+  };
+  useEffect(() => { void (async () => { await reload(); await resumePending(); })(); }, []);
+
+  // Poll wallet + pending state every 10s so betra callback completions
+  // (balance credit + lock release) surface in near real-time.
+  useEffect(() => {
+    const id = setInterval(() => { void reload(); }, 10_000);
+    const onVis = () => { if (document.visibilityState === 'visible') void reload(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVis); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);  const filtered = methods.filter((m) => (tab === 'deposit' ? m.isDeposit : tab === 'withdraw' ? m.isWithdraw : false));
   const selected = methods.find((m) => m.slug === methodSlug) ?? null;
   const isCrypto = selected?.kind === 'westwallet';
 

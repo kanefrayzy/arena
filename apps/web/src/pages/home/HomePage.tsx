@@ -80,6 +80,25 @@ export function HomePage() {
     })();
   }, [nav, setMe]);
 
+  // Poll wallet + unread notifications every 15s so deposit completions and
+  // server-side notifications surface in near real-time without a WebSocket.
+  useEffect(() => {
+    const tick = async () => {
+      try {
+        const [w, n] = await Promise.allSettled([
+          api.get<Wallet>('/wallet'),
+          api.get<{ items: unknown[]; unreadCount: number }>('/notifications?limit=1'),
+        ]);
+        if (w.status === 'fulfilled') setWallet(w.value);
+        if (n.status === 'fulfilled') setUnreadNotifs(n.value.unreadCount);
+      } catch { /* ignore */ }
+    };
+    const id = setInterval(() => { void tick(); }, 15_000);
+    const onVis = () => { if (document.visibilityState === 'visible') void tick(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVis); };
+  }, []);
+
   if (!me) return null;
 
   const play = async () => {

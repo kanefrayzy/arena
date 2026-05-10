@@ -11,6 +11,12 @@
 		reverse_proxy api:3000
 	}
 
+	# Public payment provider webhooks (Betra, Westwallet) — bypass /api prefix.
+	@internal path /internal/*
+	handle @internal {
+		reverse_proxy api:3000
+	}
+
 	@uploads path /uploads/*
 	handle @uploads {
 		reverse_proxy api:3000
