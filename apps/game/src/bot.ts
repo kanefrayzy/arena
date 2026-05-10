@@ -1,4 +1,5 @@
 import type { PlayerInput, PlayerState, Sim } from './sim.js';
+import type { Obstacle } from '@arena/protocol';
 import { MAP_WIDTH, MAP_HEIGHT } from '@arena/shared';
 
 export type BotDifficulty = 'easy' | 'medium' | 'hard';
@@ -95,6 +96,10 @@ export class Bot {
     const dist = Math.hypot(dxRaw, dyRaw) || 1;
     const angleToTarget = Math.atan2(dyRaw, dxRaw);
 
+    // Line-of-sight: shrink obstacles slightly so we don't refuse shots
+    // through tiny corner gaps, but still respect every wall/crate/barrel.
+    const hasLos = segmentClear(me.x, me.y, target.x, target.y, this.sim.obstacles);
+
     // Kiting at desired range with sideways dodge.
     const desired = this.params.desiredRange;
     const closing = dist > desired + 30 ? 1 : dist < desired - 30 ? -1 : 0;
@@ -106,8 +111,21 @@ export class Bot {
     const perpX = -Math.sin(angleToTarget) * this.dodgeDir;
     const perpY = Math.cos(angleToTarget) * this.dodgeDir;
 
-    let mx = (dxRaw / dist) * closing + perpX * 0.7;
-    let my = (dyRaw / dist) * closing + perpY * 0.7;
+    // If line of sight is blocked, push toward the target more aggressively
+    // and use perpendicular probing to find an angle without a wall in the
+    // way. This stops the bot from standing in front of a crate firing into it.
+    let mx: number;
+    let my: number;
+    if (!hasLos) {
+      // Try sidestepping in current dodgeDir to peek past the obstacle.
+      const peekX = (dxRaw / dist) * 0.6 + perpX * 1.0;
+      const peekY = (dyRaw / dist) * 0.6 + perpY * 1.0;
+      mx = peekX;
+      my = peekY;
+    } else {
+      mx = (dxRaw / dist) * closing + perpX * 0.7;
+      my = (dyRaw / dist) * closing + perpY * 0.7;
+    }
 
     if (me.x < 80) mx += 1;
     if (me.x > MAP_WIDTH - 80) mx -= 1;
@@ -121,10 +139,12 @@ export class Bot {
     }
 
     const aimAngle = angleToTarget + (Math.random() - 0.5) * 2 * this.params.aimNoise;
-    const fire = reacted && dist < 480 && Math.random() < this.params.fireProb;
+    // Don't waste bullets on walls. Also gate ability LOS for projectile-like
+    // abilities (bomb / triple_shot / slow); melee/self ones don't need LOS.
+    const fire = reacted && hasLos && dist < 480 && Math.random() < this.params.fireProb;
     const ability = reacted
       && me.abilityCdLeftMs <= 0
-      && this.shouldUseAbility(me, target, dist, now);
+      && this.shouldUseAbility(me, target, dist, now, hasLos);
 
     this.sim.setInput(this.botId, {
       seq: ++this.inputSeq,
@@ -140,6 +160,7 @@ export class Bot {
     target: PlayerState,
     dist: number,
     now: number,
+    hasLos: boolean,
   ): boolean {
     if (Math.random() > this.params.abilityUseProb) return false;
     const hpPct = me.hp / Math.max(1, me.maxHp);
@@ -158,15 +179,17 @@ export class Bot {
         if (hpPct < this.params.panicHpPct && dist < 280) return true;
         return dist > 350 && Math.random() < 0.35;
       case 'blink':
+        // Use blink to escape low-HP corner OR to bypass a wall the bot can't shoot through.
         if (dist > 380) return true;
+        if (!hasLos && dist < 500) return true;
         if (hpPct < this.params.panicHpPct && dist < 200) return true;
         return false;
       case 'bomb':
-        return dist <= range * 0.9;
+        return hasLos && dist <= range * 0.9;
       case 'triple_shot':
-        return dist < 420 && facingTarget;
+        return hasLos && dist < 420 && facingTarget;
       case 'slow':
-        return dist > 240 && dist < 600;
+        return hasLos && dist > 240 && dist < 600;
       default:
         return false;
     }
@@ -178,6 +201,61 @@ function angleDiff(a: number, b: number): number {
   while (d > Math.PI) d -= Math.PI * 2;
   while (d < -Math.PI) d += Math.PI * 2;
   return d;
+}
+
+/** Slab-method ray/segment vs AABB. Returns true when the segment from (x1,y1)
+ *  to (x2,y2) does NOT intersect any obstacle (i.e. line of sight is clear). */
+function segmentClear(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  obstacles: ReadonlyArray<Obstacle>,
+): boolean {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  if (dx === 0 && dy === 0) return true;
+  for (const ob of obstacles) {
+    // Shrink ~2 px so razor-thin grazes don't cancel valid line-up shots.
+    const minX = ob.x + 2;
+    const minY = ob.y + 2;
+    const maxX = ob.x + ob.w - 2;
+    const maxY = ob.y + ob.h - 2;
+    if (maxX <= minX || maxY <= minY) continue;
+
+    let t0 = 0;
+    let t1 = 1;
+    let blocked = true;
+
+    if (dx === 0) {
+      if (x1 < minX || x1 > maxX) { blocked = false; }
+    } else {
+      const txa = (minX - x1) / dx;
+      const txb = (maxX - x1) / dx;
+      const txn = Math.min(txa, txb);
+      const txf = Math.max(txa, txb);
+      if (txn > t0) t0 = txn;
+      if (txf < t1) t1 = txf;
+      if (t0 > t1) blocked = false;
+    }
+
+    if (blocked) {
+      if (dy === 0) {
+        if (y1 < minY || y1 > maxY) blocked = false;
+      } else {
+        const tya = (minY - y1) / dy;
+        const tyb = (maxY - y1) / dy;
+        const tyn = Math.min(tya, tyb);
+        const tyf = Math.max(tya, tyb);
+        if (tyn > t0) t0 = tyn;
+        if (tyf < t1) t1 = tyf;
+        if (t0 > t1) blocked = false;
+      }
+    }
+
+    if (blocked && t1 >= 0 && t0 <= 1) return false;
+  }
+  return true;
 }
 
 const REALISTIC_BOT_NAMES = [

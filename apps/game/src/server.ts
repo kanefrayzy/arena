@@ -31,6 +31,28 @@ interface SocketUserData {
    *  resolves. Used by `close` to disambiguate a stale OLD-socket close event
    *  from a real disconnect after a page-refresh reconnect. */
   wrapper?: { send: (d: ArrayBuffer | Uint8Array, b: boolean, c?: boolean) => void; close: () => void };
+  /** Token-bucket rate limiter against client message floods. */
+  rl?: { tokens: number; last: number };
+}
+
+// Token bucket: burst of 60, refilled at 120 msg/s. Comfortably fits a
+// 60Hz client (input + ping) but blocks scripted floods that try to DoS
+// the simulation with millions of msgpack frames per second.
+const RL_CAPACITY = 60;
+const RL_REFILL_PER_SEC = 120;
+function rateLimitOk(ud: SocketUserData): boolean {
+  const now = Date.now();
+  let s = ud.rl;
+  if (!s) {
+    s = { tokens: RL_CAPACITY, last: now };
+    ud.rl = s;
+  }
+  const elapsed = (now - s.last) / 1000;
+  s.last = now;
+  s.tokens = Math.min(RL_CAPACITY, s.tokens + elapsed * RL_REFILL_PER_SEC);
+  if (s.tokens < 1) return false;
+  s.tokens -= 1;
+  return true;
 }
 
 const matches = new Map<string, Match>();
@@ -194,6 +216,11 @@ app.ws<SocketUserData>('/ws/match', {
   message: (ws, message, isBinary) => {
     const ud = ws.getUserData();
     if (!isBinary) return;
+    if (!rateLimitOk(ud)) {
+      // Silently drop excess frames; persistent abuse will get killed by uWS
+      // backpressure and the AFK timeout will eventually finalize the match.
+      return;
+    }
     let frame;
     try {
       frame = decodeMsg(new Uint8Array(message));

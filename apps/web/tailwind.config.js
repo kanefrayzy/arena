@@ -47,6 +47,7 @@ export default {
         shimmer: 'shimmer 2.5s linear infinite',
         float: 'float 3s ease-in-out infinite',
         'pulse-glow': 'pulseGlow 1.6s ease-in-out infinite',
+        bell: 'bellShake 1.6s ease-in-out infinite',
       },
       keyframes: {
         popIn: {
@@ -64,6 +65,11 @@ export default {
         pulseGlow: {
           '0%, 100%': { boxShadow: '0 0 16px rgba(255,209,59,0.4)' },
           '50%': { boxShadow: '0 0 32px rgba(255,209,59,0.8)' },
+        },
+        bellShake: {
+          '0%, 60%, 100%': { transform: 'rotate(0deg)' },
+          '10%, 30%, 50%': { transform: 'rotate(-12deg)' },
+          '20%, 40%': { transform: 'rotate(12deg)' },
         },
       },
     },

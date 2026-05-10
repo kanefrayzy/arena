@@ -116,13 +116,7 @@ export function HomePage() {
 
         <div className="flex flex-col items-center gap-0.5">
           <div className="game-title text-lg text-white/90">@{me.username}</div>
-          <div
-            className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5 text-[11px] font-mono text-white/70"
-            title={t('home.cup') ?? 'Cup'}
-          >
-            <span aria-hidden="true">🏆</span>
-            <span>{me.cup ?? 0}</span>
-          </div>
+          <RankBadge cup={me.cup ?? 0} />
         </div>
 
         <div className="flex items-center gap-1">
@@ -175,34 +169,50 @@ export function HomePage() {
         {/* ── CHARACTER AREA (flex-1) ── */}
         <div className="relative flex flex-1 overflow-hidden">
 
-          {/* History — top-left corner of char area */}
+          {/* History — top-left as rich card */}
           <button
             type="button"
             onClick={() => setShowHistory(true)}
-            className="absolute left-4 top-2 z-20 flex h-11 w-11 items-center justify-center rounded-2xl border border-game-yellow/40 bg-black/40 text-game-yellow backdrop-blur active:scale-90 hover:bg-black/60"
+            className="absolute left-3 top-2 z-20 group flex items-center gap-2 rounded-2xl border border-game-yellow/40 bg-gradient-to-br from-game-yellow/15 via-black/40 to-black/40 px-3 py-2 text-game-yellow shadow-[0_4px_18px_rgba(0,0,0,0.45)] backdrop-blur transition active:scale-95 hover:border-game-yellow/70 hover:from-game-yellow/25"
             aria-label="История матчей"
           >
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg viewBox="0 0 24 24" className="h-5 w-5 transition-transform group-hover:rotate-12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
             </svg>
+            <div className="flex flex-col items-start leading-tight">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-white/55">{t('home.history')}</span>
+              <span className="font-mono text-xs text-white/90">
+                {me.wins ?? 0}<span className="text-emerald-300">W</span>
+                <span className="mx-0.5 text-white/30">·</span>
+                {me.losses ?? 0}<span className="text-rose-300">L</span>
+              </span>
+            </div>
           </button>
 
-          {/* Notifications — top-right corner of char area */}
+          {/* Notifications — top-right as rich card */}
           <button
             type="button"
             onClick={() => setShowNotifs(true)}
-            className="absolute right-4 top-2 z-20 flex h-11 w-11 items-center justify-center rounded-2xl border border-game-cyan/40 bg-black/40 text-game-cyan backdrop-blur active:scale-90 hover:bg-black/60"
+            className="absolute right-3 top-2 z-20 group flex items-center gap-2 rounded-2xl border border-game-cyan/40 bg-gradient-to-br from-game-cyan/15 via-black/40 to-black/40 px-3 py-2 text-game-cyan shadow-[0_4px_18px_rgba(0,0,0,0.45)] backdrop-blur transition active:scale-95 hover:border-game-cyan/70 hover:from-game-cyan/25"
             aria-label="Уведомления"
           >
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-            </svg>
-            {unreadNotifs > 0 && (
-              <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white">
-                {unreadNotifs > 9 ? '9+' : unreadNotifs}
+            <div className="relative">
+              <svg viewBox="0 0 24 24" className={'h-5 w-5 ' + (unreadNotifs > 0 ? 'animate-bell' : '')} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              {unreadNotifs > 0 && (
+                <span className="absolute -top-1 -right-1.5 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">
+                  {unreadNotifs > 9 ? '9+' : unreadNotifs}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-col items-start leading-tight">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-white/55">{t('home.alerts')}</span>
+              <span className="font-mono text-xs text-white/90">
+                {unreadNotifs > 0 ? `+${unreadNotifs} ${t('home.new')}` : t('home.read_all')}
               </span>
-            )}
+            </div>
           </button>
 
           {/* Character — fills entire area */}
@@ -340,6 +350,62 @@ export function HomePage() {
           onUnreadChange={setUnreadNotifs}
         />
       )}
+    </div>
+  );
+}
+
+interface RankTier {
+  name: string;
+  min: number;
+  emoji: string;
+  /** Tailwind classes for ring + bg gradient + text. */
+  ring: string;
+  glow: string;
+  text: string;
+}
+
+const RANK_TIERS: RankTier[] = [
+  { name: 'Bronze',   min: 0,    emoji: '🥉', ring: 'ring-amber-700/60',  glow: 'from-amber-700/30 to-amber-900/10',  text: 'text-amber-300' },
+  { name: 'Silver',   min: 100,  emoji: '🥈', ring: 'ring-slate-300/60',  glow: 'from-slate-300/30 to-slate-500/10', text: 'text-slate-200' },
+  { name: 'Gold',     min: 300,  emoji: '🥇', ring: 'ring-yellow-400/70', glow: 'from-yellow-400/35 to-yellow-700/10', text: 'text-yellow-200' },
+  { name: 'Platinum', min: 600,  emoji: '🛡️', ring: 'ring-cyan-300/60',   glow: 'from-cyan-300/30 to-cyan-600/10',   text: 'text-cyan-200' },
+  { name: 'Diamond',  min: 1000, emoji: '💎', ring: 'ring-sky-300/70',    glow: 'from-sky-300/35 to-indigo-600/10',  text: 'text-sky-200' },
+  { name: 'Master',   min: 1500, emoji: '👑', ring: 'ring-fuchsia-400/70', glow: 'from-fuchsia-400/40 to-purple-700/15', text: 'text-fuchsia-200' },
+  { name: 'Legend',   min: 2500, emoji: '⚡', ring: 'ring-rose-400/80',   glow: 'from-rose-400/40 to-orange-500/15', text: 'text-rose-200' },
+];
+
+function tierFor(cup: number): { tier: RankTier; next: RankTier | null } {
+  let tier = RANK_TIERS[0]!;
+  let next: RankTier | null = RANK_TIERS[1] ?? null;
+  for (let i = 0; i < RANK_TIERS.length; i++) {
+    if (cup >= RANK_TIERS[i]!.min) {
+      tier = RANK_TIERS[i]!;
+      next = RANK_TIERS[i + 1] ?? null;
+    }
+  }
+  return { tier, next };
+}
+
+function RankBadge({ cup }: { cup: number }) {
+  const { tier, next } = tierFor(cup);
+  const span = next ? next.min - tier.min : 1;
+  const progress = next ? Math.min(100, Math.max(0, ((cup - tier.min) / span) * 100)) : 100;
+  return (
+    <div
+      className={
+        'group relative inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-mono ' +
+        'bg-gradient-to-r ' + tier.glow + ' ring-1 ' + tier.ring + ' ' + tier.text + ' shadow-[0_2px_8px_rgba(0,0,0,0.35)]'
+      }
+      title={`${tier.name} · ${cup} cup${next ? ` · до ${next.name}: ${next.min - cup}` : ''}`}
+    >
+      <span aria-hidden="true" className="text-[13px] leading-none">{tier.emoji}</span>
+      <span className="font-semibold tracking-wide">{tier.name}</span>
+      <span className="text-white/40">·</span>
+      <span className="font-mono text-white/90">{cup}</span>
+      {/* progress dot row */}
+      <span className="ml-0.5 inline-block h-1 w-8 overflow-hidden rounded-full bg-white/10 align-middle">
+        <span className="block h-full rounded-full bg-current opacity-80" style={{ width: `${progress}%` }} />
+      </span>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Logger, Post, UseGuards } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { Prisma } from '@prisma/client';
 import { BOT_USER_ID } from '@arena/shared';
 import { PrismaService } from '../common/prisma/prisma.module';
@@ -28,6 +29,7 @@ interface MatchAbortBody {
  */
 @Controller('internal/match')
 @UseGuards(HmacGuard)
+@SkipThrottle()
 export class InternalMatchController {
   private readonly log = new Logger('InternalMatch');
   constructor(
@@ -110,14 +112,13 @@ export class InternalMatchController {
   }
 
   /** Increment matchesPlayed/wins/losses/draws and apply cup delta from settings.
-   *  Cup is clamped to 0 (never negative). Bot matches do not affect ranks. */
+   *  Cup is clamped to 0 (never negative). The bot user is skipped, but the
+   *  human in a bot match still receives a cup delta and stat increment. */
   private async updateStatsAndCup(
     match: { player1Id: number; player2Id: number },
     winnerId: number | null,
-    isBotMatch: boolean,
+    _isBotMatch: boolean,
   ): Promise<void> {
-    if (isBotMatch) return;
-
     const [winSetting, lossSetting] = await Promise.all([
       this.prisma.setting.findUnique({ where: { key: 'gameplay.cup_win' } }),
       this.prisma.setting.findUnique({ where: { key: 'gameplay.cup_loss' } }),
@@ -125,9 +126,11 @@ export class InternalMatchController {
     const cupWin = readPositiveInt(winSetting?.value, 25);
     const cupLoss = readPositiveInt(lossSetting?.value, 15);
 
-    const ids = [match.player1Id, match.player2Id];
-    for (const userId of ids) {
-      // Ensure UserStats row exists.
+    // Filter out the bot user — never write stats/cup for it.
+    const humanIds = [match.player1Id, match.player2Id].filter((id) => id !== BOT_USER_ID);
+    if (humanIds.length === 0) return;
+
+    for (const userId of humanIds) {
       await this.prisma.userStats.upsert({
         where: { userId },
         update: {},
@@ -138,34 +141,36 @@ export class InternalMatchController {
     if (winnerId == null) {
       // Draw — both +1 draw, no cup change.
       await this.prisma.userStats.updateMany({
-        where: { userId: { in: ids } },
+        where: { userId: { in: humanIds } },
         data: { matchesPlayed: { increment: 1 }, draws: { increment: 1 } },
       });
       return;
     }
 
+    if (winnerId !== BOT_USER_ID && humanIds.includes(winnerId)) {
+      await this.prisma.userStats.update({
+        where: { userId: winnerId },
+        data: {
+          matchesPlayed: { increment: 1 },
+          wins: { increment: 1 },
+          cup: { increment: cupWin },
+        },
+      });
+    }
+
     const loserId = winnerId === match.player1Id ? match.player2Id : match.player1Id;
-
-    await this.prisma.userStats.update({
-      where: { userId: winnerId },
-      data: {
-        matchesPlayed: { increment: 1 },
-        wins: { increment: 1 },
-        cup: { increment: cupWin },
-      },
-    });
-
-    // Loser: clamp cup to >= 0.
-    const loser = await this.prisma.userStats.findUnique({ where: { userId: loserId } });
-    const newCup = Math.max(0, (loser?.cup ?? 0) - cupLoss);
-    await this.prisma.userStats.update({
-      where: { userId: loserId },
-      data: {
-        matchesPlayed: { increment: 1 },
-        losses: { increment: 1 },
-        cup: newCup,
-      },
-    });
+    if (loserId !== BOT_USER_ID && humanIds.includes(loserId)) {
+      const loser = await this.prisma.userStats.findUnique({ where: { userId: loserId } });
+      const newCup = Math.max(0, (loser?.cup ?? 0) - cupLoss);
+      await this.prisma.userStats.update({
+        where: { userId: loserId },
+        data: {
+          matchesPlayed: { increment: 1 },
+          losses: { increment: 1 },
+          cup: newCup,
+        },
+      });
+    }
   }
 
   @Post('abort')

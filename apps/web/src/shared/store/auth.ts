@@ -7,6 +7,10 @@ export interface Me {
   role: 'PLAYER' | 'ADMIN' | 'MODERATOR';
   cup?: number;
   mmr?: number;
+  wins?: number;
+  losses?: number;
+  draws?: number;
+  matchesPlayed?: number;
 }
 
 interface AuthState {
