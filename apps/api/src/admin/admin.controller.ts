@@ -416,6 +416,11 @@ export class AdminController {
     return this.admin.rejectPayment(id, this.adminId(req), body.reason);
   }
 
+  @Post('payments/:id/force-complete')
+  forceCompleteDeposit(@Param('id') id: string, @Req() req: Request) {
+    return this.admin.forceCompleteDeposit(id, this.adminId(req));
+  }
+
   // Settings
   @Get('settings')
   listSettings() {

@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { SYSTEM_USER_ID } from '@arena/shared';
 import { PrismaService } from '../common/prisma/prisma.module';
 import { LedgerService } from '../wallet/ledger.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 /**
  * AdminService — privileged operations. Every mutation that touches money
@@ -16,6 +17,7 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ledger: LedgerService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ───────────────────────── Dashboard ─────────────────────────
@@ -702,6 +704,47 @@ export class AdminService {
       });
     });
     return { id: paymentId, status: 'APPROVED' };
+  }
+
+  /**
+   * Manually credit a DEPOSIT that the provider confirmed externally but whose
+   * callback failed (e.g. signature mismatch, network drop). Re-uses the same
+   * ledger idempotencyKey as the auto-callback path, so a later successful
+   * callback will NOT double-credit.
+   */
+  async forceCompleteDeposit(paymentId: string, adminId: number) {
+    const p = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!p) throw new NotFoundException({ code: 'PAYMENT_NOT_FOUND', message: 'payment not found' });
+    if (p.type !== 'DEPOSIT') {
+      throw new BadRequestException({ code: 'NOT_DEPOSIT', message: 'only DEPOSIT can be force-completed' });
+    }
+    if (p.status === 'COMPLETED') return { id: paymentId, status: 'COMPLETED', alreadyCredited: true };
+
+    await this.ledger.record({
+      userId: p.userId,
+      amount: new Prisma.Decimal(p.amountUsd.toString()),
+      type: 'DEPOSIT',
+      refType: 'payment',
+      refId: p.id,
+      idempotencyKey: `payment:${p.id}:deposit`,
+    });
+    await this.prisma.payment.update({
+      where: { id: p.id },
+      data: {
+        status: 'COMPLETED',
+        finishedAt: new Date(),
+        meta: { ...((p.meta as object) ?? {}), forceCompletedBy: adminId, forceCompletedAt: new Date().toISOString() } as Prisma.InputJsonValue,
+      },
+    });
+    void this.notifications.create({
+      userId: p.userId,
+      type: 'deposit',
+      title: 'Пополнение зачислено',
+      body: `${p.amountRaw.toString()} ${p.currency} (≈$${Number(p.amountUsd).toFixed(2)}) зачислено на счёт`,
+      meta: { paymentId: p.id, forced: true },
+    }).catch(() => undefined);
+    this.log.log(`Admin ${adminId} force-completed deposit ${paymentId} (${p.amountRaw} ${p.currency})`);
+    return { id: paymentId, status: 'COMPLETED' };
   }
 
   async rejectPayment(paymentId: string, adminId: number, reason: string) {

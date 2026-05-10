@@ -5,9 +5,10 @@ import { SpritesController, PublicSpritesController } from './sprites.controller
 import { BrandingController, PublicBrandingController } from './branding.controller';
 import { AdminSeoController, PublicSeoController, PublicManifestController } from './seo.controller';
 import { WalletModule } from '../wallet/wallet.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [WalletModule],
+  imports: [WalletModule, NotificationsModule],
   controllers: [
     AdminController,
     SpritesController,
