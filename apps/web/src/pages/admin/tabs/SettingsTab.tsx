@@ -111,7 +111,7 @@ export function SettingsTab() {
       (map[meta.group] ||= []).push({ setting: { key, value: null }, meta });
     }
 
-    const order: SettingMeta['group'][] = ['gameplay', 'rooms', 'wallet', 'legal', 'other'];
+    const order: SettingMeta['group'][] = ['gameplay', 'bots', 'rooms', 'wallet', 'seo', 'legal', 'other'];
     return order
       .filter((g) => map[g] && map[g]!.length > 0)
       .map((g) => ({ group: g, label: GROUP_LABELS[g], rows: map[g]!.sort((a, b) => a.meta.label.localeCompare(b.meta.label)) }));
