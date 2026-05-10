@@ -103,15 +103,17 @@ export function HomePage() {
 
       {/* ── TOP BAR ── */}
       <header className="game-panel relative z-10 flex items-center justify-between px-4 py-2.5">
-        {/* Balance chip → wallet */}
+        {/* Balance — Brawl-Stars-style coin pill → wallet */}
         <button
           type="button"
           onClick={() => nav('/wallet')}
-          className="game-chip game-chip-yellow text-base"
+          className="group relative inline-flex items-center gap-1.5 rounded-full border-b-2 border-emerald-800/80 bg-gradient-to-b from-emerald-300 via-emerald-400 to-emerald-600 px-3 py-1 shadow-[0_3px_0_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.45)] transition active:translate-y-0.5 active:border-b-0 active:shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]"
           title={t('home.balance')}
         >
-          <span className="text-[#1a1450]">$</span>
-          <span className="font-mono">{wallet ? Number(wallet.balance).toFixed(2) : '—'}</span>
+          <span className="flex h-5 w-5 items-center justify-center rounded-full border border-yellow-700/80 bg-gradient-to-b from-yellow-200 via-yellow-400 to-yellow-600 text-[10px] font-black text-yellow-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">$</span>
+          <span className="font-mono font-black text-emerald-950 drop-shadow-[0_1px_0_rgba(255,255,255,0.4)] tabular-nums">
+            {wallet ? Number(wallet.balance).toFixed(2) : '—'}
+          </span>
         </button>
 
         <div className="flex flex-col items-center gap-0.5">
@@ -123,9 +125,13 @@ export function HomePage() {
           <button
             type="button"
             onClick={() => nav('/settings')}
-            className="game-btn game-btn-ghost game-btn-sm"
+            className="group relative h-9 w-9 rounded-xl border-b-2 border-slate-700/80 bg-gradient-to-b from-slate-300 via-slate-400 to-slate-600 text-slate-900 shadow-[0_3px_0_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.5)] transition active:translate-y-0.5 active:border-b-0"
             aria-label={t('settings.title')}
-          >⚙</button>
+          >
+            <svg viewBox="0 0 24 24" className="mx-auto h-5 w-5 transition-transform group-hover:rotate-45" fill="currentColor" aria-hidden>
+              <path d="M12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7zm7.4-3.5l1.7-1.3-1.7-3-2 .7a7.5 7.5 0 00-1.5-.9L15.5 5h-3.4l-.4 2.5a7.5 7.5 0 00-1.5.9l-2-.7-1.7 3 1.7 1.3a7.6 7.6 0 000 1.7L4.5 14l1.7 3 2-.7a7.5 7.5 0 001.5.9l.4 2.5h3.4l.4-2.5a7.5 7.5 0 001.5-.9l2 .7 1.7-3-1.7-1.3a7.6 7.6 0 000-1.7z" />
+            </svg>
+          </button>
           {me.role === 'ADMIN' && (
             <button type="button" onClick={() => nav('/admin')} className="game-btn game-btn-pink game-btn-sm">
               admin
@@ -169,7 +175,7 @@ export function HomePage() {
         {/* ── CHARACTER AREA (flex-1) ── */}
         <div className="relative flex flex-1 overflow-hidden">
 
-          {/* History — Brawl-Stars-style round icon button */}
+          {/* History — Brawl-Stars-style round icon button (clock-rewind) */}
           <button
             type="button"
             onClick={() => setShowHistory(true)}
@@ -177,8 +183,10 @@ export function HomePage() {
             aria-label="История матчей"
           >
             <span className="pointer-events-none absolute inset-x-1.5 top-1 h-2 rounded-full bg-white/55 blur-[1px]" />
-            <svg viewBox="0 0 24 24" className="relative mx-auto h-7 w-7 transition-transform group-hover:scale-110" fill="currentColor" aria-hidden>
-              <path d="M12 2.5l2.7 5.5 6 .9-4.35 4.25 1 6L12 16.3 6.65 19.15l1-6L3.3 8.9l6-.9L12 2.5z" />
+            <svg viewBox="0 0 24 24" className="relative mx-auto h-7 w-7 transition-transform group-hover:-rotate-12" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M3 12a9 9 0 1 0 3-6.7" />
+              <polyline points="3 4 3 9 8 9" />
+              <polyline points="12 7 12 12 16 14" />
             </svg>
           </button>
 
@@ -376,14 +384,26 @@ function RankBadge({ cup }: { cup: number }) {
   return (
     <div
       className={
-        'group relative inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-mono ' +
-        'bg-gradient-to-r ' + tier.glow + ' ring-1 ' + tier.ring + ' ' + tier.text +
-        ' shadow-[0_2px_10px_rgba(0,0,0,0.4)]'
+        'group relative inline-flex items-center gap-1.5 rounded-full pl-1 pr-3 py-0.5 text-sm ' +
+        'bg-gradient-to-b from-black/55 via-black/35 to-black/60 ring-1 ' + tier.ring +
+        ' shadow-[0_2px_8px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.08)]'
       }
-      title={`${tier.name} · ${cup} \uD83C\uDFC6`}
+      title={`${tier.name} · ${cup}`}
     >
-      <span aria-hidden="true" className="text-[14px] leading-none drop-shadow-[0_1px_0_rgba(0,0,0,0.4)]">🏆</span>
-      <span className="font-bold tabular-nums text-white">{cup}</span>
+      {/* 3D trophy medallion */}
+      <span
+        aria-hidden="true"
+        className={
+          'relative -ml-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full ' +
+          'border border-yellow-700/80 bg-gradient-to-b from-yellow-200 via-yellow-400 to-amber-600 ' +
+          'shadow-[0_1px_0_rgba(0,0,0,0.4),inset_0_1px_0_rgba(255,255,255,0.7)]'
+        }
+      >
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-amber-900 drop-shadow-[0_1px_0_rgba(255,255,255,0.4)]" fill="currentColor" aria-hidden>
+          <path d="M7 4h10v2h3v3a4 4 0 0 1-4 4h-.18A5 5 0 0 1 13 15.9V18h2v2H9v-2h2v-2.1A5 5 0 0 1 7.18 13H7a4 4 0 0 1-4-4V6h4V4zm0 4H5v1a2 2 0 0 0 2 2V8zm10 0v3a2 2 0 0 0 2-2V8h-2z" />
+        </svg>
+      </span>
+      <span className={'font-display font-black tabular-nums text-base leading-none ' + tier.text + ' drop-shadow-[0_1px_0_rgba(0,0,0,0.6)]'}>{cup}</span>
     </div>
   );
 }

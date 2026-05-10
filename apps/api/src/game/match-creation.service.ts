@@ -57,7 +57,12 @@ export class MatchCreationService {
 
   async createMatch(input: CreateMatchInput): Promise<{ matchId: string }> {
     const meta: Record<string, unknown> = {};
-    if (input.isBotMatch) meta.bot = true;
+    if (input.isBotMatch) {
+      meta.bot = true;
+      // Pre-pick the bot's per-match display name and persist it so the same
+      // name is shown in match history (player2.username is always 'Bot').
+      meta.botUsername = pickBotName();
+    }
 
     // Resolve loadouts (character+skin) for both players. Bot: pick first active char/default skin.
     const p1Loadout = await this.resolveLoadout(input.player1Id);
@@ -121,7 +126,8 @@ export class MatchCreationService {
         difficulty: parseDifficulty(diffSetting?.value),
         startDelayMs: 3500,
       };
-      player2Display = { id: player2User.id, username: pickBotName() };
+      const persistedName = typeof meta.botUsername === 'string' ? (meta.botUsername as string) : pickBotName();
+      player2Display = { id: player2User.id, username: persistedName };
     }
 
     const gameWsUrl = process.env.GAME_PUBLIC_WS_URL ?? 'ws://localhost/ws/match';
@@ -238,14 +244,16 @@ export class MatchCreationService {
   }
 
   private async resolveBotLoadout(): Promise<ResolvedLoadout> {
-    const char = await this.prisma.character.findFirst({
+    // Pick a RANDOM active character so the bot doesn't always look the same.
+    const chars = await this.prisma.character.findMany({
       where: { isActive: true },
-      orderBy: { id: 'asc' },
-      include: { skins: { where: { isActive: true }, orderBy: { id: 'asc' }, take: 1 }, ability: true },
+      include: { skins: { where: { isActive: true }, orderBy: { id: 'asc' } }, ability: true },
     });
-    if (!char) throw new Error('no active character seeded');
-    const skin = char.skins[0];
-    if (!skin) throw new Error(`character ${char.id} has no skin`);
+    if (chars.length === 0) throw new Error('no active character seeded');
+    const char = chars[Math.floor(Math.random() * chars.length)]!;
+    if (char.skins.length === 0) throw new Error(`character ${char.id} has no skin`);
+    // Random skin too, when more than one is available.
+    const skin = char.skins[Math.floor(Math.random() * char.skins.length)]!;
     const weapon = await this.resolveWeapon(null);
     return {
       characterId: char.id,

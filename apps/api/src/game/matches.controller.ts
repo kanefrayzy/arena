@@ -32,7 +32,17 @@ export class MatchesController {
         room:    { select: { mode: true } },
       },
     });
-    return { items };
+    // For bot matches, override player2.username with the per-match bot name
+    // stored in `meta.botUsername` so history shows the same realistic name
+    // the user saw during the match (instead of the literal "Bot").
+    const decorated = items.map((m) => {
+      const meta = (m.meta ?? {}) as { bot?: boolean; botUsername?: string };
+      if (meta.bot && meta.botUsername && m.player2) {
+        return { ...m, player2: { ...m.player2, username: meta.botUsername } };
+      }
+      return m;
+    });
+    return { items: decorated };
   }
 
   @Get(':id')
