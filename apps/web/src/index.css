@@ -33,6 +33,30 @@ body {
     linear-gradient(180deg, #1a1450 0%, #0d0938 100%);
 }
 
+/*
+ * Performance: backdrop-filter (Tailwind `backdrop-blur-*`) re-rasterises
+ * the area underneath EVERY animation frame of any moving element on top
+ * (drawers, modals, sliding sheets). On mid/low-end GPUs and most phones
+ * this single property turns 60fps into 15-20fps slideshow.
+ *
+ * Almost every component in this codebase already pairs backdrop-blur with
+ * `bg-*/90` or `bg-*/95`, so removing the blur is visually almost a no-op
+ * but yields a massive frame-time win. Same logic for `filter: blur()` /
+ * `drop-shadow()` on continuously-transformed sprites.
+ */
+@layer utilities {
+  .backdrop-blur,
+  .backdrop-blur-sm,
+  .backdrop-blur-md,
+  .backdrop-blur-lg,
+  .backdrop-blur-xl,
+  .backdrop-blur-2xl,
+  .backdrop-blur-3xl {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
 @layer components {
   /* Big chunky 3D button with hard bottom shadow (Brawl-style) */
   .game-btn {

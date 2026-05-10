@@ -238,12 +238,20 @@ export function HomePage() {
             <div
               className="absolute inset-0 z-10 flex flex-col items-center"
             >
-              {/* Image wrapper — takes all vertical space, top padding clears the buttons */}
-              <div className="flex min-h-0 flex-1 w-full items-end justify-center pt-16 pb-0">
+              {/* Image wrapper — takes all vertical space, top padding clears the buttons.
+                  Static radial ellipse below acts as the ground shadow (cheap GPU paint),
+                  replacing the expensive `filter: drop-shadow` that used to re-rasterise
+                  the sprite every frame of the float animation. */}
+              <div className="relative flex min-h-0 flex-1 w-full items-end justify-center pt-16 pb-0">
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute bottom-2 left-1/2 h-6 w-[55%] -translate-x-1/2 rounded-[50%]"
+                  style={{ background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.25) 45%, transparent 75%)' }}
+                />
                 {activeChar.spriteUrl ? (
                   (() => {
                     const isWebm = /\.webm(\?|$)/i.test(activeChar.spriteUrl ?? '');
-                    const cls = 'max-h-full w-auto max-w-[75%] object-contain drop-shadow-[0_14px_32px_rgba(0,0,0,0.7)] animate-float';
+                    const cls = 'relative max-h-full w-auto max-w-[75%] object-contain animate-float';
                     return isWebm
                       ? <video
                           key={activeChar.spriteUrl}
