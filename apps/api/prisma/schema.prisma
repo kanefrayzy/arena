@@ -297,10 +297,31 @@ model UserStats {
   losses        Int     @default(0)
   draws         Int     @default(0)
   mmr           Int     @default(1000)
+  /// Cup ranking points. Earned on win, lost on defeat. Min 0. Step configured in Settings.
+  cup           Int     @default(0)
   totalEarned   Decimal @db.Decimal(20, 8) @default(0)
   totalLost     Decimal @db.Decimal(20, 8) @default(0)
 
   user User @relation(fields: [userId], references: [id])
+}
+
+/// Player report about a finished/live match. Visible in admin panel.
+model MatchReport {
+  id         Int      @id @default(autoincrement())
+  matchId    String
+  reporterId Int
+  category   String   // cheating | bug | abuse | other
+  message    String
+  status     String   @default("pending") // pending | reviewed | resolved | dismissed
+  adminNote  String?
+  reviewedBy Int?
+  reviewedAt DateTime?
+  createdAt  DateTime @default(now())
+  meta       Json?
+
+  @@index([status, createdAt])
+  @@index([matchId])
+  @@index([reporterId, createdAt])
 }
 
 model Setting {

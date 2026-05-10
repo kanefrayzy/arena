@@ -3,7 +3,7 @@ export interface SettingMeta {
   description: string;
   type: 'boolean' | 'number' | 'string' | 'array' | 'object';
   example?: string;
-  group: 'gameplay' | 'rooms' | 'wallet' | 'legal' | 'other';
+  group: 'gameplay' | 'rooms' | 'wallet' | 'legal' | 'bots' | 'seo' | 'other';
 }
 
 export const SETTING_META: Record<string, SettingMeta> = {
@@ -70,6 +70,110 @@ export const SETTING_META: Record<string, SettingMeta> = {
     example: '["RU","US"]',
     group: 'legal',
   },
+
+  // ───── Cup ranking ─────
+  'gameplay.cup_win': {
+    label: 'Кубков за победу',
+    description: 'Сколько кубков получает победитель матча.',
+    type: 'number',
+    example: '25',
+    group: 'gameplay',
+  },
+  'gameplay.cup_loss': {
+    label: 'Кубков за поражение',
+    description: 'Сколько кубков теряет проигравший. Минимум 0 (не уходит в минус).',
+    type: 'number',
+    example: '15',
+    group: 'gameplay',
+  },
+
+  // ───── Bots ─────
+  'bots.enabled': {
+    label: 'Боты включены',
+    description: 'Глобальный выключатель ботов в матчмейкинге FREE-комнат.',
+    type: 'boolean',
+    example: 'true',
+    group: 'bots',
+  },
+  'bots.difficulty': {
+    label: 'Сложность ботов',
+    description: 'Уровень сложности: easy | medium | hard. Влияет на реакцию, точность, использование способностей.',
+    type: 'string',
+    example: 'medium',
+    group: 'bots',
+  },
+  'bots.queue_min_wait_s': {
+    label: 'Мин. ожидание перед ботом, сек',
+    description: 'Минимум секунд в поиске, после которого может подключиться бот.',
+    type: 'number',
+    example: '30',
+    group: 'bots',
+  },
+  'bots.queue_max_wait_s': {
+    label: 'Макс. ожидание перед ботом, сек',
+    description: 'Верхняя граница случайного окна. Каждому пользователю выбирается случайное значение в [min, max].',
+    type: 'number',
+    example: '40',
+    group: 'bots',
+  },
+
+  // ───── SEO ─────
+  'seo.site_name': {
+    label: 'Название сайта',
+    description: 'Используется в og:site_name и apple-mobile-web-app-title.',
+    type: 'string',
+    example: 'Arena1v1',
+    group: 'seo',
+  },
+  'seo.title': {
+    label: 'Title (заголовок вкладки)',
+    description: 'Тег <title> и og:title. До 60 символов рекомендуется.',
+    type: 'string',
+    example: 'Arena1v1 — Skill PvP 1 на 1',
+    group: 'seo',
+  },
+  'seo.description': {
+    label: 'Description',
+    description: 'meta description + og:description. До 160 символов рекомендуется.',
+    type: 'string',
+    example: 'Браузерная Skill PvP 1 на 1 на реальные деньги.',
+    group: 'seo',
+  },
+  'seo.keywords': {
+    label: 'Keywords',
+    description: 'meta keywords. Запятыми.',
+    type: 'string',
+    example: 'arena, pvp, 1v1, skill, browser game',
+    group: 'seo',
+  },
+  'seo.og_image_url': {
+    label: 'OG image URL',
+    description: 'Полный URL картинки 1200×630 для соцсетей. Если пусто — берётся branding.og_image.',
+    type: 'string',
+    example: 'https://faoor.com/og.png',
+    group: 'seo',
+  },
+  'seo.twitter_handle': {
+    label: 'Twitter @handle',
+    description: 'Twitter @username для twitter:site.',
+    type: 'string',
+    example: '@arena1v1',
+    group: 'seo',
+  },
+  'seo.canonical_url': {
+    label: 'Canonical / base URL',
+    description: 'Базовый URL сайта (без слэша на конце). Используется в sitemap.xml и canonical link.',
+    type: 'string',
+    example: 'https://faoor.com',
+    group: 'seo',
+  },
+  'seo.theme_color': {
+    label: 'Theme color',
+    description: 'Цвет PWA / адресной строки на мобильных. HEX.',
+    type: 'string',
+    example: '#1a1450',
+    group: 'seo',
+  },
 };
 
 export const GROUP_LABELS: Record<SettingMeta['group'], string> = {
@@ -77,6 +181,8 @@ export const GROUP_LABELS: Record<SettingMeta['group'], string> = {
   rooms: 'Rooms / matchmaking',
   wallet: 'Wallet & payouts',
   legal: 'Legal & compliance',
+  bots: 'Bots',
+  seo: 'SEO & meta',
   other: 'Other',
 };
 

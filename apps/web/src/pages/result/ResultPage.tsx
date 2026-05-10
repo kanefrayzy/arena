@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../shared/store/auth';
+import { api } from '../../shared/api/client';
+import { toast } from '../../shared/ui/toast';
 
 interface ResultData {
   winnerId: number | null;
@@ -105,6 +107,98 @@ export function ResultPage() {
       >
         {t('result.back')}
       </button>
+
+      <ReportButton matchId={id ?? ''} />
     </div>
+  );
+}
+
+function ReportButton({ matchId }: { matchId: string }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [category, setCategory] = useState<'cheating' | 'bug' | 'abuse' | 'connection' | 'other'>('cheating');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  async function submit() {
+    if (!matchId || message.trim().length < 3) return;
+    setBusy(true);
+    try {
+      await api.post(`/matches/${matchId}/report`, { category, message: message.trim() });
+      setSent(true);
+      toast.success(t('report.success_title'), t('report.success_body'));
+      setTimeout(() => setOpen(false), 600);
+    } catch (e) {
+      toast.error('Error', e instanceof Error ? e.message : 'failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!matchId) return null;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => { setOpen(true); setSent(false); setMessage(''); }}
+        className="text-xs text-white/40 underline underline-offset-4 hover:text-white/70"
+      >
+        {t('report.button')}
+      </button>
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => !busy && setOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-white/10 bg-game-bg p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 text-lg font-semibold">{t('report.title')}</div>
+            <div className="mb-3 text-xs text-white/50">{t('report.subtitle')}</div>
+            <label className="mb-1 block text-xs text-white/60">{t('report.category')}</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value as typeof category)}
+              className="mb-3 w-full rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm"
+            >
+              <option value="cheating">{t('report.cat.cheating')}</option>
+              <option value="bug">{t('report.cat.bug')}</option>
+              <option value="abuse">{t('report.cat.abuse')}</option>
+              <option value="connection">{t('report.cat.connection')}</option>
+              <option value="other">{t('report.cat.other')}</option>
+            </select>
+            <label className="mb-1 block text-xs text-white/60">{t('report.message')}</label>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              maxLength={2000}
+              rows={4}
+              placeholder={t('report.placeholder') ?? ''}
+              className="mb-3 w-full resize-none rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                disabled={busy}
+                className="rounded-md bg-white/5 px-3 py-1.5 text-sm hover:bg-white/10 disabled:opacity-50"
+              >
+                {t('report.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={submit}
+                disabled={busy || sent || message.trim().length < 3}
+                className="rounded-md bg-game-purple px-4 py-1.5 text-sm font-semibold disabled:opacity-50"
+              >
+                {busy ? '…' : sent ? t('report.sent') : t('report.submit')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

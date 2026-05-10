@@ -15,7 +15,7 @@ import {
 } from '@arena/protocol';
 import { MAP_HEIGHT, MAP_WIDTH, DEFAULT_MATCH_DURATION_MS } from '@arena/shared';
 import { Sim, defaultSpawns, type PlayerInput, type PlayerState, type EndReason } from './sim.js';
-import { Bot, buildBotPlayer } from './bot.js';
+import { Bot, type BotConfig } from './bot.js';
 import { ReplayWriter } from './replay.js';
 import { InternalApiClient } from './internal-client.js';
 
@@ -55,6 +55,8 @@ export interface MatchSeed {
   player2: MatchPlayerSeed;
   /** When player2.userId equals BOT_USER_ID we drive it locally. */
   isBotMatch: boolean;
+  /** Bot config (difficulty + start delay). Required when isBotMatch is true. */
+  botConfig?: BotConfig;
   obstacles?: Obstacle[];
 }
 
@@ -102,9 +104,12 @@ export class Match {
     this.matchId = seed.matchId;
     const spawns = defaultSpawns();
     const p1 = buildPlayer(seed.player1, spawns.p1);
-    const p2 = seed.isBotMatch
-      ? buildBotPlayer(seed.player2.userId, spawns.p2)
-      : buildPlayer(seed.player2, spawns.p2);
+    const p2 = buildPlayer(seed.player2, spawns.p2);
+    if (seed.isBotMatch) {
+      // Mark as bot so server-only checks (settlement skip, etc.) work; the
+      // flag is never serialized in welcome/snapshot payloads.
+      p2.isBot = true;
+    }
     this.sim = new Sim({
       matchId: seed.matchId,
       durationMs: seed.durationMs ?? DEFAULT_MATCH_DURATION_MS,
@@ -112,7 +117,12 @@ export class Match {
       ...(seed.obstacles ? { obstacles: seed.obstacles } : {}),
     });
     if (seed.isBotMatch) {
-      this.bot = new Bot(this.sim, seed.player2.userId, seed.player1.userId);
+      this.bot = new Bot(
+        this.sim,
+        seed.player2.userId,
+        seed.player1.userId,
+        seed.botConfig ?? { difficulty: 'medium', startDelayMs: 3500 },
+      );
     }
     this.replay = new ReplayWriter(seed.matchId);
     this.replay.meta(0, {

@@ -15,6 +15,11 @@
 		reverse_proxy api:3000
 	}
 
+	@seo_meta path /robots.txt /sitemap.xml /manifest.webmanifest
+	handle @seo_meta {
+		reverse_proxy api:3000
+	}
+
 	@lobby path /ws/lobby /ws/lobby/*
 	handle @lobby {
 		reverse_proxy api:3000

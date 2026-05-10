@@ -77,6 +77,7 @@ export class AdminService {
         balance: u.wallet?.balance.toString() ?? '0',
         locked: u.wallet?.locked.toString() ?? '0',
         mmr: u.stats?.mmr ?? 1000,
+        cup: u.stats?.cup ?? 0,
         wins: u.stats?.wins ?? 0,
         losses: u.stats?.losses ?? 0,
       })),

@@ -12,6 +12,7 @@ interface User {
   balance: string;
   locked: string;
   mmr: number;
+  cup: number;
   wins: number;
   losses: number;
 }
@@ -68,6 +69,7 @@ export function UsersTab() {
               <th className="px-3 py-2.5">Role</th>
               <th className="px-3 py-2.5 text-right">Balance</th>
               <th className="hidden px-3 py-2.5 text-right md:table-cell">MMR</th>
+              <th className="hidden px-3 py-2.5 text-right md:table-cell">🏆 Cup</th>
               <th className="hidden px-3 py-2.5 text-right md:table-cell">W/L</th>
               <th className="px-3 py-2.5">Status</th>
               <th className="px-3 py-2.5 text-right">Actions</th>
@@ -90,6 +92,7 @@ export function UsersTab() {
                   )}
                 </td>
                 <td className="hidden px-3 py-2.5 text-right tabular-nums md:table-cell">{u.mmr}</td>
+                <td className="hidden px-3 py-2.5 text-right tabular-nums md:table-cell">{u.cup}</td>
                 <td className="hidden px-3 py-2.5 text-right md:table-cell">
                   <span className="text-green-300">{u.wins}</span>
                   <span className="text-white/30">/</span>
@@ -124,7 +127,7 @@ export function UsersTab() {
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-sm text-white/40">
+                <td colSpan={8} className="px-3 py-8 text-center text-sm text-white/40">
                   No users found
                 </td>
               </tr>

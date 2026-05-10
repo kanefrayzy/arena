@@ -5,6 +5,8 @@ export interface Me {
   email: string;
   username: string;
   role: 'PLAYER' | 'ADMIN' | 'MODERATOR';
+  cup?: number;
+  mmr?: number;
 }
 
 interface AuthState {

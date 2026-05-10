@@ -12,6 +12,7 @@ import { ContentModule } from './content/content.module';
 import { GameModule } from './game/game.module';
 import { AdminModule } from './admin/admin.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     GameModule,
     AdminModule,
     NotificationsModule,
+    ReportsModule,
   ],
   controllers: [HealthController],
 })

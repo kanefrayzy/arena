@@ -260,11 +260,27 @@ async function main() {
   const defaultSettings: Array<{ key: string; value: unknown }> = [
     { key: 'gameplay.tickRate', value: 30 },
     { key: 'gameplay.bot_in_free', value: true },
+    { key: 'gameplay.cup_win', value: 25 },
+    { key: 'gameplay.cup_loss', value: 15 },
     { key: 'rooms.casualEnabled', value: true },
     { key: 'wallet.auto_withdrawal', value: false },
     { key: 'legal.minAge', value: 18 },
     { key: 'legal.blockedCountries', value: [] },
     { key: 'legal.kycRequiredFromUsd', value: 1000 },
+    // Bots
+    { key: 'bots.enabled', value: true },
+    { key: 'bots.difficulty', value: 'medium' },
+    { key: 'bots.queue_min_wait_s', value: 30 },
+    { key: 'bots.queue_max_wait_s', value: 40 },
+    // SEO
+    { key: 'seo.site_name', value: 'Arena1v1' },
+    { key: 'seo.title', value: 'Arena1v1 — Skill PvP 1 на 1 на реальные деньги' },
+    { key: 'seo.description', value: 'Браузерная PvP-игра 1 на 1. Skill-based, никакого RNG. Играй и зарабатывай реальные деньги.' },
+    { key: 'seo.keywords', value: 'arena, pvp, 1v1, skill, browser game, real money, esports' },
+    { key: 'seo.og_image_url', value: '' },
+    { key: 'seo.twitter_handle', value: '' },
+    { key: 'seo.canonical_url', value: '' },
+    { key: 'seo.theme_color', value: '#1a1450' },
   ];
 
   for (const s of defaultSettings) {

@@ -8,6 +8,26 @@ import { LedgerService } from '../wallet/ledger.service';
 
 export const MATCH_FOUND_CHANNEL = 'lobby:match-found';
 
+const BOT_NAMES = [
+  'shadow_fox', 'pixel_warden', 'krait', 'nightowl', 'arc_wolf', 'orion',
+  'tundra', 'voidstep', 'crimson', 'echo_one', 'spectre', 'glitchy',
+  'kestrel', 'razorbyte', 'paperjet', 'mirage', 'icarus', 'ronin77',
+  'flux', 'doppler', 'cobra', 'phantasm', 'reckoner', 'novak', 'zephyr',
+  'kairo', 'mistral', 'tempest', 'hexbloom', 'lunar', 'volt', 'nyx',
+];
+
+function pickBotName(): string {
+  const base = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)] ?? 'player';
+  if (Math.random() < 0.3) return `${base}${Math.floor(10 + Math.random() * 990)}`;
+  return base;
+}
+
+type BotDifficulty = 'easy' | 'medium' | 'hard';
+function parseDifficulty(v: unknown): BotDifficulty {
+  if (v === 'easy' || v === 'medium' || v === 'hard') return v;
+  return 'medium';
+}
+
 export interface MatchFoundEvent {
   userId: number;
   matchId: string;
@@ -83,10 +103,26 @@ export class MatchCreationService {
       where: { id: input.player1Id },
       select: { id: true, username: true },
     });
-    const player2 = await this.prisma.user.findUniqueOrThrow({
+    const player2User = await this.prisma.user.findUniqueOrThrow({
       where: { id: input.player2Id },
       select: { id: true, username: true },
     });
+
+    // For bot matches, replace the visible username with a realistic random
+    // name AND resolve bot difficulty from settings. The name is per-match so
+    // the human player can't recognize the bot by username.
+    let botConfig: { difficulty: BotDifficulty; startDelayMs: number } | undefined;
+    let player2Display = { id: player2User.id, username: player2User.username };
+    if (input.isBotMatch) {
+      const diffSetting = await this.prisma.setting.findUnique({
+        where: { key: 'bots.difficulty' },
+      });
+      botConfig = {
+        difficulty: parseDifficulty(diffSetting?.value),
+        startDelayMs: 3500,
+      };
+      player2Display = { id: player2User.id, username: pickBotName() };
+    }
 
     const gameWsUrl = process.env.GAME_PUBLIC_WS_URL ?? 'ws://localhost/ws/match';
 
@@ -114,8 +150,8 @@ export class MatchCreationService {
         ability: p1Loadout.ability,
       },
       player2: {
-        userId: player2.id,
-        username: player2.username,
+        userId: player2Display.id,
+        username: player2Display.username,
         characterId: p2Loadout.characterId,
         skinId: p2Loadout.skinId,
         stats: p2Loadout.stats,
@@ -124,13 +160,14 @@ export class MatchCreationService {
         bulletSpriteUrl: p2Loadout.bulletSpriteUrl,
         ability: p2Loadout.ability,
       },
+      ...(botConfig ? { botConfig } : {}),
     };
     await this.redis.client.set(`match:seed:${match.id}`, JSON.stringify(seed), 'EX', 600);
 
     // Publish match:found for each human player only (bot doesn't subscribe).
     for (const [self, other] of [
-      [player1, player2],
-      [player2, player1],
+      [player1, player2Display],
+      [player2Display, player1],
     ] as const) {
       if (self.id === BOT_USER_ID) continue;
       const ev: MatchFoundEvent = {

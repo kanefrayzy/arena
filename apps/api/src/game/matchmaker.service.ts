@@ -1,11 +1,15 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { BOT_USER_ID, QUEUE_TIMEOUT_BOT_OFFER_MS } from '@arena/shared';
+import { BOT_USER_ID } from '@arena/shared';
 import type { QueueMode } from '@arena/shared';
 import { PrismaService } from '../common/prisma/prisma.module';
 import { QueueService } from './queue.service';
 import { MatchCreationService } from './match-creation.service';
 
 const TICK_MS = 500;
+
+/** Per-user random offset within [bots.queue_min_wait_s, bots.queue_max_wait_s].
+ *  Stored in-memory so the same user gets a stable threshold across ticks. */
+const botWaitThresholdMs = new Map<number, number>();
 
 /**
  * Pairs players from Redis queues into matches. Runs as a setInterval inside the api process.
@@ -44,10 +48,32 @@ export class MatchmakerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async getBotInFreeEnabled(): Promise<boolean> {
-    const s = await this.prisma.setting.findUnique({ where: { key: 'gameplay.bot_in_free' } });
-    if (!s) return false;
-    const v = s.value as unknown;
-    return v === true || v === 'true';
+    // Combined check: legacy 'gameplay.bot_in_free' AND new 'bots.enabled'.
+    const [legacy, enabled] = await Promise.all([
+      this.prisma.setting.findUnique({ where: { key: 'gameplay.bot_in_free' } }),
+      this.prisma.setting.findUnique({ where: { key: 'bots.enabled' } }),
+    ]);
+    const legacyOn = legacy ? legacy.value === true || legacy.value === 'true' : true;
+    const newOn = enabled ? enabled.value === true || enabled.value === 'true' : true;
+    return legacyOn && newOn;
+  }
+
+  private async getBotWaitThresholdMs(userId: number): Promise<number> {
+    const cached = botWaitThresholdMs.get(userId);
+    if (cached !== undefined) return cached;
+    const [minS, maxS] = await Promise.all([
+      this.prisma.setting.findUnique({ where: { key: 'bots.queue_min_wait_s' } }),
+      this.prisma.setting.findUnique({ where: { key: 'bots.queue_max_wait_s' } }),
+    ]);
+    const minMs = readPositiveNumber(minS?.value, 30) * 1000;
+    const maxMs = readPositiveNumber(maxS?.value, 40) * 1000;
+    const lo = Math.min(minMs, maxMs);
+    const hi = Math.max(minMs, maxMs);
+    const v = lo + Math.random() * Math.max(0, hi - lo);
+    botWaitThresholdMs.set(userId, v);
+    // Auto-evict after 5 min so memory doesn't grow.
+    setTimeout(() => botWaitThresholdMs.delete(userId), 5 * 60_000).unref?.();
+    return v;
   }
 
   async tick(): Promise<void> {
@@ -134,10 +160,12 @@ export class MatchmakerService implements OnModuleInit, OnModuleDestroy {
       const enabled = await this.getBotInFreeEnabled();
       if (!enabled) return;
       const waited = Date.now() - waiters[0].score;
-      if (waited >= QUEUE_TIMEOUT_BOT_OFFER_MS) {
+      const threshold = await this.getBotWaitThresholdMs(waiters[0].userId);
+      if (waited >= threshold) {
         const room = await this.pickRoom('FREE');
         if (!room) return;
         const userId = waiters[0].userId;
+        botWaitThresholdMs.delete(userId);
         await this.queue.removeUsers(key, userId);
         try {
           await this.creator.createMatch({
@@ -152,4 +180,13 @@ export class MatchmakerService implements OnModuleInit, OnModuleDestroy {
       }
     }
   }
+}
+
+function readPositiveNumber(v: unknown, fallback: number): number {
+  if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return v;
+  if (typeof v === 'string') {
+    const n = Number(v);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }
+  return fallback;
 }

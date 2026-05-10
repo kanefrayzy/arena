@@ -40,7 +40,15 @@ async function bootstrap() {
     }),
   );
 
-  app.setGlobalPrefix('api', { exclude: ['internal/(.*)', 'uploads/(.*)'] });
+  app.setGlobalPrefix('api', {
+    exclude: [
+      'internal/(.*)',
+      'uploads/(.*)',
+      'manifest.webmanifest',
+      'robots.txt',
+      'sitemap.xml',
+    ],
+  });
   // Note: Zod-based validation is applied per-route via ZodValidationPipe.
   app.useGlobalFilters(new AllExceptionsFilter());
 

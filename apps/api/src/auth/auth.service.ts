@@ -84,7 +84,8 @@ export class AuthService {
   async getMe(userId: number) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new UnauthorizedException();
-    return this.publicUser(user);
+    const stats = await this.prisma.userStats.findUnique({ where: { userId } });
+    return { ...this.publicUser(user), cup: stats?.cup ?? 0, mmr: stats?.mmr ?? 1000 };
   }
 
   async changePassword(userId: number, currentPassword: string, newPassword: string) {

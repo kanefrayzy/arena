@@ -14,8 +14,9 @@ import { SettingsTab } from './tabs/SettingsTab';
 import { SpritesTab } from './tabs/SpritesTab';
 import { AbilitiesTab } from './tabs/AbilitiesTab';
 import { BrandingTab } from './tabs/BrandingTab';
+import { ReportsTab } from './tabs/ReportsTab';
 
-type Tab = 'dash' | 'users' | 'rooms' | 'content' | 'matches' | 'payments' | 'methods' | 'settings' | 'sprites' | 'abilities' | 'branding';
+type Tab = 'dash' | 'users' | 'rooms' | 'content' | 'matches' | 'payments' | 'methods' | 'settings' | 'sprites' | 'abilities' | 'branding' | 'reports';
 
 const TABS: { key: Tab; label: string; desc: string; icon: string }[] = [
   { key: 'dash', label: 'Dashboard', desc: 'Key metrics', icon: '▦' },
@@ -25,6 +26,7 @@ const TABS: { key: Tab; label: string; desc: string; icon: string }[] = [
   { key: 'sprites', label: 'Sprites', desc: 'Game graphics', icon: '◆' },
   { key: 'abilities', label: 'Abilities', desc: 'Ability system', icon: '⚡' },
   { key: 'matches', label: 'Matches', desc: 'Live & history', icon: '⚔' },
+  { key: 'reports', label: 'Reports', desc: 'Player complaints', icon: '🚩' },
   { key: 'payments', label: 'Payments', desc: 'Approvals & queue', icon: '$' },
   { key: 'methods', label: 'Methods', desc: 'Payment methods & icons', icon: '◈' },
   { key: 'settings', label: 'Settings', desc: 'Feature flags', icon: '⚙' },
@@ -166,6 +168,7 @@ export function AdminPage() {
             {tab === 'settings' && <SettingsTab />}
             {tab === 'abilities' && <AbilitiesTab />}
             {tab === 'branding' && <BrandingTab />}
+            {tab === 'reports' && <ReportsTab />}
           </div>
         </main>
       </div>

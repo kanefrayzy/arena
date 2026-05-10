@@ -98,11 +98,74 @@ export class InternalMatchController {
     }
 
     this.log.log(`match ${body.matchId} finished (winner=${body.winnerId}, reason=${body.reason})`);
+    // Update per-user stats and cup ranking (skip bots).
+    await this.updateStatsAndCup(match, body.winnerId, isBotMatch).catch((e) =>
+      this.log.error(`updateStatsAndCup failed: ${(e as Error).message}`),
+    );
     // Drop any leftover lobby:pending-match keys for both players. Their TTL
     // (300 s) outlives the match itself, and a stale key delivered to a
     // reconnecting lobby socket would dispatch the player into a dead match.
     await this.cleanupLobbyKeys(match.player1Id, match.player2Id);
     return { ok: true };
+  }
+
+  /** Increment matchesPlayed/wins/losses/draws and apply cup delta from settings.
+   *  Cup is clamped to 0 (never negative). Bot matches do not affect ranks. */
+  private async updateStatsAndCup(
+    match: { player1Id: number; player2Id: number },
+    winnerId: number | null,
+    isBotMatch: boolean,
+  ): Promise<void> {
+    if (isBotMatch) return;
+
+    const [winSetting, lossSetting] = await Promise.all([
+      this.prisma.setting.findUnique({ where: { key: 'gameplay.cup_win' } }),
+      this.prisma.setting.findUnique({ where: { key: 'gameplay.cup_loss' } }),
+    ]);
+    const cupWin = readPositiveInt(winSetting?.value, 25);
+    const cupLoss = readPositiveInt(lossSetting?.value, 15);
+
+    const ids = [match.player1Id, match.player2Id];
+    for (const userId of ids) {
+      // Ensure UserStats row exists.
+      await this.prisma.userStats.upsert({
+        where: { userId },
+        update: {},
+        create: { userId },
+      });
+    }
+
+    if (winnerId == null) {
+      // Draw — both +1 draw, no cup change.
+      await this.prisma.userStats.updateMany({
+        where: { userId: { in: ids } },
+        data: { matchesPlayed: { increment: 1 }, draws: { increment: 1 } },
+      });
+      return;
+    }
+
+    const loserId = winnerId === match.player1Id ? match.player2Id : match.player1Id;
+
+    await this.prisma.userStats.update({
+      where: { userId: winnerId },
+      data: {
+        matchesPlayed: { increment: 1 },
+        wins: { increment: 1 },
+        cup: { increment: cupWin },
+      },
+    });
+
+    // Loser: clamp cup to >= 0.
+    const loser = await this.prisma.userStats.findUnique({ where: { userId: loserId } });
+    const newCup = Math.max(0, (loser?.cup ?? 0) - cupLoss);
+    await this.prisma.userStats.update({
+      where: { userId: loserId },
+      data: {
+        matchesPlayed: { increment: 1 },
+        losses: { increment: 1 },
+        cup: newCup,
+      },
+    });
   }
 
   @Post('abort')
@@ -149,4 +212,13 @@ export class InternalMatchController {
       this.log.warn(`cleanupLobbyKeys failed: ${(e as Error).message}`);
     }
   }
+}
+
+function readPositiveInt(v: unknown, fallback: number): number {
+  if (typeof v === 'number' && Number.isFinite(v) && v >= 0) return Math.floor(v);
+  if (typeof v === 'string') {
+    const n = Number(v);
+    if (Number.isFinite(n) && n >= 0) return Math.floor(n);
+  }
+  return fallback;
 }

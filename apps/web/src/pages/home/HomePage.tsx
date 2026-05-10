@@ -114,7 +114,16 @@ export function HomePage() {
           <span className="font-mono">{wallet ? Number(wallet.balance).toFixed(2) : '—'}</span>
         </button>
 
-        <div className="game-title text-lg text-white/90">@{me.username}</div>
+        <div className="flex flex-col items-center gap-0.5">
+          <div className="game-title text-lg text-white/90">@{me.username}</div>
+          <div
+            className="inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-0.5 text-[11px] font-mono text-white/70"
+            title={t('home.cup') ?? 'Cup'}
+          >
+            <span aria-hidden="true">🏆</span>
+            <span>{me.cup ?? 0}</span>
+          </div>
+        </div>
 
         <div className="flex items-center gap-1">
           <button

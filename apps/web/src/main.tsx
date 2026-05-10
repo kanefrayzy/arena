@@ -8,8 +8,12 @@ import { startSW } from './shared/pwa/registerSW';
 import { ErrorBoundary } from './shared/ui/ErrorBoundary';
 import { ToastViewport, toast } from './shared/ui/toast';
 import { unlockAudio } from './shared/game/audio';
+import { applyBrandingAndSeo } from './shared/seo/applyBrandingAndSeo';
 import './shared/i18n';
 import './index.css';
+
+// Live-apply admin branding (favicon, icons, theme color) and SEO meta tags.
+void applyBrandingAndSeo();
 
 // Global audio unlock on first user gesture (browsers require this).
 const unlock = () => {
