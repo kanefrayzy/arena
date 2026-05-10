@@ -10,13 +10,13 @@ const SEO_KEYS = [
 ] as const;
 
 const DEFAULTS: Record<string, string> = {
-  site_name: 'Arena1v1',
-  title: 'Arena1v1 — Skill PvP 1 на 1',
-  description: 'Браузерная PvP-игра 1 на 1. Skill-based, никакого RNG.',
-  keywords: 'arena, pvp, 1v1, skill, browser game',
-  og_image_url: '',
-  twitter_handle: '',
-  canonical_url: '',
+  site_name: 'Faoor',
+  title: 'Faoor — Skill PvP 1 на 1 за реальные деньги',
+  description: 'Skill-based PvP арена 1 на 1. Сражайся за реальные деньги, без RNG и удачи — только чистый скилл.',
+  keywords: 'faoor, arena, pvp, 1v1, skill arena, real money, esports, online battle, браузерная игра, дуэль',
+  og_image_url: 'https://faoor.com/icons/icon-512.png',
+  twitter_handle: '@faoor',
+  canonical_url: 'https://faoor.com',
   theme_color: '#1a1450',
 };
 
@@ -76,8 +76,8 @@ export class PublicManifestController {
     const icon512 = stripQuery(branding.icon512) ?? '/icons/icon-512.png';
     const themeColor = seo.theme_color || '#1a1450';
     return {
-      name: seo.site_name || 'Arena1v1',
-      short_name: (seo.site_name || 'Arena1v1').slice(0, 12),
+      name: seo.site_name || 'Faoor',
+      short_name: (seo.site_name || 'Faoor').slice(0, 12),
       description: seo.description,
       theme_color: themeColor,
       background_color: '#0b0d12',

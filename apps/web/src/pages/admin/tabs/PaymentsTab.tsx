@@ -6,16 +6,21 @@ import { Badge, statusTone } from '../components/Badge';
 interface Payment {
   id: string;
   userId: number;
+  username: string | null;
+  email: string | null;
   type: string;
   status: string;
   amountUsd: string;
+  amountRaw: string | null;
+  currency: string | null;
   provider: string;
+  methodSlug: string | null;
   externalId: string | null;
   createdAt: string;
   finishedAt: string | null;
 }
 
-const STATUSES = ['', 'PENDING', 'APPROVED', 'REJECTED', 'COMPLETED'];
+const STATUSES = ['', 'PENDING', 'COMPLETED', 'FAILED', 'REJECTED'];
 
 export function PaymentsTab() {
   const [items, setItems] = useState<Payment[]>([]);
@@ -27,7 +32,9 @@ export function PaymentsTab() {
   async function load() {
     setErr(null);
     try {
-      const r = await api.get<{ items: Payment[] }>(`/admin/payments${status ? `?status=${status}` : ''}`);
+      const qs = new URLSearchParams({ type: 'DEPOSIT' });
+      if (status) qs.set('status', status);
+      const r = await api.get<{ items: Payment[] }>(`/admin/payments?${qs.toString()}`);
       setItems(r.items);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'load failed');
@@ -73,25 +80,35 @@ export function PaymentsTab() {
         <table className="w-full text-sm">
           <thead className="bg-white/5 text-left text-xs uppercase tracking-wider text-white/50">
             <tr>
-              <th className="px-3 py-2.5">ID</th>
               <th className="px-3 py-2.5">User</th>
-              <th className="px-3 py-2.5">Type</th>
               <th className="px-3 py-2.5 text-right">Amount</th>
+              <th className="hidden px-3 py-2.5 md:table-cell">Method</th>
               <th className="hidden px-3 py-2.5 md:table-cell">Provider</th>
               <th className="px-3 py-2.5">Status</th>
+              <th className="px-3 py-2.5">Created</th>
               <th className="px-3 py-2.5 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
             {items.map((p) => (
               <tr key={p.id} className="hover:bg-white/[0.02]">
-                <td className="px-3 py-2.5 font-mono text-xs text-white/60">{p.id.slice(0, 8)}…</td>
-                <td className="px-3 py-2.5 text-xs">#{p.userId}</td>
-                <td className="px-3 py-2.5 text-xs">{p.type}</td>
-                <td className="px-3 py-2.5 text-right font-mono tabular-nums">${p.amountUsd}</td>
+                <td className="px-3 py-2.5">
+                  <div className="font-medium text-sm">@{p.username ?? `user${p.userId}`}</div>
+                  <div className="text-[10px] text-white/40">{p.email ?? `#${p.userId}`}</div>
+                </td>
+                <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                  <div>${Number(p.amountUsd).toFixed(2)}</div>
+                  {p.amountRaw && p.currency && p.currency !== 'USD' && (
+                    <div className="text-[10px] text-white/50">{Number(p.amountRaw).toFixed(2)} {p.currency}</div>
+                  )}
+                </td>
+                <td className="hidden px-3 py-2.5 text-xs text-white/70 md:table-cell">{p.methodSlug ?? '—'}</td>
                 <td className="hidden px-3 py-2.5 text-xs text-white/60 md:table-cell">{p.provider}</td>
                 <td className="px-3 py-2.5">
                   <Badge tone={statusTone(p.status)}>{p.status}</Badge>
+                </td>
+                <td className="px-3 py-2.5 text-xs text-white/60 whitespace-nowrap">
+                  {new Date(p.createdAt).toLocaleString()}
                 </td>
                 <td className="px-3 py-2.5">
                   <div className="flex justify-end gap-1">
@@ -121,7 +138,7 @@ export function PaymentsTab() {
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-sm text-white/40">No payments</td>
+                <td colSpan={7} className="px-3 py-8 text-center text-sm text-white/40">No deposits</td>
               </tr>
             )}
           </tbody>

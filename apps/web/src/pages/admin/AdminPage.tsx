@@ -9,6 +9,7 @@ import { RoomsTab } from './tabs/RoomsTab';
 import { ContentTab } from './tabs/ContentTab';
 import { MatchesTab } from './tabs/MatchesTab';
 import { PaymentsTab } from './tabs/PaymentsTab';
+import { WithdrawalsTab } from './tabs/WithdrawalsTab';
 import { PaymentMethodsTab } from './tabs/PaymentMethodsTab';
 import { SettingsTab } from './tabs/SettingsTab';
 import { SpritesTab } from './tabs/SpritesTab';
@@ -16,7 +17,7 @@ import { AbilitiesTab } from './tabs/AbilitiesTab';
 import { BrandingTab } from './tabs/BrandingTab';
 import { ReportsTab } from './tabs/ReportsTab';
 
-type Tab = 'dash' | 'users' | 'rooms' | 'content' | 'matches' | 'payments' | 'methods' | 'settings' | 'sprites' | 'abilities' | 'branding' | 'reports';
+type Tab = 'dash' | 'users' | 'rooms' | 'content' | 'matches' | 'payments' | 'withdrawals' | 'methods' | 'settings' | 'sprites' | 'abilities' | 'branding' | 'reports';
 
 const TABS: { key: Tab; label: string; desc: string; icon: string }[] = [
   { key: 'dash', label: 'Dashboard', desc: 'Key metrics', icon: '▦' },
@@ -27,7 +28,8 @@ const TABS: { key: Tab; label: string; desc: string; icon: string }[] = [
   { key: 'abilities', label: 'Abilities', desc: 'Ability system', icon: '⚡' },
   { key: 'matches', label: 'Matches', desc: 'Live & history', icon: '⚔' },
   { key: 'reports', label: 'Reports', desc: 'Player complaints', icon: '🚩' },
-  { key: 'payments', label: 'Payments', desc: 'Approvals & queue', icon: '$' },
+  { key: 'payments', label: 'Deposits', desc: 'Пополнения', icon: '$' },
+  { key: 'withdrawals', label: 'Withdrawals', desc: 'Заявки на вывод', icon: '↑' },
   { key: 'methods', label: 'Methods', desc: 'Payment methods & icons', icon: '◈' },
   { key: 'settings', label: 'Settings', desc: 'Feature flags', icon: '⚙' },
   { key: 'branding', label: 'Branding', desc: 'Logo, favicon, icons', icon: '🎨' },
@@ -164,6 +166,7 @@ export function AdminPage() {
             {tab === 'sprites' && <SpritesTab />}
             {tab === 'matches' && <MatchesTab />}
             {tab === 'payments' && <PaymentsTab />}
+            {tab === 'withdrawals' && <WithdrawalsTab />}
             {tab === 'methods' && <PaymentMethodsTab />}
             {tab === 'settings' && <SettingsTab />}
             {tab === 'abilities' && <AbilitiesTab />}

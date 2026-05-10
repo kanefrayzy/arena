@@ -103,15 +103,17 @@ export function HomePage() {
 
       {/* ── TOP BAR ── */}
       <header className="game-panel relative z-10 flex items-center justify-between px-4 py-2.5">
-        {/* Balance — Brawl-Stars-style coin pill → wallet */}
+        {/* Balance — subtle dark pill with gold accent */}
         <button
           type="button"
           onClick={() => nav('/wallet')}
-          className="group relative inline-flex items-center gap-1.5 rounded-full border-b-2 border-emerald-800/80 bg-gradient-to-b from-emerald-300 via-emerald-400 to-emerald-600 px-3 py-1 shadow-[0_3px_0_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.45)] transition active:translate-y-0.5 active:border-b-0 active:shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]"
+          className="group inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 backdrop-blur-sm transition hover:border-game-yellow/40 hover:bg-white/[0.09] active:scale-[0.98]"
           title={t('home.balance')}
         >
-          <span className="flex h-5 w-5 items-center justify-center rounded-full border border-yellow-700/80 bg-gradient-to-b from-yellow-200 via-yellow-400 to-yellow-600 text-[10px] font-black text-yellow-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">$</span>
-          <span className="font-mono font-black text-emerald-950 drop-shadow-[0_1px_0_rgba(255,255,255,0.4)] tabular-nums">
+          <svg viewBox="0 0 24 24" className="h-4 w-4 text-game-yellow" fill="currentColor" aria-hidden>
+            <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm.9 15.3v1.4h-1.8v-1.4c-1.7-.2-3-1.2-3-2.9h1.7c.1.9.7 1.5 2.1 1.5 1.3 0 1.9-.6 1.9-1.4 0-.8-.5-1.2-2.2-1.6-2.3-.5-3.4-1.4-3.4-3 0-1.5 1.2-2.5 2.9-2.7V5.8h1.8v1.4c1.7.2 2.7 1.3 2.8 2.7h-1.7c-.1-.7-.6-1.3-1.9-1.3-1.2 0-1.7.5-1.7 1.2 0 .7.5 1.1 2.1 1.5 2.4.5 3.5 1.5 3.5 3.1 0 1.5-1.1 2.6-3.1 2.9z" />
+          </svg>
+          <span className="font-mono text-sm font-semibold text-white tabular-nums">
             {wallet ? Number(wallet.balance).toFixed(2) : '—'}
           </span>
         </button>
@@ -125,10 +127,10 @@ export function HomePage() {
           <button
             type="button"
             onClick={() => nav('/settings')}
-            className="group relative h-9 w-9 rounded-xl border-b-2 border-slate-700/80 bg-gradient-to-b from-slate-300 via-slate-400 to-slate-600 text-slate-900 shadow-[0_3px_0_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.5)] transition active:translate-y-0.5 active:border-b-0"
+            className="group inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/70 backdrop-blur-sm transition hover:border-white/25 hover:bg-white/[0.1] hover:text-white active:scale-95"
             aria-label={t('settings.title')}
           >
-            <svg viewBox="0 0 24 24" className="mx-auto h-5 w-5 transition-transform group-hover:rotate-45" fill="currentColor" aria-hidden>
+            <svg viewBox="0 0 24 24" className="h-4.5 w-4.5 transition-transform group-hover:rotate-45" fill="currentColor" aria-hidden>
               <path d="M12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7zm7.4-3.5l1.7-1.3-1.7-3-2 .7a7.5 7.5 0 00-1.5-.9L15.5 5h-3.4l-.4 2.5a7.5 7.5 0 00-1.5.9l-2-.7-1.7 3 1.7 1.3a7.6 7.6 0 000 1.7L4.5 14l1.7 3 2-.7a7.5 7.5 0 001.5.9l.4 2.5h3.4l.4-2.5a7.5 7.5 0 001.5-.9l2 .7 1.7-3-1.7-1.3a7.6 7.6 0 000-1.7z" />
             </svg>
           </button>

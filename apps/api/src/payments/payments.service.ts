@@ -6,6 +6,7 @@ import { LedgerService } from '../wallet/ledger.service';
 import { BetraService, BetraDepositReqs } from './betra.service';
 import { WestwalletService } from './westwallet.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ExchangeService } from '../common/exchange.service';
 
 const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL ?? 'http://localhost').replace(/\/$/, '');
 
@@ -16,7 +17,7 @@ const MIN_WITHDRAW_USD = new Prisma.Decimal('1');
 interface DepositResult {
   paymentId: string;
   status: string;
-  betra?: BetraDepositReqs;
+  betra?: BetraDepositReqs; 
   crypto?: { address: string; destTag?: string; currency: string };
 }
 
@@ -36,6 +37,7 @@ export class PaymentsService {
     private readonly betra: BetraService,
     private readonly west: WestwalletService,
     private readonly notifications: NotificationsService,
+    private readonly exchange: ExchangeService,
   ) {}
 
   async listMethods() {
@@ -68,7 +70,7 @@ export class PaymentsService {
     if (method.maxAmount && amount.gt(new Prisma.Decimal(method.maxAmount.toString()))) {
       throw new BadRequestException({ code: 'AMOUNT_TOO_HIGH', max: method.maxAmount.toString() });
     }
-    const usdAmount = this.toUsd(amount, method.usdRate);
+    const usdAmount = await this.toUsd(amount, method.usdRate, method.currency);
     if (usdAmount.lt(MIN_DEPOSIT_USD)) throw new BadRequestException({ code: 'AMOUNT_TOO_LOW' });
     if (usdAmount.gt(MAX_DEPOSIT_USD)) throw new BadRequestException({ code: 'AMOUNT_TOO_HIGH' });
 
@@ -124,7 +126,7 @@ export class PaymentsService {
     if (method.minAmount && amount.lt(new Prisma.Decimal(method.minAmount.toString()))) {
       throw new BadRequestException({ code: 'AMOUNT_TOO_LOW', min: method.minAmount.toString() });
     }
-    const usdAmount = this.toUsd(amount, method.usdRate);
+    const usdAmount = await this.toUsd(amount, method.usdRate, method.currency);
     if (usdAmount.lt(MIN_WITHDRAW_USD)) throw new BadRequestException({ code: 'AMOUNT_TOO_LOW' });
 
     const wallet = await this.prisma.wallet.findUnique({ where: { userId } });
@@ -145,6 +147,11 @@ export class PaymentsService {
           id: orderId, userId, type: 'WITHDRAWAL', status: 'PENDING',
           amountUsd: usdAmount, amountRaw: amount, currency: method.currency,
           provider: 'betra', methodSlug: method.slug,
+          meta: {
+            card: opts.card,
+            receiverName: opts.receiverName ?? null,
+            receiverPhone: opts.receiverPhone ?? null,
+          },
         },
       });
       await this.ledger.record({
@@ -181,6 +188,10 @@ export class PaymentsService {
           id: orderId, userId, type: 'WITHDRAWAL', status: 'PENDING',
           amountUsd: usdAmount, amountRaw: amount, currency: method.currency,
           provider: 'westwallet', methodSlug: method.slug,
+          meta: {
+            address: opts.address,
+            destTag: opts.destTag ?? null,
+          },
         },
       });
       await this.ledger.record({
@@ -296,7 +307,7 @@ export class PaymentsService {
 
     const method = await this.prisma.paymentMethod.findFirst({ where: { kind: 'westwallet', currency: tx.currency, isActive: true } });
     const amountRaw = new Prisma.Decimal(String(tx.amount));
-    const usdAmount = this.toUsd(amountRaw, method?.usdRate ?? null);
+    const usdAmount = await this.toUsd(amountRaw, method?.usdRate ?? null, tx.currency);
 
     const payment = await this.prisma.payment.create({
       data: {
@@ -372,9 +383,27 @@ export class PaymentsService {
     return amount.toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
   }
 
-  private toUsd(amount: Prisma.Decimal, rate: Prisma.Decimal | null | undefined): Prisma.Decimal {
-    if (!rate) return amount.toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
-    return amount.mul(new Prisma.Decimal(rate.toString())).toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
+  private async toUsd(amount: Prisma.Decimal, rate: Prisma.Decimal | null | undefined, currency?: string | null): Promise<Prisma.Decimal> {
+    // 1) Admin-defined fixed rate wins (e.g. crypto/manual override).
+    if (rate) {
+      return amount.mul(new Prisma.Decimal(rate.toString())).toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
+    }
+    const cur = (currency ?? 'USD').toUpperCase();
+    // 2) USD-pegged currencies pass through.
+    if (cur === 'USD' || cur === 'USDT' || cur === 'USDC') {
+      return amount.toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
+    }
+    // 3) Fiat conversion via live FX rates.
+    try {
+      const usdNum = await this.exchange.toUsd(Number(amount.toString()), cur);
+      if (Number.isFinite(usdNum) && usdNum > 0) {
+        return new Prisma.Decimal(usdNum.toFixed(8)).toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
+      }
+    } catch (err) {
+      this.log.warn(`exchange convert failed for ${cur}: ${(err as Error).message}`);
+    }
+    // 4) Last resort: 1:1 (better than failing the payment).
+    return amount.toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
   }
 
   private mapBetraDepositStatus(s: string): string {

@@ -550,16 +550,23 @@ export class AdminService {
       where,
       orderBy: { createdAt: 'desc' },
       take: limit,
+      include: { user: { select: { id: true, username: true, email: true } } },
     });
     return {
       items: rows.map((p) => ({
         id: p.id,
         userId: p.userId,
+        username: p.user?.username ?? null,
+        email: p.user?.email ?? null,
         type: p.type,
         status: p.status,
         amountUsd: p.amountUsd.toString(),
+        amountRaw: p.amountRaw?.toString() ?? null,
+        currency: p.currency ?? null,
         provider: p.provider,
+        methodSlug: p.methodSlug ?? null,
         externalId: p.externalId,
+        meta: p.meta ?? null,
         createdAt: p.createdAt.toISOString(),
         finishedAt: p.finishedAt?.toISOString() ?? null,
       })),

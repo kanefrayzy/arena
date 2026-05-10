@@ -52,8 +52,8 @@ export async function applyBrandingAndSeo(): Promise<void> {
 
     // Open Graph
     setMeta('og:type', 'website', 'property');
-    setMeta('og:site_name', seo.site_name || 'Arena1v1', 'property');
-    setMeta('og:title', seo.title || seo.site_name || 'Arena1v1', 'property');
+    setMeta('og:site_name', seo.site_name || 'Faoor', 'property');
+    setMeta('og:title', seo.title || seo.site_name || 'Faoor', 'property');
     if (seo.description) setMeta('og:description', seo.description, 'property');
     if (seo.canonical_url) setMeta('og:url', seo.canonical_url, 'property');
     const ogImage = seo.og_image_url || branding.og_image || branding.icon512;
@@ -62,7 +62,7 @@ export async function applyBrandingAndSeo(): Promise<void> {
     // Twitter
     setMeta('twitter:card', 'summary_large_image');
     if (seo.twitter_handle) setMeta('twitter:site', seo.twitter_handle);
-    setMeta('twitter:title', seo.title || seo.site_name || 'Arena1v1');
+    setMeta('twitter:title', seo.title || seo.site_name || 'Faoor');
     if (seo.description) setMeta('twitter:description', seo.description);
     if (ogImage) setMeta('twitter:image', ogImage);
 

@@ -5,13 +5,14 @@ import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 import { BetraService } from './betra.service';
 import { WestwalletService } from './westwallet.service';
+import { ExchangeService } from '../common/exchange.service';
 import { PaymentWebhookController } from './payment-webhook.controller';
 import { PaymentMethodsAdminController } from './payment-methods-admin.controller';
 
 @Module({
   imports: [WalletModule, NotificationsModule],
-  providers: [PaymentsService, BetraService, WestwalletService],
+  providers: [PaymentsService, BetraService, WestwalletService, ExchangeService],
   controllers: [PaymentsController, PaymentWebhookController, PaymentMethodsAdminController],
-  exports: [PaymentsService],
+  exports: [PaymentsService, ExchangeService],
 })
 export class PaymentsModule {}

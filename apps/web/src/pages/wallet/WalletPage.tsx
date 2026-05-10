@@ -72,6 +72,9 @@ export function WalletPage() {
   const [reqs, setReqs] = useState<DepositResponse | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetMin, setSheetMin] = useState(false);
+  const [withdrawSheetOpen, setWithdrawSheetOpen] = useState(false);
+  const [withdrawSheetMin, setWithdrawSheetMin] = useState(false);
+  const [withdrawDone, setWithdrawDone] = useState(false);
 
   const reload = async () => {
     try {
@@ -130,8 +133,7 @@ export function WalletPage() {
       if (selected.kind === 'betra_payout') body.card = card;
       else if (selected.kind === 'westwallet') body.address = address;
       await api.post('/payments/withdraw', body);
-      setErr(null);
-      toast.success('Заявка отправлена', `Вывод ${amount} ${selected.currency} принят в обработку`);
+      setErr(null);      setWithdrawDone(true);      toast.success('Заявка отправлена', `Вывод ${amount} ${selected.currency} принят в обработку`);
       await reload();
     } catch (e) {
       setErr(e instanceof ApiError ? `${e.code}` : (e as Error).message);
@@ -185,9 +187,10 @@ export function WalletPage() {
                   key={m.slug}
                   onClick={() => {
                     setMethodSlug(m.slug);
-                    setReqs(null); setErr(null);
-                    // Open sheet immediately when selecting deposit method
+                    setReqs(null); setErr(null); setCard(''); setAddress(''); setWithdrawDone(false);
+                    // Open the appropriate drawer for the active tab
                     if (tab === 'deposit') { setSheetOpen(true); setSheetMin(false); }
+                    else if (tab === 'withdraw') { setWithdrawSheetOpen(true); setWithdrawSheetMin(false); }
                   }}
                   className={
                     'game-card flex flex-col items-center gap-2 p-3 transition ' +
@@ -208,41 +211,15 @@ export function WalletPage() {
           </section>
         )}
 
-        {tab !== 'history' && selected && tab === 'withdraw' && (
+        {tab !== 'history' && selected && tab === 'withdraw' && !withdrawSheetOpen && (
           <section className="flex flex-col gap-3 px-6 pt-4">
-            <input
-              inputMode="decimal"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))}
-              className="game-input font-mono text-xl"
-              placeholder={`Amount in ${selected.currency}`}
-            />
-            {selected.kind === 'betra_payout' && (
-              <input
-                value={card}
-                onChange={(e) => setCard(e.target.value.replace(/[^0-9]/g, ''))}
-                className="game-input font-mono"
-                placeholder={t('wallet.card_number')}
-                maxLength={20}
-              />
-            )}
-            {selected.kind === 'westwallet' && (
-              <input
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                className="game-input font-mono text-sm"
-                placeholder={`${selected.currency} address`}
-              />
-            )}
             <button
               type="button"
-              disabled={busy || !amount}
-              onClick={() => void submitWithdraw()}
+              onClick={() => { setWithdrawSheetOpen(true); setWithdrawSheetMin(false); }}
               className="game-btn game-btn-purple"
             >
               {t('wallet.withdraw')}
             </button>
-            {err && <div className="text-center text-sm font-semibold text-game-red">{err}</div>}
           </section>
         )}
 
@@ -288,6 +265,28 @@ export function WalletPage() {
           minimized={sheetMin}
           onMinimize={() => setSheetMin((v) => !v)}
           onClose={() => { setSheetOpen(false); setReqs(null); setErr(null); setMethodSlug(null); }}
+        />
+      )}
+      {withdrawSheetOpen && selected && tab === 'withdraw' && (
+        <WithdrawSheet
+          busy={busy}
+          err={err}
+          done={withdrawDone}
+          balance={wallet ? Number(wallet.balance) : 0}
+          selected={selected}
+          amount={amount}
+          card={card}
+          address={address}
+          onAmountChange={setAmount}
+          onCardChange={setCard}
+          onAddressChange={setAddress}
+          onSubmit={submitWithdraw}
+          minimized={withdrawSheetMin}
+          onMinimize={() => setWithdrawSheetMin((v) => !v)}
+          onClose={() => {
+            setWithdrawSheetOpen(false); setErr(null); setMethodSlug(null);
+            setCard(''); setAddress(''); setWithdrawDone(false);
+          }}
         />
       )}
     </div>
@@ -512,6 +511,202 @@ function CryptoView({ c, onCopy, copied }: { c: { address: string; destTag?: str
       )}
       <div className="text-center text-xs text-white/60">
         {t('wallet.address_static_note', { currency: c.currency })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Withdraw drawer (mirrors DepositSheet UX) ─────────────────────────────
+function WithdrawSheet({
+  busy, err, done, balance, selected, amount, card, address,
+  onAmountChange, onCardChange, onAddressChange, onSubmit,
+  minimized, onMinimize, onClose,
+}: {
+  busy: boolean;
+  err: string | null;
+  done: boolean;
+  balance: number;
+  selected: PaymentMethod;
+  amount: string;
+  card: string;
+  address: string;
+  onAmountChange: (v: string) => void;
+  onCardChange: (v: string) => void;
+  onAddressChange: (v: string) => void;
+  onSubmit: () => void;
+  minimized: boolean;
+  onMinimize: () => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const [drag, setDrag] = useState<{ startY: number; dy: number } | null>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    setDrag({ startY: e.clientY, dy: 0 });
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!drag) return;
+    setDrag({ ...drag, dy: e.clientY - drag.startY });
+  };
+  const onPointerUp = () => {
+    if (!drag) return;
+    const { dy } = drag;
+    setDrag(null);
+    if (dy > 60 && !minimized) onMinimize();
+    else if (dy < -60 && minimized) onMinimize();
+  };
+  const translatePx = drag
+    ? Math.max(minimized ? -200 : 0, Math.min(minimized ? 0 : 200, drag.dy))
+    : 0;
+
+  const isCrypto = selected.kind === 'westwallet';
+  const isCard = selected.kind === 'betra_payout';
+  const min = selected.minAmount ? Number(selected.minAmount) : 0;
+  const max = selected.maxAmount ? Number(selected.maxAmount) : 0;
+  const amt = Number(amount) || 0;
+  const detailsOk = isCrypto ? address.trim().length >= 10 : isCard ? card.length >= 12 : true;
+  const balanceOk = amt <= balance;
+  const minOk = !min || amt >= min;
+  const maxOk = !max || amt <= max;
+  const canSubmit = !busy && amt > 0 && detailsOk && balanceOk && minOk && maxOk;
+
+  return (
+    <div className="pointer-events-none fixed inset-0 z-40 flex justify-center">
+      <div
+        ref={sheetRef}
+        className={
+          'pointer-events-auto absolute bottom-0 w-full max-w-md transform rounded-t-3xl border-2 border-b-0 border-game-purple/40 bg-bg/95 shadow-[0_-12px_30px_rgba(0,0,0,0.6)] backdrop-blur-md transition-transform duration-200 ' +
+          (drag ? '' : 'ease-out')
+        }
+        style={{
+          transform: `translateY(${minimized ? 'calc(100% - 64px)' : '0px'}) translateY(${translatePx}px)`,
+        }}
+      >
+        <div
+          className="flex select-none items-center gap-2 px-4 py-3 cursor-grab active:cursor-grabbing"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onClick={() => { if (!drag) onMinimize(); }}
+        >
+          <div className="mx-auto flex flex-col items-center gap-1">
+            <div className="h-1.5 w-12 rounded-full bg-white/30" />
+          </div>
+        </div>
+        <div className="flex items-center justify-between px-5 pb-2">
+          <div className="font-display text-base text-game-purple">
+            {t('wallet.withdraw')} · {selected.label}
+          </div>
+          <div className="flex gap-1">
+            <button onClick={onMinimize} className="game-btn game-btn-ghost game-btn-sm" title={minimized ? 'expand' : 'collapse'}>
+              {minimized ? '▴' : '▾'}
+            </button>
+            <button onClick={onClose} className="game-btn game-btn-ghost game-btn-sm" title="close">✕</button>
+          </div>
+        </div>
+
+        <div className={'overflow-y-auto px-5 pb-6 transition-opacity duration-200 ' + (minimized ? 'opacity-0' : 'opacity-100')}
+          style={{ maxHeight: '70vh' }}>
+          {done ? (
+            <div className="flex flex-col items-center gap-3 py-6">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-game-green/20 text-3xl text-game-green">✓</div>
+              <div className="font-display text-lg text-white">{t('wallet.withdraw_submitted', 'Заявка отправлена')}</div>
+              <div className="text-center text-sm text-white/60">
+                {t('wallet.withdraw_submitted_hint', 'Заявка передана на проверку администратору. Статус виден в истории.')}
+              </div>
+              <button onClick={onClose} className="game-btn game-btn-ghost mt-2">{t('wallet.close', 'Закрыть')}</button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 pt-1">
+              <div className="rounded-xl bg-black/40 px-4 py-3">
+                <div className="text-[10px] uppercase tracking-widest text-white/50">{t('wallet.balance')}</div>
+                <div className="font-mono text-xl font-bold text-white">${balance.toFixed(2)}</div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[10px] uppercase tracking-widest text-white/50">
+                  {t('wallet.amount')} ({selected.currency})
+                </label>
+                <input
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => onAmountChange(e.target.value.replace(/[^0-9.]/g, ''))}
+                  className="game-input font-mono text-xl"
+                  placeholder={`0.00 ${selected.currency}`}
+                />
+                <div className="mt-1 flex items-center justify-between text-[11px] text-white/50">
+                  <span>
+                    {min > 0 && `Мин: ${min} ${selected.currency}`}
+                    {min > 0 && max > 0 && ' · '}
+                    {max > 0 && `Макс: ${max} ${selected.currency}`}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onAmountChange(String(balance.toFixed(2)))}
+                    className="text-game-yellow underline-offset-2 hover:underline"
+                  >
+                    Все ({balance.toFixed(2)})
+                  </button>
+                </div>
+              </div>
+
+              {isCard && (
+                <div>
+                  <label className="mb-1 block text-[10px] uppercase tracking-widest text-white/50">
+                    {t('wallet.card_number')}
+                  </label>
+                  <input
+                    value={card}
+                    onChange={(e) => onCardChange(e.target.value.replace(/[^0-9]/g, ''))}
+                    className="game-input font-mono"
+                    placeholder="0000 0000 0000 0000"
+                    maxLength={20}
+                  />
+                </div>
+              )}
+              {isCrypto && (
+                <div>
+                  <label className="mb-1 block text-[10px] uppercase tracking-widest text-white/50">
+                    {selected.currency} {t('wallet.address', 'адрес')}
+                  </label>
+                  <input
+                    value={address}
+                    onChange={(e) => onAddressChange(e.target.value.trim())}
+                    className="game-input font-mono text-sm"
+                    placeholder={`${selected.currency} address`}
+                  />
+                  <div className="mt-1 text-[11px] text-white/50">
+                    Внимательно проверьте адрес — отмена невозможна.
+                  </div>
+                </div>
+              )}
+
+              {!balanceOk && (
+                <div className="rounded-md bg-rose-500/15 px-3 py-2 text-xs text-rose-300">
+                  Сумма больше доступного баланса
+                </div>
+              )}
+              {err && (
+                <div className="rounded-md bg-rose-500/15 px-3 py-2 text-xs text-rose-300">{err}</div>
+              )}
+
+              <button
+                type="button"
+                disabled={!canSubmit}
+                onClick={onSubmit}
+                className="game-btn game-btn-purple"
+              >
+                {busy ? '…' : t('wallet.submit_withdraw', 'Отправить заявку')}
+              </button>
+              <div className="text-center text-[11px] text-white/40">
+                Заявка попадёт в очередь администратора. Деньги будут списаны при создании заявки.
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
