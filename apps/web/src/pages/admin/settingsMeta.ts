@@ -154,10 +154,24 @@ export const SETTING_META: Record<string, SettingMeta> = {
     group: 'seo',
   },
   'seo.twitter_handle': {
-    label: 'Twitter @handle',
-    description: 'Twitter @username для twitter:site.',
+    label: 'Twitter @handle (deprecated)',
+    description: 'Устарело: оставлено для совместимости. Используйте instagram_url и telegram_url.',
     type: 'string',
-    example: '@arena1v1',
+    example: '@faoor',
+    group: 'seo',
+  },
+  'seo.instagram_url': {
+    label: 'Instagram URL',
+    description: 'Полная ссылка на профиль Instagram. Используется в <link rel="me"> и в JSON-LD sameAs.',
+    type: 'string',
+    example: 'https://instagram.com/faoor',
+    group: 'seo',
+  },
+  'seo.telegram_url': {
+    label: 'Telegram URL',
+    description: 'Полная ссылка на канал/чат Telegram. Используется в <link rel="me"> и в JSON-LD sameAs.',
+    type: 'string',
+    example: 'https://t.me/faoor',
     group: 'seo',
   },
   'seo.canonical_url': {
@@ -177,13 +191,13 @@ export const SETTING_META: Record<string, SettingMeta> = {
 };
 
 export const GROUP_LABELS: Record<SettingMeta['group'], string> = {
-  gameplay: 'Gameplay',
-  rooms: 'Rooms / matchmaking',
-  wallet: 'Wallet & payouts',
-  legal: 'Legal & compliance',
-  bots: 'Bots',
-  seo: 'SEO & meta',
-  other: 'Other',
+  gameplay: 'Геймплей',
+  rooms: 'Комнаты / матчмейкинг',
+  wallet: 'Кошелёк и выплаты',
+  legal: 'Юридическое и compliance',
+  bots: 'Боты',
+  seo: 'SEO и мета-теги',
+  other: 'Прочее',
 };
 
 export function getMeta(key: string): SettingMeta {

@@ -6,7 +6,7 @@ import { AdminGuard } from './admin.guard';
 
 const SEO_KEYS = [
   'site_name', 'title', 'description', 'keywords',
-  'og_image_url', 'twitter_handle', 'canonical_url', 'theme_color',
+  'og_image_url', 'instagram_url', 'telegram_url', 'canonical_url', 'theme_color',
 ] as const;
 
 const DEFAULTS: Record<string, string> = {
@@ -15,7 +15,8 @@ const DEFAULTS: Record<string, string> = {
   description: 'Skill-based PvP арена 1 на 1. Сражайся за реальные деньги, без RNG и удачи — только чистый скилл.',
   keywords: 'faoor, arena, pvp, 1v1, skill arena, real money, esports, online battle, браузерная игра, дуэль',
   og_image_url: 'https://faoor.com/icons/icon-512.png',
-  twitter_handle: '@faoor',
+  instagram_url: 'https://instagram.com/faoor',
+  telegram_url: 'https://t.me/faoor',
   canonical_url: 'https://faoor.com',
   theme_color: '#1a1450',
 };
@@ -141,6 +142,25 @@ export class AdminSeoController {
 
   @Get()
   async get() {
+    // Auto-seed any missing seo.* keys with sensible defaults so the admin form
+    // shows the actual current values (and not just frontend placeholders).
+    const existing = await this.prisma.setting.findMany({
+      where: { key: { startsWith: 'seo.' } },
+      select: { key: true },
+    });
+    const have = new Set(existing.map((r) => r.key));
+    const missing = (Object.keys(DEFAULTS) as (keyof typeof DEFAULTS)[]).filter((k) => !have.has(`seo.${k}`));
+    if (missing.length) {
+      await this.prisma.$transaction(
+        missing.map((k) =>
+          this.prisma.setting.upsert({
+            where: { key: `seo.${k}` },
+            create: { key: `seo.${k}`, value: DEFAULTS[k] },
+            update: {},
+          }),
+        ),
+      );
+    }
     return loadSeo(this.prisma);
   }
 

@@ -13,6 +13,7 @@ const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL ?? 'http://localhost').repl
 const MIN_DEPOSIT_USD = new Prisma.Decimal('0.01');
 const MAX_DEPOSIT_USD = new Prisma.Decimal('100000');
 const MIN_WITHDRAW_USD = new Prisma.Decimal('1');
+const PENDING_DEPOSIT_TTL_MS = 15 * 60 * 1000;
 
 interface DepositResult {
   paymentId: string;
@@ -63,6 +64,38 @@ export class PaymentsService {
     if (!method || !method.isActive || !method.isDeposit) {
       throw new BadRequestException({ code: 'METHOD_NOT_AVAILABLE' });
     }
+
+    // Antispam: only one open betra_card deposit at a time, with a 15-minute window.
+    if (method.kind === 'betra_card') {
+      const since = new Date(Date.now() - PENDING_DEPOSIT_TTL_MS);
+      const existing = await this.prisma.payment.findFirst({
+        where: {
+          userId,
+          type: 'DEPOSIT',
+          status: 'PENDING',
+          provider: 'betra',
+          createdAt: { gt: since },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (existing) {
+        const meta = (existing.meta ?? {}) as { betra?: BetraDepositReqs };
+        const expiresAt = new Date(existing.createdAt.getTime() + PENDING_DEPOSIT_TTL_MS).toISOString();
+        throw new BadRequestException({
+          code: 'PENDING_DEPOSIT_EXISTS',
+          message: 'You already have an active deposit. Pay it or wait until it expires (15 min).',
+          details: {
+            paymentId: existing.id,
+            expiresAt,
+            amountUsd: existing.amountUsd.toString(),
+            currency: existing.currency,
+            methodSlug: existing.methodSlug,
+            betra: meta.betra ?? null,
+          },
+        });
+      }
+    }
+
     // Frontend always sends USD. Convert to method.currency for the provider.
     const usdAmount = this.parseAmount(amountUsdRaw);
     if (usdAmount.lt(MIN_DEPOSIT_USD)) throw new BadRequestException({ code: 'AMOUNT_TOO_LOW' });
@@ -367,6 +400,55 @@ export class PaymentsService {
         finishedAt: p.finishedAt?.toISOString() ?? null,
       })),
     };
+  }
+
+  /**
+   * Returns the user's currently-open betra_card deposit (if any) — the one used
+   * for the 15-minute anti-spam lock. Frontend polls this on wallet open and uses
+   * it to display a countdown / re-open the requisites sheet without creating a
+   * new payment.
+   */
+  async getActivePendingDeposit(userId: number) {
+    const since = new Date(Date.now() - PENDING_DEPOSIT_TTL_MS);
+    const p = await this.prisma.payment.findFirst({
+      where: {
+        userId,
+        type: 'DEPOSIT',
+        status: 'PENDING',
+        provider: 'betra',
+        createdAt: { gt: since },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!p) return { active: false as const };
+    const meta = (p.meta ?? {}) as { betra?: BetraDepositReqs };
+    return {
+      active: true as const,
+      paymentId: p.id,
+      amountUsd: p.amountUsd.toString(),
+      amountRaw: p.amountRaw?.toString() ?? null,
+      currency: p.currency ?? null,
+      methodSlug: p.methodSlug ?? null,
+      createdAt: p.createdAt.toISOString(),
+      expiresAt: new Date(p.createdAt.getTime() + PENDING_DEPOSIT_TTL_MS).toISOString(),
+      betra: meta.betra ?? null,
+    };
+  }
+
+  /**
+   * Cancels an open pending betra_card deposit (only the user's own, only PENDING).
+   * Frees the 15-minute lock so the user can create a new payment immediately.
+   */
+  async cancelPendingDeposit(userId: number, paymentId: string) {
+    const p = await this.prisma.payment.findUnique({ where: { id: paymentId } });
+    if (!p || p.userId !== userId) throw new BadRequestException({ code: 'NOT_FOUND' });
+    if (p.status !== 'PENDING') throw new BadRequestException({ code: 'NOT_PENDING' });
+    if (p.type !== 'DEPOSIT') throw new BadRequestException({ code: 'WRONG_TYPE' });
+    await this.prisma.payment.update({
+      where: { id: paymentId },
+      data: { status: 'CANCELLED', finishedAt: new Date() },
+    });
+    return { ok: true };
   }
 
   // Helpers ------------------------------------------------------------

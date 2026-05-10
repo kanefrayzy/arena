@@ -29,6 +29,47 @@ function setLink(rel: string, href: string, type?: string): void {
   if (type) el.setAttribute('type', type);
 }
 
+/**
+ * Sets/replaces a `<link rel="me" href="...">` tag identified by a custom
+ * `data-id` so we can have multiple `rel="me"` links (IG, TG, ...) without
+ * stomping each other.
+ */
+function setSocialLink(id: string, rel: string, href: string | undefined): void {
+  const sel = `link[rel="${rel}"][data-id="${id}"]`;
+  let el = document.head.querySelector<HTMLLinkElement>(sel);
+  if (!href) {
+    if (el) el.remove();
+    return;
+  }
+  if (!el) {
+    el = document.createElement('link');
+    el.setAttribute('rel', rel);
+    el.setAttribute('data-id', id);
+    document.head.appendChild(el);
+  }
+  el.setAttribute('href', href);
+}
+
+function upsertOrganizationJsonLd(seo: Record<string, string>): void {
+  const sameAs = [seo.instagram_url, seo.telegram_url].filter(Boolean);
+  const data: Record<string, unknown> = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: seo.site_name || 'Faoor',
+    url: seo.canonical_url || undefined,
+    logo: seo.og_image_url || undefined,
+    sameAs: sameAs.length ? sameAs : undefined,
+  };
+  let el = document.head.querySelector<HTMLScriptElement>('script[type="application/ld+json"][data-id="organization"]');
+  if (!el) {
+    el = document.createElement('script');
+    el.setAttribute('type', 'application/ld+json');
+    el.setAttribute('data-id', 'organization');
+    document.head.appendChild(el);
+  }
+  el.textContent = JSON.stringify(data, (_, v) => (v === undefined ? undefined : v));
+}
+
 export async function applyBrandingAndSeo(): Promise<void> {
   try {
     const r = await fetch('/api/seo', { credentials: 'omit' });
@@ -59,12 +100,22 @@ export async function applyBrandingAndSeo(): Promise<void> {
     const ogImage = seo.og_image_url || branding.og_image || branding.icon512;
     if (ogImage) setMeta('og:image', ogImage, 'property');
 
-    // Twitter
+    // Twitter card meta is kept (twitter:card defines preview rendering on
+    // anything that crawls Twitter-style cards including some messengers), but
+    // we no longer expose a Twitter handle. Instead Instagram and Telegram URLs
+    // are surfaced via <link rel="me"> for proper social discovery.
     setMeta('twitter:card', 'summary_large_image');
-    if (seo.twitter_handle) setMeta('twitter:site', seo.twitter_handle);
     setMeta('twitter:title', seo.title || seo.site_name || 'Faoor');
     if (seo.description) setMeta('twitter:description', seo.description);
     if (ogImage) setMeta('twitter:image', ogImage);
+
+    // Social profile links (rel="me" — used by IndieWeb-aware crawlers and
+    // some search engines for entity verification).
+    setSocialLink('me-instagram', 'me', seo.instagram_url);
+    setSocialLink('me-telegram', 'me', seo.telegram_url);
+
+    // JSON-LD Organization with sameAs links to socials.
+    upsertOrganizationJsonLd(seo);
 
     // Canonical
     if (seo.canonical_url) setLink('canonical', seo.canonical_url);

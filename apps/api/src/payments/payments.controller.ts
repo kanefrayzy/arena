@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { z } from 'zod';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -85,5 +85,16 @@ export class PaymentsController {
   @Get('me')
   async list(@Req() req: AuthedRequest, @Query('limit') limit?: string) {
     return this.payments.list(req.user.sub, Number(limit ?? 50));
+  }
+
+  @Get('pending')
+  async pending(@Req() req: AuthedRequest) {
+    return this.payments.getActivePendingDeposit(req.user.sub);
+  }
+
+  @Post(':id/cancel')
+  @HttpCode(200)
+  async cancel(@Req() req: AuthedRequest, @Param('id') id: string) {
+    return this.payments.cancelPendingDeposit(req.user.sub, id);
   }
 }

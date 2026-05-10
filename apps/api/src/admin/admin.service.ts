@@ -20,25 +20,104 @@ export class AdminService {
 
   // ───────────────────────── Dashboard ─────────────────────────
   async dashboard() {
-    const [users, banned, matchesTotal, matchesRunning, matchesDisputed, gross, commission, pendingPayouts] =
-      await Promise.all([
-        this.prisma.user.count(),
-        this.prisma.user.count({ where: { isBanned: true } }),
-        this.prisma.match.count(),
-        this.prisma.match.count({ where: { status: 'RUNNING' } }),
-        this.prisma.match.count({ where: { status: 'DISPUTED' } }),
-        this.prisma.ledger.aggregate({
-          where: { type: { in: ['MATCH_STAKE_LOCK', 'SHOP_PURCHASE'] }, amount: { lt: 0 } },
-          _sum: { amount: true },
-        }),
-        this.prisma.ledger.aggregate({
-          where: { type: 'COMMISSION' },
-          _sum: { amount: true },
-        }),
-        this.prisma.payment.count({ where: { type: 'WITHDRAW', status: 'PENDING' } }),
-      ]);
+    const now = new Date();
+    const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const startOfDay = new Date(now);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const [
+      users, banned, usersNew24h, usersNew7d,
+      matchesTotal, matchesRunning, matchesDisputed, matchesToday,
+      gross, commission,
+      pendingPayouts, pendingPayoutsAmount,
+      depositsToday, withdrawalsToday,
+      depositsFailed24h,
+      walletTotal,
+    ] = await Promise.all([
+      this.prisma.user.count(),
+      this.prisma.user.count({ where: { isBanned: true } }),
+      this.prisma.user.count({ where: { createdAt: { gt: dayAgo } } }),
+      this.prisma.user.count({ where: { createdAt: { gt: weekAgo } } }),
+      this.prisma.match.count(),
+      this.prisma.match.count({ where: { status: 'RUNNING' } }),
+      this.prisma.match.count({ where: { status: 'DISPUTED' } }),
+      this.prisma.match.count({ where: { finishedAt: { gt: startOfDay } } }),
+      this.prisma.ledger.aggregate({
+        where: { type: { in: ['MATCH_STAKE_LOCK', 'SHOP_PURCHASE'] }, amount: { lt: 0 } },
+        _sum: { amount: true },
+      }),
+      this.prisma.ledger.aggregate({
+        where: { type: 'COMMISSION' },
+        _sum: { amount: true },
+      }),
+      this.prisma.payment.count({ where: { type: 'WITHDRAWAL', status: 'PENDING' } }),
+      this.prisma.payment.aggregate({
+        where: { type: 'WITHDRAWAL', status: 'PENDING' },
+        _sum: { amountUsd: true },
+      }),
+      this.prisma.payment.aggregate({
+        where: { type: 'DEPOSIT', status: 'COMPLETED', finishedAt: { gt: startOfDay } },
+        _sum: { amountUsd: true },
+      }),
+      this.prisma.payment.aggregate({
+        where: { type: 'WITHDRAWAL', status: 'COMPLETED', finishedAt: { gt: startOfDay } },
+        _sum: { amountUsd: true },
+      }),
+      this.prisma.payment.count({
+        where: { status: 'FAILED', createdAt: { gt: dayAgo } },
+      }),
+      this.prisma.wallet.aggregate({
+        _sum: { balance: true, locked: true },
+      }),
+    ]);
+
+    // Top 5 active rooms by match count in the last 24h.
+    const roomActivity = await this.prisma.match.groupBy({
+      by: ['roomId'],
+      where: { finishedAt: { gt: dayAgo } },
+      _count: { _all: true },
+      orderBy: { _count: { roomId: 'desc' } },
+      take: 5,
+    });
+    const roomIds = roomActivity.map((r) => r.roomId);
+    const rooms = roomIds.length
+      ? await this.prisma.room.findMany({ where: { id: { in: roomIds } }, select: { id: true, name: true, stakeUsd: true } })
+      : [];
+    const roomMap = new Map(rooms.map((r) => [r.id, r]));
+    const topRooms = roomActivity.map((r) => ({
+      roomId: r.roomId,
+      name: roomMap.get(r.roomId)?.name ?? `room#${r.roomId}`,
+      stake: roomMap.get(r.roomId)?.stakeUsd?.toString() ?? null,
+      matches24h: r._count._all,
+    }));
+
     return {
-      users,
+      users: {
+        total: users,
+        banned,
+        new24h: usersNew24h,
+        new7d: usersNew7d,
+      },
+      matches: {
+        total: matchesTotal,
+        running: matchesRunning,
+        disputed: matchesDisputed,
+        today: matchesToday,
+      },
+      finance: {
+        grossVolumeUsd: gross._sum.amount ? gross._sum.amount.abs().toString() : '0',
+        commissionUsd: commission._sum.amount ? commission._sum.amount.toString() : '0',
+        depositsToday: depositsToday._sum.amountUsd?.toString() ?? '0',
+        withdrawalsToday: withdrawalsToday._sum.amountUsd?.toString() ?? '0',
+        pendingPayouts,
+        pendingPayoutsAmount: pendingPayoutsAmount._sum.amountUsd?.toString() ?? '0',
+        failedPayments24h: depositsFailed24h,
+        walletBalanceTotal: walletTotal._sum.balance?.toString() ?? '0',
+        walletLockedTotal: walletTotal._sum.locked?.toString() ?? '0',
+      },
+      topRooms,
+      // Legacy flat fields kept for backward compatibility with the admin UI.
       banned,
       matchesTotal,
       matchesRunning,
@@ -550,26 +629,36 @@ export class AdminService {
       where,
       orderBy: { createdAt: 'desc' },
       take: limit,
-      include: { user: { select: { id: true, username: true, email: true } } },
     });
+    const userIds = Array.from(new Set(rows.map((r) => r.userId)));
+    const users = userIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, username: true, email: true },
+        })
+      : [];
+    const userMap = new Map(users.map((u) => [u.id, u]));
     return {
-      items: rows.map((p) => ({
-        id: p.id,
-        userId: p.userId,
-        username: p.user?.username ?? null,
-        email: p.user?.email ?? null,
-        type: p.type,
-        status: p.status,
-        amountUsd: p.amountUsd.toString(),
-        amountRaw: p.amountRaw?.toString() ?? null,
-        currency: p.currency ?? null,
-        provider: p.provider,
-        methodSlug: p.methodSlug ?? null,
-        externalId: p.externalId,
-        meta: p.meta ?? null,
-        createdAt: p.createdAt.toISOString(),
-        finishedAt: p.finishedAt?.toISOString() ?? null,
-      })),
+      items: rows.map((p) => {
+        const u = userMap.get(p.userId);
+        return {
+          id: p.id,
+          userId: p.userId,
+          username: u?.username ?? null,
+          email: u?.email ?? null,
+          type: p.type,
+          status: p.status,
+          amountUsd: p.amountUsd.toString(),
+          amountRaw: p.amountRaw?.toString() ?? null,
+          currency: p.currency ?? null,
+          provider: p.provider,
+          methodSlug: p.methodSlug ?? null,
+          externalId: p.externalId,
+          meta: p.meta ?? null,
+          createdAt: p.createdAt.toISOString(),
+          finishedAt: p.finishedAt?.toISOString() ?? null,
+        };
+      }),
     };
   }
 
@@ -579,8 +668,8 @@ export class AdminService {
     if (p.status !== 'PENDING') {
       throw new BadRequestException({ code: 'NOT_PENDING', message: `payment is ${p.status}` });
     }
-    if (p.type !== 'WITHDRAW') {
-      throw new BadRequestException({ code: 'NOT_WITHDRAW', message: 'only WITHDRAW can be approved here' });
+    if (p.type !== 'WITHDRAWAL') {
+      throw new BadRequestException({ code: 'NOT_WITHDRAW', message: 'only WITHDRAWAL can be approved here' });
     }
     // Funds were already locked at request time. On approve: convert lock → debit (WITHDRAWAL).
     const idempotencyKey = `payment:${paymentId}:approve`;

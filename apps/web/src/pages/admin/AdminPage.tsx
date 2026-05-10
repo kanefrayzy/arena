@@ -20,19 +20,19 @@ import { ReportsTab } from './tabs/ReportsTab';
 type Tab = 'dash' | 'users' | 'rooms' | 'content' | 'matches' | 'payments' | 'withdrawals' | 'methods' | 'settings' | 'sprites' | 'abilities' | 'branding' | 'reports';
 
 const TABS: { key: Tab; label: string; desc: string; icon: string }[] = [
-  { key: 'dash', label: 'Dashboard', desc: 'Key metrics', icon: '▦' },
-  { key: 'users', label: 'Users', desc: 'Players & balances', icon: '◉' },
-  { key: 'rooms', label: 'Rooms', desc: 'Match rooms', icon: '◫' },
-  { key: 'content', label: 'Content', desc: 'Characters & skins', icon: '✦' },
-  { key: 'sprites', label: 'Sprites', desc: 'Game graphics', icon: '◆' },
-  { key: 'abilities', label: 'Abilities', desc: 'Ability system', icon: '⚡' },
-  { key: 'matches', label: 'Matches', desc: 'Live & history', icon: '⚔' },
-  { key: 'reports', label: 'Reports', desc: 'Player complaints', icon: '🚩' },
-  { key: 'payments', label: 'Deposits', desc: 'Пополнения', icon: '$' },
-  { key: 'withdrawals', label: 'Withdrawals', desc: 'Заявки на вывод', icon: '↑' },
-  { key: 'methods', label: 'Methods', desc: 'Payment methods & icons', icon: '◈' },
-  { key: 'settings', label: 'Settings', desc: 'Feature flags', icon: '⚙' },
-  { key: 'branding', label: 'Branding', desc: 'Logo, favicon, icons', icon: '🎨' },
+  { key: 'dash', label: 'Дашборд', desc: 'Ключевые метрики', icon: '▦' },
+  { key: 'users', label: 'Пользователи', desc: 'Игроки и балансы', icon: '◉' },
+  { key: 'rooms', label: 'Комнаты', desc: 'Матч-комнаты и ставки', icon: '◫' },
+  { key: 'content', label: 'Контент', desc: 'Персонажи и скины', icon: '✦' },
+  { key: 'sprites', label: 'Спрайты', desc: 'Графика игры', icon: '◆' },
+  { key: 'abilities', label: 'Способности', desc: 'Система абилок', icon: '⚡' },
+  { key: 'matches', label: 'Матчи', desc: 'Текущие и история', icon: '⚔' },
+  { key: 'reports', label: 'Жалобы', desc: 'Жалобы игроков', icon: '🚩' },
+  { key: 'payments', label: 'Депозиты', desc: 'Пополнения', icon: '$' },
+  { key: 'withdrawals', label: 'Выводы', desc: 'Заявки на вывод', icon: '↑' },
+  { key: 'methods', label: 'Методы оплаты', desc: 'Способы и иконки', icon: '◈' },
+  { key: 'settings', label: 'Настройки', desc: 'Флаги и параметры', icon: '⚙' },
+  { key: 'branding', label: 'Брендинг', desc: 'Лого, фавикон, иконки', icon: '🎨' },
 ];
 
 export function AdminPage() {

@@ -56,6 +56,32 @@ function qrUrl(text: string, size = 240): string {
   return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=8&data=${encodeURIComponent(text)}`;
 }
 
+// Format raw card digits into 4-digit groups: "1234567812345678" -> "1234 5678 1234 5678"
+function formatCard(s: string | null | undefined): string {
+  if (!s) return '';
+  const digits = String(s).replace(/\D/g, '');
+  if (!digits) return String(s);
+  return digits.replace(/(\d{4})(?=\d)/g, '$1 ');
+}
+
+function Spinner({ size = 28, label }: { size?: number; label?: string }) {
+  return (
+    <div className="flex flex-col items-center gap-3 py-10">
+      <svg
+        className="animate-spin text-game-yellow"
+        style={{ width: size, height: size }}
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden
+      >
+        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.2" strokeWidth="3" />
+        <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+      </svg>
+      {label && <div className="text-xs text-white/60">{label}</div>}
+    </div>
+  );
+}
+
 export function WalletPage() {
   const { t } = useTranslation();
   const nav = useNavigate();
@@ -76,6 +102,8 @@ export function WalletPage() {
   const [withdrawSheetMin, setWithdrawSheetMin] = useState(false);
   const [withdrawDone, setWithdrawDone] = useState(false);
   const [rates, setRates] = useState<Record<string, number>>({ USD: 1 });
+  // Anti-spam lock for pending betra deposits (15-min window).
+  const [pending, setPending] = useState<{ paymentId: string; expiresAt: string } | null>(null);
 
   const reload = async () => {
     try {
@@ -89,6 +117,28 @@ export function WalletPage() {
         const r = await api.get<{ rates: Record<string, number> }>('/payments/rates');
         if (r?.rates) setRates(r.rates);
       } catch { /* ignore, fallback 1:1 */ }
+      // Probe for an active pending deposit and auto-resume the sheet.
+      try {
+        type PendingResp =
+          | { active: false }
+          | {
+              active: true; paymentId: string; expiresAt: string; methodSlug: string | null;
+              betra: BetraReqs | null;
+            };
+        const pp = await api.get<PendingResp>('/payments/pending');
+        if (pp.active) {
+          setPending({ paymentId: pp.paymentId, expiresAt: pp.expiresAt });
+          if (pp.betra) {
+            setReqs({ paymentId: pp.paymentId, status: pp.betra.status, betra: pp.betra });
+            if (pp.methodSlug) setMethodSlug(pp.methodSlug);
+            setTab('deposit');
+            setSheetOpen(true);
+            setSheetMin(true);
+          }
+        } else {
+          setPending(null);
+        }
+      } catch { /* ignore */ }
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) nav('/');
     }
@@ -141,11 +191,39 @@ export function WalletPage() {
       const r = await api.post<DepositResponse>('/payments/deposit', { method: selected.slug, amount });
       setReqs(r);
       setSheetMin(false);
+      // Latch new 15-minute lock locally so countdown is accurate even before the
+      // /payments/pending probe runs again on next reload.
+      setPending({ paymentId: r.paymentId, expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString() });
       toast.info('Реквизиты получены', 'Оплатите по указанным реквизитам и средства зачислятся автоматически');
       await reload();
     } catch (e) {
-      setErr(e instanceof ApiError ? `${e.code}` : (e as Error).message);
+      if (e instanceof ApiError && e.code === 'PENDING_DEPOSIT_EXISTS') {
+        const d = (e.details ?? {}) as { paymentId?: string; expiresAt?: string; betra?: BetraReqs | null };
+        if (d.expiresAt && d.paymentId) setPending({ paymentId: d.paymentId, expiresAt: d.expiresAt });
+        if (d.betra) {
+          setReqs({ paymentId: d.paymentId ?? '', status: d.betra.status, betra: d.betra });
+          setSheetMin(false);
+        }
+        setErr(null);
+      } else {
+        setErr(e instanceof ApiError ? `${e.code}` : (e as Error).message);
+      }
     } finally { setBusy(false); }
+  };
+
+  const cancelPending = async () => {
+    if (!pending) return;
+    if (!confirm('Отменить текущую заявку на пополнение?')) return;
+    try {
+      await api.post(`/payments/${pending.paymentId}/cancel`, {});
+      setPending(null);
+      setReqs(null);
+      setSheetOpen(false);
+      toast.info('Заявка отменена', 'Можете создать новую');
+      await reload();
+    } catch (e) {
+      toast.error('Не удалось отменить', e instanceof ApiError ? e.code : (e as Error).message);
+    }
   };
 
   const submitWithdraw = async () => {
@@ -201,24 +279,35 @@ export function WalletPage() {
 
         {tab !== 'history' && (
           <section className="px-6 pt-4">
+            {tab === 'deposit' && pending && (
+              <PendingDepositBanner
+                expiresAt={pending.expiresAt}
+                onOpen={() => { setSheetOpen(true); setSheetMin(false); }}
+                onCancel={cancelPending}
+              />
+            )}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {filtered.length === 0 && (
                 <div className="game-card col-span-full px-3 py-6 text-center text-white/60">{t('wallet.no_methods')}</div>
               )}
-              {filtered.map((m) => (
+              {filtered.map((m) => {
+                const disabled = tab === 'deposit' && !!pending && m.kind === 'betra_card';
+                return (
                 <button
                   key={m.slug}
+                  disabled={disabled}
                   onClick={() => {
                     setMethodSlug(m.slug);
                     setReqs(null); setErr(null); setCard(''); setAddress(''); setWithdrawDone(false);
-                    // Open the appropriate drawer for the active tab
                     if (tab === 'deposit') { setSheetOpen(true); setSheetMin(false); }
                     else if (tab === 'withdraw') { setWithdrawSheetOpen(true); setWithdrawSheetMin(false); }
                   }}
                   className={
                     'game-card flex flex-col items-center gap-2 p-3 transition ' +
-                    (methodSlug === m.slug ? 'ring-2 ring-game-yellow' : 'hover:scale-[1.02]')
+                    (disabled ? 'cursor-not-allowed opacity-40 ' : 'hover:scale-[1.02] ') +
+                    (methodSlug === m.slug ? 'ring-2 ring-game-yellow' : '')
                   }
+                  title={disabled ? 'Дождитесь завершения текущей заявки или отмените её' : undefined}
                 >
                   {m.iconUrl ? (
                     <img src={m.iconUrl} alt={m.label} className="h-12 w-12 object-contain" />
@@ -229,7 +318,7 @@ export function WalletPage() {
                   )}
                   <div className="text-center text-xs font-semibold text-white/90">{m.label}</div>
                 </button>
-              ))}
+              ); })}
             </div>
           </section>
         )}
@@ -424,7 +513,11 @@ function DepositSheet({
           style={{ maxHeight: '70vh' }}>
           {/* Loading crypto address */}
           {busy && !reqs && isCrypto && (
-            <div className="py-10 text-center text-sm text-white/50">Получаем адрес…</div>
+            <Spinner label="Получаем адрес…" />
+          )}
+          {/* Loading betra requisites */}
+          {busy && !reqs && !isCrypto && (
+            <Spinner label="Создаём заявку и подбираем реквизиты…" />
           )}
           {/* Error */}
           {loadingErr && !reqs && (
@@ -475,6 +568,7 @@ function DepositSheet({
 
 function BetraView({ b, onCopy, copied }: { b: BetraReqs; onCopy: (s: string) => void; copied: string | null }) {
   const { t } = useTranslation();
+  const masked = formatCard(b.card);
   return (
     <div className="flex flex-col gap-3">
       <div className="rounded-xl bg-black/40 px-4 py-3">
@@ -487,9 +581,12 @@ function BetraView({ b, onCopy, copied }: { b: BetraReqs; onCopy: (s: string) =>
         <div className="rounded-xl bg-black/40 px-4 py-3">
           <div className="mb-1 text-[10px] uppercase tracking-widest text-white/50">{t('wallet.card_number')}</div>
           <div className="flex items-center justify-between gap-2">
-            <span className="font-mono text-lg tracking-wider">{b.card}</span>
-            <button onClick={() => onCopy(b.card!)} className="game-btn game-btn-ghost game-btn-sm">
-              {copied === b.card ? t('wallet.copied') : t('wallet.copy')}
+            <span className="font-mono text-lg tracking-widest">{masked}</span>
+            <button
+              onClick={() => onCopy(b.card!.replace(/\s+/g, ''))}
+              className="game-btn game-btn-ghost game-btn-sm"
+            >
+              {copied === b.card.replace(/\s+/g, '') ? t('wallet.copied') : t('wallet.copy')}
             </button>
           </div>
         </div>
@@ -556,6 +653,52 @@ function CryptoView({ c, onCopy, copied }: { c: { address: string; destTag?: str
       )}
       <div className="text-center text-xs text-white/60">
         {t('wallet.address_static_note', { currency: c.currency })}
+      </div>
+    </div>
+  );
+}
+
+// ─── 15-minute pending deposit banner with live countdown ───────────────────
+function PendingDepositBanner({
+  expiresAt, onOpen, onCancel,
+}: {
+  expiresAt: string;
+  onOpen: () => void;
+  onCancel: () => void;
+}) {
+  const target = new Date(expiresAt).getTime();
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const remainMs = Math.max(0, target - now);
+  const mm = Math.floor(remainMs / 60000);
+  const ss = Math.floor((remainMs % 60000) / 1000);
+  const expired = remainMs <= 0;
+  return (
+    <div className="mb-3 rounded-xl border-2 border-amber-400/40 bg-amber-400/10 px-4 py-3">
+      <div className="flex items-center gap-3">
+        <svg viewBox="0 0 24 24" className="h-6 w-6 shrink-0 text-amber-300" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3 2" strokeLinecap="round" />
+        </svg>
+        <div className="flex-1">
+          <div className="text-sm font-semibold text-amber-100">У вас уже есть активная заявка на пополнение</div>
+          <div className="text-xs text-white/70">
+            {expired
+              ? 'Время истекло. Обновите страницу для создания новой заявки.'
+              : <>Истекает через <span className="font-mono font-bold text-amber-200">{mm}:{String(ss).padStart(2, '0')}</span></>}
+          </div>
+        </div>
+      </div>
+      <div className="mt-2 flex gap-2">
+        <button type="button" onClick={onOpen} className="game-btn game-btn-yellow game-btn-sm flex-1">
+          Открыть реквизиты
+        </button>
+        <button type="button" onClick={onCancel} className="game-btn game-btn-ghost game-btn-sm">
+          Отменить
+        </button>
       </div>
     </div>
   );
@@ -710,11 +853,12 @@ function WithdrawSheet({
                     {t('wallet.card_number')}
                   </label>
                   <input
-                    value={card}
-                    onChange={(e) => onCardChange(e.target.value.replace(/[^0-9]/g, ''))}
-                    className="game-input font-mono"
+                    value={formatCard(card)}
+                    onChange={(e) => onCardChange(e.target.value.replace(/[^0-9]/g, '').slice(0, 19))}
+                    className="game-input font-mono tracking-widest"
                     placeholder="0000 0000 0000 0000"
-                    maxLength={20}
+                    maxLength={23}
+                    inputMode="numeric"
                   />
                 </div>
               )}

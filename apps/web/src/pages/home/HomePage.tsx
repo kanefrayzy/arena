@@ -103,19 +103,22 @@ export function HomePage() {
 
       {/* ── TOP BAR ── */}
       <header className="game-panel relative z-10 flex items-center justify-between px-4 py-2.5">
-        {/* Balance — subtle dark pill with gold accent */}
+        {/* Balance — clean dark capsule with gold dollar chip */}
         <button
           type="button"
           onClick={() => nav('/wallet')}
-          className="group inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 backdrop-blur-sm transition hover:border-game-yellow/40 hover:bg-white/[0.09] active:scale-[0.98]"
+          className="group inline-flex items-center gap-2 rounded-full border border-white/10 bg-gradient-to-b from-black/40 to-black/60 py-1 pl-1 pr-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition hover:border-game-yellow/40 hover:from-black/30 hover:to-black/50 active:scale-[0.98]"
           title={t('home.balance')}
         >
-          <svg viewBox="0 0 24 24" className="h-4 w-4 text-game-yellow" fill="currentColor" aria-hidden>
-            <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm.9 15.3v1.4h-1.8v-1.4c-1.7-.2-3-1.2-3-2.9h1.7c.1.9.7 1.5 2.1 1.5 1.3 0 1.9-.6 1.9-1.4 0-.8-.5-1.2-2.2-1.6-2.3-.5-3.4-1.4-3.4-3 0-1.5 1.2-2.5 2.9-2.7V5.8h1.8v1.4c1.7.2 2.7 1.3 2.8 2.7h-1.7c-.1-.7-.6-1.3-1.9-1.3-1.2 0-1.7.5-1.7 1.2 0 .7.5 1.1 2.1 1.5 2.4.5 3.5 1.5 3.5 3.1 0 1.5-1.1 2.6-3.1 2.9z" />
-          </svg>
-          <span className="font-mono text-sm font-semibold text-white tabular-nums">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-b from-game-yellow to-amber-500 text-[14px] font-black text-amber-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.5),0_1px_2px_rgba(0,0,0,0.4)]">
+            $
+          </span>
+          <span className="font-mono text-[15px] font-semibold leading-none text-white tabular-nums">
             {wallet ? Number(wallet.balance).toFixed(2) : '—'}
           </span>
+          <svg viewBox="0 0 12 12" className="h-3 w-3 text-white/40 transition group-hover:text-game-yellow" fill="currentColor" aria-hidden>
+            <path d="M6 2v8M6 2l3 3M6 2l-3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" transform="rotate(180 6 6)" />
+          </svg>
         </button>
 
         <div className="flex flex-col items-center gap-0.5">
@@ -123,15 +126,16 @@ export function HomePage() {
           <RankBadge cup={me.cup ?? 0} />
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => nav('/settings')}
-            className="group inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/70 backdrop-blur-sm transition hover:border-white/25 hover:bg-white/[0.1] hover:text-white active:scale-95"
+            className="group relative inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-b from-white/[0.08] to-white/[0.02] text-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition hover:border-white/25 hover:text-white active:scale-95"
             aria-label={t('settings.title')}
           >
-            <svg viewBox="0 0 24 24" className="h-4.5 w-4.5 transition-transform group-hover:rotate-45" fill="currentColor" aria-hidden>
-              <path d="M12 15.5a3.5 3.5 0 110-7 3.5 3.5 0 010 7zm7.4-3.5l1.7-1.3-1.7-3-2 .7a7.5 7.5 0 00-1.5-.9L15.5 5h-3.4l-.4 2.5a7.5 7.5 0 00-1.5.9l-2-.7-1.7 3 1.7 1.3a7.6 7.6 0 000 1.7L4.5 14l1.7 3 2-.7a7.5 7.5 0 001.5.9l.4 2.5h3.4l.4-2.5a7.5 7.5 0 001.5-.9l2 .7 1.7-3-1.7-1.3a7.6 7.6 0 000-1.7z" />
+            <svg viewBox="0 0 24 24" className="h-5 w-5 transition-transform duration-300 group-hover:rotate-90" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
           </button>
           {me.role === 'ADMIN' && (
