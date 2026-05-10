@@ -44,8 +44,8 @@ const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/sv
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 
 function uploadDir(): string {
-  // CWD when api runs is /workspace/apps/api in container, host root otherwise.
-  const dir = join(process.cwd(), 'uploads', 'sprites');
+  // Static-serve root is `${cwd}/apps/api/uploads`; keep writes in the same tree.
+  const dir = join(process.cwd(), 'apps', 'api', 'uploads', 'sprites');
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   return dir;
 }

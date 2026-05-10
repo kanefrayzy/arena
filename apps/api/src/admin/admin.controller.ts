@@ -51,7 +51,9 @@ function extFromMime(m: string): string {
   return '.bin';
 }
 function ensureDir(sub: string): string {
-  const dir = join(process.cwd(), 'uploads', sub);
+  // Static-serve root is `${cwd}/apps/api/uploads`; writing under `${cwd}/uploads`
+  // produced 404s on every uploaded asset.
+  const dir = join(process.cwd(), 'apps', 'api', 'uploads', sub);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   return dir;
 }

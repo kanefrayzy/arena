@@ -38,7 +38,10 @@ const patchSchema = createSchema.partial().omit({ slug: true });
 type PatchInput = z.infer<typeof patchSchema>;
 
 function ensureDir(): string {
-  const dir = join(process.cwd(), 'uploads', 'payment-icons');
+  // Express serves /uploads from `${cwd}/apps/api/uploads` and the prod
+  // volume is mounted there too. Writing under `${cwd}/uploads` lands in an
+  // unserved, ephemeral path -> the icons return 404 after upload.
+  const dir = join(process.cwd(), 'apps', 'api', 'uploads', 'payment-icons');
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   return dir;
 }
