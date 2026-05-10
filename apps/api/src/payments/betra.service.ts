@@ -182,13 +182,21 @@ export class BetraService {
       } catch { /* not JSON */ }
     }
 
-    // Diagnostic log (sanitized): keep first 8 chars of each candidate hash.
+    // Diagnostic dump on mismatch: sanitized raw body (mask card numbers) + computed candidates.
+    // This is critical for debugging real provider payloads when they don't match the docs.
+    let bodyDump = '';
+    if (rawBody) {
+      const s = typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8');
+      bodyDump = s.replace(/(\d{6})\d{6,9}(\d{4})/g, '$1******$2').slice(0, 600);
+    }
     this.log.warn(
-      `Betra deposit-callback signature mismatch. ` +
-      `received=${received.slice(0, 12)}… header=${(headerSig ?? '').slice(0, 12)}… ` +
-      `expA(raw+header)=${(rawBody && headerSig ? createHmac('sha256', SECRET).update(rawBody).digest('hex') : '').slice(0, 12)}… ` +
-      `expB(fields)=${expB.slice(0, 12)}… ` +
-      `payload-keys=${Object.keys(payload).join(',')}`,
+      `Betra deposit-callback signature mismatch.\n` +
+      `  received=${received}\n` +
+      `  expA(raw+header)=${rawBody && headerSig ? createHmac('sha256', SECRET).update(rawBody).digest('hex') : '<n/a>'}\n` +
+      `  expB(fields ${sigB.length}b)=${expB}\n` +
+      `  signed-string="${sigB}"\n` +
+      `  payload-keys=${Object.keys(payload).join(',')}\n` +
+      `  rawBody=${bodyDump}`,
     );
     return false;
   }
