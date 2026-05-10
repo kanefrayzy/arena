@@ -280,13 +280,30 @@ export class PaymentsService {
   // Webhooks ------------------------------------------------------------
 
   async handleBetraDepositCallback(payload: any, signature?: string, rawBody?: Buffer) {
+    this.log.log(
+      `Betra deposit-callback received: order_id=${payload?.order_id} status=${payload?.status} ` +
+      `id=${payload?.id} ts=${payload?.timestamp} hasHeaderSig=${!!signature} hasBodySig=${!!payload?.signature} ` +
+      `keys=${Object.keys(payload ?? {}).join(',')}`,
+    );
     if (!this.betra.verifyDepositSignature(payload, rawBody, signature)) {
       throw new BadRequestException('invalid signature');
     }
     const orderId = String(payload.order_id);
     const status = String(payload.status);
     const payment = await this.prisma.payment.findUnique({ where: { id: orderId } });
-    if (!payment || payment.type !== 'DEPOSIT' || payment.status === 'COMPLETED') return { ok: true };
+    if (!payment) {
+      this.log.warn(`Betra callback for unknown order_id=${orderId} (no Payment row)`);
+      return { ok: true };
+    }
+    if (payment.type !== 'DEPOSIT') {
+      this.log.warn(`Betra callback order_id=${orderId} is not a DEPOSIT (type=${payment.type})`);
+      return { ok: true };
+    }
+    if (payment.status === 'COMPLETED') {
+      this.log.log(`Betra callback order_id=${orderId} already COMPLETED — skip`);
+      return { ok: true };
+    }
+    this.log.log(`Betra callback order_id=${orderId} payment.status=${payment.status} -> incoming=${status}`);
 
     if (status === 'paid') {
       await this.ledger.record({
