@@ -61,7 +61,33 @@ export class QueueController {
       }
     }
     await this.queue.join(req.user.sub, body.mode, body.roomId);
+    // Defensive cleanup: if a previous match for this user is still marked
+    // PENDING/RUNNING in the DB but the game-server seed has expired (server
+    // restart, crash, instance gone), cancel it so the lobby gateway recovery
+    // doesn't drag the user back onto a dead match page.
+    void this.cancelStaleMatches(req.user.sub).catch(() => undefined);
     return { ok: true };
+  }
+
+  private async cancelStaleMatches(userId: number): Promise<void> {
+    const matches = await this.prisma.match.findMany({
+      where: {
+        OR: [{ player1Id: userId }, { player2Id: userId }],
+        status: { in: ['PENDING', 'RUNNING'] },
+      },
+      select: { id: true, meta: true },
+    });
+    for (const m of matches) {
+      const seedAlive = await this.redis.client.exists(`match:seed:${m.id}`);
+      if (seedAlive) continue;
+      await this.prisma.match.update({
+        where: { id: m.id },
+        data: {
+          status: 'CANCELLED',
+          meta: { ...(m.meta as object | null ?? {}), cancelReason: 'stale_no_seed' },
+        },
+      }).catch(() => undefined);
+    }
   }
 
   @Post('leave')

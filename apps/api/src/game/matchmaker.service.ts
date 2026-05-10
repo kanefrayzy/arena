@@ -47,8 +47,9 @@ export class MatchmakerService implements OnModuleInit, OnModuleDestroy {
     if (this.timer) clearInterval(this.timer);
   }
 
-  private async getBotInFreeEnabled(): Promise<boolean> {
+  private async getBotEnabled(): Promise<boolean> {
     // Combined check: legacy 'gameplay.bot_in_free' AND new 'bots.enabled'.
+    // Both default to true.
     const [legacy, enabled] = await Promise.all([
       this.prisma.setting.findUnique({ where: { key: 'gameplay.bot_in_free' } }),
       this.prisma.setting.findUnique({ where: { key: 'bots.enabled' } }),
@@ -155,14 +156,16 @@ export class MatchmakerService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    // Bot match for FREE if remaining waiter is old enough.
-    if (mode === 'FREE' && waiters.length === 1 && waiters[0]) {
-      const enabled = await this.getBotInFreeEnabled();
+    // Bot match for ANY mode (FREE / CASUAL / STAKE) if remaining waiter is
+    // old enough. Bot stakes are always free (no ledger lock), so STAKE bot
+    // matches are practice-only — they don't pay out and don't deduct money.
+    if (waiters.length === 1 && waiters[0]) {
+      const enabled = await this.getBotEnabled();
       if (!enabled) return;
       const waited = Date.now() - waiters[0].score;
       const threshold = await this.getBotWaitThresholdMs(waiters[0].userId);
       if (waited >= threshold) {
-        const room = await this.pickRoom('FREE');
+        const room = await this.pickRoom(mode, roomId);
         if (!room) return;
         const userId = waiters[0].userId;
         botWaitThresholdMs.delete(userId);

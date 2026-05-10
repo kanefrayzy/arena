@@ -8,11 +8,11 @@ export interface SettingMeta {
 
 export const SETTING_META: Record<string, SettingMeta> = {
   'gameplay.bot_in_free': {
-    label: 'Боты в FREE-комнатах',
-    description: 'Ставить бота, если не нашлось живого соперника за время поиска.',
+    label: 'Боты в FREE-комнатах (legacy)',
+    description: 'Legacy-флаг. Используйте bots.enabled — он объединяет все комнаты.',
     type: 'boolean',
     example: 'true',
-    group: 'gameplay',
+    group: 'bots',
   },
   'gameplay.tickRate': {
     label: 'Tick rate сервера',
@@ -90,7 +90,7 @@ export const SETTING_META: Record<string, SettingMeta> = {
   // ───── Bots ─────
   'bots.enabled': {
     label: 'Боты включены',
-    description: 'Глобальный выключатель ботов в матчмейкинге FREE-комнат.',
+    description: 'Глобальный выключатель ботов в матчмейкинге для всех комнат (FREE / CASUAL / STAKE).',
     type: 'boolean',
     example: 'true',
     group: 'bots',

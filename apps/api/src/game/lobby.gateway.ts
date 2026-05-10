@@ -352,7 +352,23 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
     // never actually attach to the match instance, so we should NOT lure them
     // onto a dead match page.
     const seedExists = await this.redis.client.exists(`match:seed:${match.id}`);
-    if (!seedExists) return false;
+    if (!seedExists) {
+      // Stale match — game server doesn't know about it. Mark CANCELLED so it
+      // doesn't shadow new matchmaking sessions and stop trying to deliver it.
+      try {
+        await this.prisma.match.update({
+          where: { id: match.id },
+          data: {
+            status: 'CANCELLED',
+            meta: { ...(match.meta as object | null ?? {}), cancelReason: 'stale_no_seed' },
+          },
+        });
+        this.log.warn(`cancelled stale match ${match.id} (no seed) for user ${sock.userId}`);
+      } catch (e) {
+        this.log.warn(`failed to cancel stale match ${match.id}: ${(e as Error).message}`);
+      }
+      return false;
+    }
     const opponent = match.player1Id === sock.userId ? match.player2 : match.player1;
     const gameWsUrl = process.env.GAME_PUBLIC_WS_URL ?? 'ws://localhost/ws/match';
     this.send(sock, {
