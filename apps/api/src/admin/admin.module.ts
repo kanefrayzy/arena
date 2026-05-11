@@ -8,9 +8,10 @@ import { AdminI18nController } from './i18n.admin.controller';
 import { WalletModule } from '../wallet/wallet.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ContentModule } from '../content/content.module';
+import { GameModule } from '../game/game.module';
 
 @Module({
-  imports: [WalletModule, NotificationsModule, ContentModule],
+  imports: [WalletModule, NotificationsModule, ContentModule, GameModule],
   controllers: [
     AdminController,
     SpritesController,

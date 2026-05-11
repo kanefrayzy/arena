@@ -181,6 +181,13 @@ export class AdminController {
     return this.admin.dashboard();
   }
 
+  // Real-time online users (lobby WebSocket connections). Lightweight: polled
+  // by the admin dashboard every few seconds for a live counter.
+  @Get('stats/online')
+  online() {
+    return this.admin.getOnline();
+  }
+
   // Users
   @Get('users')
   listUsers(@Query('search') search?: string, @Query('limit') limit?: string) {

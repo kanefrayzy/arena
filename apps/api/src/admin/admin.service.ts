@@ -5,6 +5,7 @@ import { SYSTEM_USER_ID, BOT_USER_ID } from '@arena/shared';
 import { PrismaService } from '../common/prisma/prisma.module';
 import { LedgerService } from '../wallet/ledger.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { LobbyGateway } from '../game/lobby.gateway';
 
 /**
  * AdminService — privileged operations. Every mutation that touches money
@@ -18,7 +19,16 @@ export class AdminService {
     private readonly prisma: PrismaService,
     private readonly ledger: LedgerService,
     private readonly notifications: NotificationsService,
+    private readonly lobby: LobbyGateway,
   ) {}
+
+  /**
+   * Real-time online count — number of users currently connected to the
+   * lobby WebSocket. Cheap (in-memory map size), safe to poll frequently.
+   */
+  getOnline(): { online: number } {
+    return { online: this.lobby.getOnlineCount() };
+  }
 
   // ───────────────────────── Dashboard ─────────────────────────
   async dashboard() {
@@ -143,6 +153,7 @@ export class AdminService {
         banned,
         new24h: usersNew24h,
         new7d: usersNew7d,
+        online: this.lobby.getOnlineCount(),
       },
       matches: {
         total: matchesTotal,

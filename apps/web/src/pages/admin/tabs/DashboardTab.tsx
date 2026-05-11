@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../../shared/api/client';
 
 interface Stats {
-  users: { total: number; banned: number; new24h: number; new7d: number };
+  users: { total: number; banned: number; new24h: number; new7d: number; online?: number };
   matches: { total: number; running: number; disputed: number; today: number };
   finance: {
     grossVolumeUsd: string;
@@ -62,21 +62,34 @@ export function DashboardTab() {
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const [online, setOnline] = useState<number | null>(null);
 
   async function load() {
     setLoading(true); setErr(null);
     try {
-      setS(await api.get<Stats>('/admin/stats/dashboard'));
+      const data = await api.get<Stats>('/admin/stats/dashboard');
+      setS(data);
+      if (typeof data.users.online === 'number') setOnline(data.users.online);
       setUpdatedAt(new Date());
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Не удалось загрузить');
     } finally { setLoading(false); }
   }
 
+  async function loadOnline() {
+    try {
+      const r = await api.get<{ online: number }>('/admin/stats/online');
+      setOnline(r.online);
+    } catch {
+      // ignore — main load() will re-sync
+    }
+  }
+
   useEffect(() => {
     void load();
     const t = setInterval(() => void load(), 30_000);
-    return () => clearInterval(t);
+    const tOnline = setInterval(() => void loadOnline(), 5_000);
+    return () => { clearInterval(t); clearInterval(tOnline); };
   }, []);
 
   if (err) return <div className="rounded-md border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{err}</div>;
@@ -102,6 +115,12 @@ export function DashboardTab() {
       <section>
         <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-white/40">Игроки</h3>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <StatCard
+            label="Онлайн сейчас"
+            value={online == null ? '—' : fmt(online)}
+            tone={online && online > 0 ? 'success' : 'default'}
+            hint="Обновляется каждые 5 сек"
+          />
           <StatCard label="Всего пользователей" value={fmt(s.users.total)} />
           <StatCard label="Новых за 24ч" value={fmt(s.users.new24h)} tone={s.users.new24h > 0 ? 'success' : 'default'} hint="Регистрации" />
           <StatCard label="Новых за 7 дней" value={fmt(s.users.new7d)} hint="Регистрации" />

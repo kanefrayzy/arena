@@ -98,6 +98,14 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
     this.wss?.close();
   }
 
+  /**
+   * Number of distinct users currently holding an open lobby WebSocket.
+   * Used by the admin dashboard for the real-time online counter.
+   */
+  getOnlineCount(): number {
+    return this.clients.size;
+  }
+
   /** Called from main.ts on http server upgrade event for /ws/lobby. */
   handleUpgrade(req: IncomingMessage, socket: import('net').Socket, head: Buffer): void {
     if (!this.wss) return socket.destroy();
