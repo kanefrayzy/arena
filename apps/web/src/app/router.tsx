@@ -30,7 +30,7 @@ export function AppRouter() {
           <Route path="/wallet" element={<WalletPage />} />
           <Route path="/loadout" element={<LoadoutPage />} />
           <Route path="/shop" element={<ShopPage />} />
-          <Route path="/admin" element={<AdminPage />} />
+          <Route path="/adfaur" element={<AdminPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/queue" element={<QueuePage />} />
           <Route path="/match/:id" element={<MatchPage />} />

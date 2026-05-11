@@ -181,7 +181,7 @@ export function HomePage() {
             </svg>
           </button>
           {me.role === 'ADMIN' && (
-            <button type="button" onClick={() => nav('/admin')} className="game-btn game-btn-pink game-btn-sm">
+            <button type="button" onClick={() => nav('/adfaur')} className="game-btn game-btn-pink game-btn-sm">
               admin
             </button>
           )}

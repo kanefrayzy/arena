@@ -137,9 +137,10 @@ export class MatchCreationService {
       },
     });
 
-    // Lock stakes for paid (non-bot) matches. Bot matches are always free.
-    // CASUAL with casualEnabled can yield asymmetric locks (one side 0 if
-    // they queued with insufficient balance).
+    // Lock stakes for paid matches.
+    // - Non-bot: lock both sides (CASUAL with casualEnabled can yield asymmetric locks).
+    // - Bot match: lock only the human (player1). The system acts as counterparty
+    //   on settle (LedgerService.settleBotMatch).
     if (!input.isBotMatch && (Number(lockP1) > 0 || Number(lockP2) > 0)) {
       try {
         if (Number(lockP1) > 0) await this.ledger.lockStake(match.id, input.player1Id, lockP1);
@@ -149,6 +150,18 @@ export class MatchCreationService {
         // Roll back: try to unlock whichever side already locked, mark match cancelled.
         await this.ledger.unlockStake(match.id, input.player1Id, lockP1).catch(() => undefined);
         await this.ledger.unlockStake(match.id, input.player2Id, lockP2).catch(() => undefined);
+        await this.prisma.match.update({
+          where: { id: match.id },
+          data: { status: 'CANCELLED', meta: { ...meta, cancelReason: 'insufficient_balance' } as Prisma.InputJsonValue },
+        });
+        throw err;
+      }
+    } else if (input.isBotMatch && Number(roomStake) > 0) {
+      try {
+        await this.ledger.lockStake(match.id, input.player1Id, roomStake);
+      } catch (err) {
+        this.log.error(`bot stake lock failed for match ${match.id}: ${(err as Error).message}`);
+        await this.ledger.unlockStake(match.id, input.player1Id, roomStake).catch(() => undefined);
         await this.prisma.match.update({
           where: { id: match.id },
           data: { status: 'CANCELLED', meta: { ...meta, cancelReason: 'insufficient_balance' } as Prisma.InputJsonValue },

@@ -111,6 +111,7 @@
   "shop.empty.weapons": "Оружия в продаже пока нет. Администратор может добавить его в разделе Admin → Content.",
   "shop.tab.characters": "Персонажи",
   "shop.tab.weapons": "Оружие",
+  "shop.insufficient_funds": "Недостаточно средств. Пополните кошелек.",
   "settings.title": "Настройки",
   "settings.back": "Назад",
   "settings.change_password": "Смена пароля",

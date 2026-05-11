@@ -111,6 +111,7 @@
   "shop.empty.weapons": "No weapons for sale yet. Admin can add them in Admin → Content.",
   "shop.tab.characters": "Characters",
   "shop.tab.weapons": "Weapons",
+  "shop.insufficient_funds": "Insufficient funds. Top up your wallet.",
   "settings.title": "Settings",
   "settings.back": "Back",
   "settings.change_password": "Change password",

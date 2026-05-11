@@ -157,8 +157,8 @@ export class MatchmakerService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Bot match for ANY mode (FREE / CASUAL / STAKE) if remaining waiter is
-    // old enough. Bot stakes are always free (no ledger lock), so STAKE bot
-    // matches are practice-only — they don't pay out and don't deduct money.
+    // old enough. For paid rooms the human's stake is locked at match start
+    // and settled vs. SYSTEM on finish (win → credit, loss → debit).
     if (waiters.length === 1 && waiters[0]) {
       const enabled = await this.getBotEnabled();
       if (!enabled) return;

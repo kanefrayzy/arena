@@ -72,7 +72,13 @@ export function ShopPage() {
       await api.post(`/shop/characters/${id}/buy`);
       await reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'buy failed');
+      if (e instanceof ApiError && e.code === 'INSUFFICIENT_BALANCE') {
+        setError(t('shop.insufficient_funds'));
+      } else if (e instanceof ApiError && e.code === 'ALREADY_OWNED') {
+        await reload();
+      } else {
+        setError(e instanceof Error ? e.message : 'buy failed');
+      }
     } finally {
       setBusy(null);
     }
@@ -143,6 +149,7 @@ export function ShopPage() {
         <ShopModal
           char={previewChar}
           owned={ownedChars.has(previewChar.id)}
+          canAfford={balance >= parseFloat(previewChar.priceUsd ?? '0')}
           busy={busy === `character:${previewChar.id}`}
           onBuy={() => void buy(previewChar.id)}
           onClose={() => setPreviewChar(null)}
@@ -244,6 +251,7 @@ function Card(p: CardProps) {
 function ShopModal({
   char,
   owned,
+  canAfford,
   busy,
   onBuy,
   onClose,
@@ -251,6 +259,7 @@ function ShopModal({
 }: {
   char: ShopCharacter;
   owned: boolean;
+  canAfford: boolean;
   busy: boolean;
   onBuy: () => void;
   onClose: () => void;
@@ -258,6 +267,7 @@ function ShopModal({
 }) {
   const priceNum = char.priceUsd != null && char.priceUsd !== '' ? parseFloat(char.priceUsd) : 0;
   const isFree = priceNum <= 0;
+  const insufficient = !owned && !isFree && !canAfford;
   const isWebm = (char.spriteUrl?.split('?')[0] ?? '').toLowerCase().endsWith('.webm');
   return (
     <div
@@ -340,14 +350,21 @@ function ShopModal({
               ✓ {t('shop.owned')}
             </button>
           ) : (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={onBuy}
-              className={'game-btn w-full py-3 font-display text-base uppercase tracking-widest transition disabled:opacity-60 ' + (isFree ? 'game-btn-green' : 'game-btn-yellow')}
-            >
-              {busy ? '…' : isFree ? t('shop.buy') : `${t('shop.buy')} $${char.priceUsd}`}
-            </button>
+            <>
+              {insufficient && (
+                <div className="rounded-xl border border-game-red/40 bg-game-red/10 px-3 py-2 text-center text-sm font-semibold text-game-red">
+                  {t('shop.insufficient_funds')}
+                </div>
+              )}
+              <button
+                type="button"
+                disabled={busy || insufficient}
+                onClick={onBuy}
+                className={'game-btn w-full py-3 font-display text-base uppercase tracking-widest transition disabled:opacity-50 disabled:cursor-not-allowed ' + (isFree ? 'game-btn-green' : 'game-btn-yellow')}
+              >
+                {busy ? '…' : isFree ? t('shop.buy') : `${t('shop.buy')} $${char.priceUsd}`}
+              </button>
+            </>
           )}
         </div>
       </div>

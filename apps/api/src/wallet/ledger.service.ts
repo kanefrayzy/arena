@@ -272,6 +272,125 @@ export class LedgerService {
     this.log.log(`match ${matchId} draw — only unlocks recorded (sum=0)`);
   }
 
+  /**
+   * Bot match settlement (human vs BOT_USER_ID). The bot side has no real
+   * wallet flow — instead the SYSTEM user acts as counterparty: it pays the
+   * prize when the human wins and collects the stake when the human loses.
+   *
+   * Per-match invariant (Σ = 0) still holds:
+   *   human:  −stake (LOCK), +stake (UNLOCK), ±X (WIN/LOSS)
+   *   system: ∓X (counterparty entry)
+   *
+   * - humanWon = true: prize = (2·stake − commission), human_net = prize − stake
+   *     human  +human_net  (MATCH_WIN)
+   *     system −human_net  (MATCH_LOSS, system funds prize from house bankroll)
+   * - humanWon = false: human loses stake
+   *     human  −stake (MATCH_LOSS)
+   *     system +stake (MATCH_WIN, house keeps it)
+   */
+  async settleBotMatch(opts: {
+    matchId: string;
+    humanId: number;
+    humanWon: boolean;
+    stake: Prisma.Decimal | string;
+    commissionPct: number;
+  }): Promise<void> {
+    const stake = new Prisma.Decimal(opts.stake);
+    if (stake.lte(0)) return;
+
+    const winKey = `match:${opts.matchId}:bot-win:${opts.humanId}`;
+    const lossKey = `match:${opts.matchId}:bot-loss:${opts.humanId}`;
+    const sysWinKey = `match:${opts.matchId}:bot-sys-win`;
+    const sysLossKey = `match:${opts.matchId}:bot-sys-loss`;
+
+    if (opts.humanWon) {
+      const pool = stake.mul(2);
+      const commission = pool.mul(opts.commissionPct).div(100).toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
+      const prize = pool.minus(commission);
+      const humanNet = prize.minus(stake); // = stake − commission
+
+      await this.prisma.$transaction(async (tx) => {
+        const present = await tx.ledger.findMany({
+          where: { idempotencyKey: { in: [winKey, sysLossKey] } },
+          select: { idempotencyKey: true },
+        });
+        const have = new Set(present.map((p) => p.idempotencyKey));
+
+        if (!have.has(winKey) && humanNet.gt(0)) {
+          await this.applyDelta(tx, opts.humanId, humanNet);
+          await tx.ledger.create({
+            data: {
+              userId: opts.humanId,
+              amount: humanNet,
+              type: 'MATCH_WIN',
+              refType: 'match',
+              refId: opts.matchId,
+              idempotencyKey: winKey,
+              meta: { bot: true, commission: commission.toString(), prize: prize.toString() },
+            },
+          });
+        }
+
+        if (!have.has(sysLossKey) && humanNet.gt(0)) {
+          await this.applyDelta(tx, SYSTEM_USER_ID, humanNet.negated());
+          await tx.ledger.create({
+            data: {
+              userId: SYSTEM_USER_ID,
+              amount: humanNet.negated(),
+              type: 'MATCH_LOSS',
+              refType: 'match',
+              refId: opts.matchId,
+              idempotencyKey: sysLossKey,
+              meta: { bot: true, counterparty: opts.humanId },
+            },
+          });
+        }
+      });
+
+      this.log.log(`bot match ${opts.matchId} settled: human=${opts.humanId} WON (+${humanNet}), commission=${commission}`);
+    } else {
+      await this.prisma.$transaction(async (tx) => {
+        const present = await tx.ledger.findMany({
+          where: { idempotencyKey: { in: [lossKey, sysWinKey] } },
+          select: { idempotencyKey: true },
+        });
+        const have = new Set(present.map((p) => p.idempotencyKey));
+
+        if (!have.has(lossKey)) {
+          await this.applyDelta(tx, opts.humanId, stake.negated());
+          await tx.ledger.create({
+            data: {
+              userId: opts.humanId,
+              amount: stake.negated(),
+              type: 'MATCH_LOSS',
+              refType: 'match',
+              refId: opts.matchId,
+              idempotencyKey: lossKey,
+              meta: { bot: true },
+            },
+          });
+        }
+
+        if (!have.has(sysWinKey)) {
+          await this.applyDelta(tx, SYSTEM_USER_ID, stake);
+          await tx.ledger.create({
+            data: {
+              userId: SYSTEM_USER_ID,
+              amount: stake,
+              type: 'MATCH_WIN',
+              refType: 'match',
+              refId: opts.matchId,
+              idempotencyKey: sysWinKey,
+              meta: { bot: true, counterparty: opts.humanId },
+            },
+          });
+        }
+      });
+
+      this.log.log(`bot match ${opts.matchId} settled: human=${opts.humanId} LOST (−${stake})`);
+    }
+  }
+
   /** Cancellation before start: just unlock; settled here means we do nothing extra. */
   async settleCancel(matchId: string): Promise<void> {
     this.log.log(`match ${matchId} cancelled — only unlocks recorded`);
