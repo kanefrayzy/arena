@@ -53,6 +53,7 @@ export default {
         'pop-vs': 'popVS 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.25s both',
         'count-pop': 'countPop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1)',
         'cup-pop': 'cupPop 1.1s cubic-bezier(0.34, 1.56, 0.64, 1)',
+        'confetti-fall': 'confettiFall linear forwards',
       },
       keyframes: {
         popIn: {
@@ -101,6 +102,11 @@ export default {
           '30%':  { transform: 'translateY(-14px) scale(1.35)', opacity: '1' },
           '70%':  { transform: 'translateY(-8px)  scale(1.1)',  opacity: '1' },
           '100%': { transform: 'translateY(0)    scale(1)',    opacity: '1' },
+        },
+        confettiFall: {
+          '0%':   { transform: 'translate3d(0,0,0) rotate(0deg)', opacity: '0' },
+          '10%':  { opacity: '1' },
+          '100%': { transform: 'translate3d(var(--cx,0), 110vh, 0) rotate(var(--cr,360deg))', opacity: '0' },
         },
       },
     },

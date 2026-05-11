@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import { api } from '../../shared/api/client';
 import { useAuth } from '../../shared/store/auth';
 
@@ -27,7 +26,6 @@ function formatDuration(ms: number | null): string {
 
 export function MatchHistoryModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
-  const nav = useNavigate();
   const me = useAuth((s) => s.me);
   const [items, setItems] = useState<MatchItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,21 +124,13 @@ export function MatchHistoryModal({ onClose }: { onClose: () => void }) {
                 <div className={`w-16 shrink-0 text-center text-xs font-bold ${resultColor}`}>
                   {resultLabel}
                 </div>
-                {/* Opponent — tap to open profile */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    nav(`/u/${opp.id}`);
-                  }}
-                  className="min-w-0 flex-1 text-left transition active:scale-[0.98]"
-                  title={t('history.viewProfile', 'Открыть профиль')}
-                >
-                  <div className="truncate text-sm font-semibold text-white hover:text-game-yellow">vs {opp.username}</div>
+                {/* Opponent (non-interactive to avoid revealing identity in bot matches) */}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold text-white">vs {opp.username}</div>
                   <div className="text-xs text-white/40">
                     {m.room.mode} · {formatDuration(m.durationMs)} · {date}
                   </div>
-                </button>
+                </div>
                 {/* Stake */}
                 {stake > 0 && (
                   <div className="shrink-0 text-xs font-mono text-game-yellow">${stake.toFixed(2)}</div>

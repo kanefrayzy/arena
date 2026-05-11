@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth, type Me } from '../../shared/store/auth';
 import { api } from '../../shared/api/client';
 import { toast } from '../../shared/ui/toast';
+import { ResultFx } from './ResultFx';
 
 interface ResultData {
   winnerId: number | null;
@@ -138,6 +139,7 @@ export function ResultPage() {
       {outcome === 'win' && (
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(255,209,59,0.25),transparent_60%)]" />
       )}
+      <ResultFx outcome={outcome} />
 
       <div className={`game-title text-7xl uppercase animate-pop-in ${titleClass}`}>
         {t(`result.${outcome}`)}

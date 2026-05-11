@@ -56,6 +56,16 @@ export class InternalMatchController {
     const match = await this.prisma.match.findUnique({ where: { id: body.matchId } });
     if (!match) throw new BadRequestException('match not found');
 
+    // PRESERVE existing meta (bot flag, botUsername, casualFree, …) and just
+    // tack the finish summary onto it. A previous version did
+    // `meta: { reason, score }` which wiped `meta.bot` / `meta.botUsername`,
+    // so the match-history endpoint then fell back to the literal username
+    // "Bot" (because the override only triggers when `meta.bot` is truthy).
+    const prevMeta = (match.meta && typeof match.meta === 'object' && !Array.isArray(match.meta))
+      ? (match.meta as Record<string, unknown>)
+      : {};
+    const mergedMeta = { ...prevMeta, reason: body.reason, score: body.score };
+
     await this.prisma.match.update({
       where: { id: body.matchId },
       data: {
@@ -64,7 +74,7 @@ export class InternalMatchController {
         winnerId: body.winnerId,
         durationMs: body.durationMs,
         replayUrl: body.replayPath ?? null,
-        meta: { reason: body.reason, score: body.score },
+        meta: mergedMeta as Prisma.InputJsonValue,
       },
     });
 
@@ -184,7 +194,12 @@ export class InternalMatchController {
       data: {
         status: 'CANCELLED',
         finishedAt: new Date(),
-        meta: { reason: body.reason },
+        meta: ((): Prisma.InputJsonValue => {
+          const prev = (match?.meta && typeof match.meta === 'object' && !Array.isArray(match.meta))
+            ? (match.meta as Record<string, unknown>)
+            : {};
+          return { ...prev, reason: body.reason } as Prisma.InputJsonValue;
+        })(),
       },
     });
 
