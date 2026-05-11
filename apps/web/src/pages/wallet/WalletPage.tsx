@@ -326,7 +326,7 @@ export function WalletPage() {
                   title={disabled ? 'Дождитесь завершения текущей заявки или отмените её' : undefined}
                 >
                   {m.iconUrl ? (
-                    <img src={m.iconUrl} alt={m.label} className="w-2/3 max-w-[3.5rem] aspect-square object-contain" />
+                    <img src={m.iconUrl} alt={m.label} className="h-12 w-12 object-contain" />
                   ) : (
                     <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-white/10 font-display text-xs text-white/70">
                       {m.currency.slice(0, 4)}
@@ -636,7 +636,7 @@ function BetraView({ b, onCopy, copied }: { b: BetraReqs; onCopy: (s: string) =>
       {b.bank && <div className="text-xs text-white/60">{b.bank}</div>}
       {b.qrLink && (
         <div className="flex flex-col items-center gap-2 rounded-xl bg-white/5 p-4">
-          <img src={b.qrLink} alt="QR" className="w-full max-w-[12rem] aspect-square rounded-lg bg-white p-2 object-contain" />
+          <img src={b.qrLink} alt="QR" className="h-48 w-48 rounded-lg bg-white p-2" />
           <a href={b.qrLink} target="_blank" rel="noreferrer" className="text-xs text-game-yellow underline">
             {t('wallet.open_qr')}
           </a>

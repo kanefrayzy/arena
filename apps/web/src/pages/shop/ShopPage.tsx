@@ -191,13 +191,13 @@ function Card(p: CardProps) {
             <video
               src={c.spriteUrl}
               autoPlay loop muted playsInline
-              className="relative h-[88%] w-[88%] animate-float object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]"
+              className="relative max-h-[88%] max-w-[88%] animate-float object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]"
             />
           ) : (
             <img
               src={c.spriteUrl}
               alt={c.name}
-              className="relative h-[88%] w-[88%] animate-float object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]"
+              className="relative max-h-[88%] max-w-[88%] animate-float object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]"
             />
           )
         ) : (
@@ -295,9 +295,9 @@ function ShopModal({
           <div className="absolute bottom-0 left-1/2 h-6 w-32 -translate-x-1/2 rounded-full bg-black/40 blur-md" />
           {char.spriteUrl ? (
             isWebm ? (
-              <video src={char.spriteUrl} autoPlay loop muted playsInline className="relative mb-4 max-h-[80%] w-auto object-contain drop-shadow-[0_8px_8px_rgba(0,0,0,0.6)]" />
+              <video src={char.spriteUrl} autoPlay loop muted playsInline className="relative mb-4 max-h-36 object-contain drop-shadow-[0_8px_8px_rgba(0,0,0,0.6)]" />
             ) : (
-              <img src={char.spriteUrl} alt={char.name} className="relative mb-4 max-h-[80%] w-auto object-contain drop-shadow-[0_8px_8px_rgba(0,0,0,0.6)]" />
+              <img src={char.spriteUrl} alt={char.name} className="relative mb-4 max-h-36 object-contain drop-shadow-[0_8px_8px_rgba(0,0,0,0.6)]" />
             )
           ) : (
             <div className="relative mb-8 h-20 w-20 rounded-full bg-white/20" />
