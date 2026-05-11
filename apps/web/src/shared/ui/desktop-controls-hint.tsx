@@ -44,7 +44,7 @@ export function DesktopControlsHint() {
         <span className="text-white/70">выстрел</span>
       </div>
       <div className="flex items-center gap-1.5">
-        <KeyCap label="Space" wide />
+        <KeyCap label="Q" />
         <span className="text-white/70">способность</span>
       </div>
     </div>

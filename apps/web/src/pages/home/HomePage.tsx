@@ -42,6 +42,9 @@ export function HomePage() {
   const [activeChar, setActiveChar] = useState<CharSummary | null>(null);
   const [mode, setMode] = useState<Mode>('casual');
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
+  // Per-mode display labels sourced from /queue/rooms so admins can rename
+  // rooms without redeploying the UI (e.g. "Casual" → "Training").
+  const [modeLabels, setModeLabels] = useState<Partial<Record<Mode, string>>>({});
   const [error, setError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
@@ -80,6 +83,20 @@ export function HomePage() {
       }
     })();
   }, [nav, setMe]);
+
+  // Fetch room list once to populate the mode-tab labels from server-side
+  // room names (admin-editable). Falls back to i18n labels on failure.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await api.get<{ items: { id: number; name: string; mode: 'FREE' | 'CASUAL' | 'STAKE' }[] }>(
+          '/queue/rooms',
+        );
+        const casual = res.items.find((r) => r.mode === 'CASUAL');
+        if (casual) setModeLabels({ casual: casual.name });
+      } catch { /* fall back to i18n */ }
+    })();
+  }, []);
 
   // Poll wallet + unread notifications every 15s so deposit completions and
   // server-side notifications surface in near real-time without a WebSocket.
@@ -182,7 +199,7 @@ export function HomePage() {
               onClick={() => setMode(m)}
               className={'game-btn game-btn-sm ' + (mode === m ? 'game-btn-yellow' : 'game-btn-ghost')}
             >
-              {t(`home.mode.${m}`)}
+              {modeLabels[m] ?? t(`home.mode.${m}`)}
             </button>
           ))}
         </div>

@@ -576,8 +576,11 @@ export function MatchPage() {
         ref={abRef}
         type="button"
         className={
-          'pointer-events-auto absolute bottom-32 right-12 h-16 w-16 select-none rounded-full bg-gradient-to-b from-[#a774ff]/25 to-[#7a3eff]/25 overflow-hidden shadow-[0_4px_0_rgba(77,31,184,0.2)] active:translate-y-[2px] active:shadow-[0_2px_0_rgba(77,31,184,0.2)] backdrop-blur-sm border border-[#a774ff]/20 flex items-center justify-center ' +
-          (touchUi ? '' : 'hidden')
+          'absolute select-none rounded-full bg-gradient-to-b from-[#a774ff]/25 to-[#7a3eff]/25 overflow-hidden shadow-[0_4px_0_rgba(77,31,184,0.2)] backdrop-blur-sm border border-[#a774ff]/20 flex items-center justify-center ' +
+          (touchUi
+            ? 'bottom-32 right-12 h-16 w-16 pointer-events-auto active:translate-y-[2px] active:shadow-[0_2px_0_rgba(77,31,184,0.2)]'
+            // Desktop: cooldown indicator only — ability triggered by Q key.
+            : 'bottom-6 right-6 h-20 w-20 pointer-events-none')
         }
       >
         {/* Ability icon or fallback letter */}

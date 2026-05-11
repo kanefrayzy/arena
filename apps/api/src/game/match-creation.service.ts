@@ -11,15 +11,34 @@ export const MATCH_FOUND_CHANNEL = 'lobby:match-found';
 const BOT_NAMES = [
   'shadow_fox', 'pixel_warden', 'krait', 'nightowl', 'arc_wolf', 'orion',
   'tundra', 'voidstep', 'crimson', 'echo_one', 'spectre', 'glitchy',
-  'kestrel', 'razorbyte', 'paperjet', 'mirage', 'icarus', 'ronin77',
+  'kestrel', 'razorbyte', 'paperjet', 'mirage', 'icarus', 'ronin',
   'flux', 'doppler', 'cobra', 'phantasm', 'reckoner', 'novak', 'zephyr',
   'kairo', 'mistral', 'tempest', 'hexbloom', 'lunar', 'volt', 'nyx',
+  'blaze', 'frost', 'ember', 'gale', 'hailstorm', 'inferno', 'jolt',
+  'kraken', 'lance', 'mojo', 'neon', 'omen', 'prowler', 'quasar', 'rift',
+  'siren', 'titan', 'umbra', 'vex', 'wraith', 'xeno', 'yonder', 'zenith',
+  'ace_rune', 'blackice', 'cinder', 'drift', 'eclipse', 'fang', 'ghost',
+  'havoc', 'iron', 'jester', 'karma', 'lynx', 'maverick', 'nomad', 'orca',
+  'phoenix', 'quartz', 'raven', 'sable', 'thorn', 'ursa', 'venom', 'whisper',
+  'xray', 'yeti', 'zulu', 'apex', 'bolt', 'comet', 'dagger', 'edge',
+  'falcon', 'grit', 'haze', 'idol', 'jinx', 'krypto', 'loop', 'meteor',
+  'nitro', 'onyx', 'piper', 'quick', 'rogue', 'snipe', 'tracer', 'undead',
+  'vanta', 'wolfie', 'xander', 'yoru', 'zen', 'astro', 'bandit', 'cipher',
+  'dynamo', 'enigma', 'fenix', 'gizmo', 'hunter', 'inkwell', 'juno', 'kobalt',
+  'lazer', 'minty', 'ninja', 'oracle', 'pulse', 'quill', 'rasp', 'scout',
+  'turbo', 'ulysses', 'vibe', 'wisp', 'xcal', 'yolo', 'zap', 'aero',
+  'brick', 'creep', 'dusk', 'echo', 'flick', 'glow', 'hush', 'iris',
+  'jolly', 'kilo', 'lotus', 'milo', 'noodle', 'oof', 'pancake', 'quest',
+  'rumble', 'sleek', 'tango', 'unity', 'vortex', 'wave', 'xpert', 'yummy',
+  'zoom', 'arcade', 'breeze', 'cube', 'duke', 'epic', 'fizz', 'gravy',
 ];
 
 function pickBotName(): string {
   const base = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)] ?? 'player';
-  if (Math.random() < 0.3) return `${base}${Math.floor(10 + Math.random() * 990)}`;
-  return base;
+  // Almost always append a numeric suffix so duplicates between concurrent
+  // bot matches are extremely rare (~150 * 9000 = 1.35M unique handles).
+  const suffix = Math.floor(100 + Math.random() * 9900);
+  return `${base}${suffix}`;
 }
 
 type BotDifficulty = 'easy' | 'medium' | 'hard';
