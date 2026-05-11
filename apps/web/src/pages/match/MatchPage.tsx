@@ -5,6 +5,7 @@ import { MatchClient } from '../../shared/ws/match';
 import { Controls } from '../../shared/game/controls';
 import { PixiRenderer } from '../../shared/game/pixi-renderer';
 import * as sfx from '../../shared/game/audio';
+import { useAuth } from '../../shared/store/auth';
 import type { SWelcome, SSnapshot, SMatchEnd } from '@arena/protocol';
 
 interface MatchInfo {
@@ -205,7 +206,16 @@ export function MatchPage() {
           // be null and the page would render `null` (“blue” screen). With
           // youId baked into the result payload the page can render without
           // depending on the auth store.
-          sessionStorage.setItem(`result:${matchId}`, JSON.stringify({ ...msg, opponent: info.opponent, room: info.room, youId }));
+          sessionStorage.setItem(`result:${matchId}`, JSON.stringify({
+            ...msg,
+            opponent: info.opponent,
+            room: info.room,
+            youId,
+            // Cup value captured the moment the user entered the match page,
+            // so the result screen can compute & animate the +/- cup delta
+            // without an extra API roundtrip.
+            cupBefore: useAuth.getState().me?.cup ?? 0,
+          }));
           if (msg.reason === 'disconnect') {
             // Tell the player whose perspective they're seeing this from:
             // if YOU lost on disconnect, it's YOUR connection that dropped
@@ -215,7 +225,13 @@ export function MatchPage() {
               nav(`/result/${matchId}`);
             }, 2000);
           } else {
-            nav(`/result/${matchId}`);
+            // 1.5 s grace so players actually SEE the kill / final state on the
+            // map before being yanked to the result screen. The result
+            // payload is already stashed above, so onClose's nav-to-home
+            // short-circuit still works if the WS closes during this window.
+            window.setTimeout(() => {
+              nav(`/result/${matchId}`);
+            }, 1500);
           }
         },
         onError: (code, message) => {

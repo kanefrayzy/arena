@@ -12,6 +12,7 @@ import { LoadoutPage } from '../pages/loadout/LoadoutPage';
 import { ShopPage } from '../pages/shop/ShopPage';
 import { AdminPage } from '../pages/admin/AdminPage';
 import { SettingsPage } from '../pages/settings/SettingsPage';
+import { ProfilePage } from '../pages/profile/ProfilePage';
 
 export function AppRouter() {
   return (
@@ -34,6 +35,7 @@ export function AppRouter() {
           <Route path="/queue" element={<QueuePage />} />
           <Route path="/match/:id" element={<MatchPage />} />
           <Route path="/result/:id" element={<ResultPage />} />
+          <Route path="/u/:id" element={<ProfilePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useAuth } from '../../shared/store/auth';
+import { useAuth, type Me } from '../../shared/store/auth';
 import { api } from '../../shared/api/client';
 import { toast } from '../../shared/ui/toast';
 
@@ -16,6 +16,8 @@ interface ResultData {
    *  auth store hasn't bootstrapped yet (e.g. after a mid-match page refresh
    *  the user lands on /result without ever passing through HomePage). */
   youId?: number;
+  /** Cup value captured when the user entered the match page. */
+  cupBefore?: number;
 }
 
 export function ResultPage() {
@@ -23,7 +25,14 @@ export function ResultPage() {
   const nav = useNavigate();
   const { id } = useParams();
   const me = useAuth((s) => s.me);
+  const setMe = useAuth((s) => s.setMe);
   const [data, setData] = useState<ResultData | null>(null);
+  /** Result page locks the dismiss button for 1s so players have a moment
+   *  to read win/loss + cup delta before tapping away. */
+  const [btnEnabled, setBtnEnabled] = useState(false);
+  /** Animated cup counter (interpolates from cupBefore to cupAfter). */
+  const [displayedCup, setDisplayedCup] = useState<number | null>(null);
+  const [cupAfter, setCupAfter] = useState<number | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -34,6 +43,61 @@ export function ResultPage() {
     }
     setData(JSON.parse(raw) as ResultData);
   }, [id, nav]);
+
+  // 1-second activation gate for the back button.
+  useEffect(() => {
+    const t = window.setTimeout(() => setBtnEnabled(true), 1000);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  // After mount, refresh /auth/me with a short retry loop until cup differs
+  // from cupBefore OR ~3 s elapsed. The api updates stats asynchronously via
+  // the game server's /internal/matches/finish callback, so the new cup is
+  // not necessarily ready at the exact moment this page mounts.
+  useEffect(() => {
+    if (!data) return;
+    const before = data.cupBefore ?? me?.cup ?? 0;
+    setDisplayedCup(before);
+    let cancelled = false;
+    let attempt = 0;
+    const tryOnce = async () => {
+      try {
+        const fresh = await api.get<Me>('/auth/me');
+        if (cancelled) return;
+        setMe(fresh);
+        const after = fresh.cup ?? before;
+        if (after !== before || attempt >= 7) {
+          setCupAfter(after);
+          return;
+        }
+      } catch {
+        /* network blip — try again */
+      }
+      attempt += 1;
+      window.setTimeout(() => { void tryOnce(); }, 400);
+    };
+    void tryOnce();
+    return () => { cancelled = true; };
+  }, [data, me?.cup, setMe]);
+
+  // Animate displayedCup from cupBefore → cupAfter (~900 ms ease-out).
+  useEffect(() => {
+    if (!data || cupAfter == null) return;
+    const before = data.cupBefore ?? 0;
+    const after = cupAfter;
+    if (before === after) return;
+    const startedAt = performance.now();
+    const dur = 900;
+    let raf = 0;
+    const step = (now: number) => {
+      const k = Math.min(1, (now - startedAt) / dur);
+      const eased = 1 - Math.pow(1 - k, 3); // ease-out cubic
+      setDisplayedCup(Math.round(before + (after - before) * eased));
+      if (k < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [cupAfter, data]);
 
   if (!data) return null;
 
@@ -64,6 +128,10 @@ export function ResultPage() {
           : { text: `$0.00`, cls: 'text-white/50' }
       : null;
 
+  const cupBefore = data.cupBefore ?? 0;
+  const cupDelta = cupAfter == null ? null : cupAfter - cupBefore;
+  const cupShown = displayedCup ?? cupBefore;
+
   return (
     <div className="relative flex h-full flex-col items-center justify-center gap-6 overflow-hidden p-6">
       <div className="pointer-events-none absolute -top-32 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-game-purple/40 blur-3xl" />
@@ -83,17 +151,46 @@ export function ResultPage() {
 
       <div className="game-chip">{t(`result.reason.${data.reason}`)}</div>
 
+      {/* Cup pill with animated delta */}
+      <div className="relative flex items-center gap-3">
+        <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/40 bg-black/50 px-4 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-b from-yellow-200 via-yellow-400 to-amber-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-amber-900" fill="currentColor" aria-hidden>
+              <path d="M7 4h10v2h3v3a4 4 0 0 1-4 4h-.18A5 5 0 0 1 13 15.9V18h2v2H9v-2h2v-2.1A5 5 0 0 1 7.18 13H7a4 4 0 0 1-4-4V6h4V4zm0 4H5v1a2 2 0 0 0 2 2V8zm10 0v3a2 2 0 0 0 2-2V8h-2z" />
+            </svg>
+          </span>
+          <span className="font-display text-2xl font-black tabular-nums text-yellow-200">
+            {cupShown}
+          </span>
+        </div>
+        {cupDelta != null && cupDelta !== 0 && (
+          <div
+            className={
+              'animate-cup-pop font-display text-3xl font-black tabular-nums drop-shadow-[0_2px_0_rgba(0,0,0,0.6)] ' +
+              (cupDelta > 0 ? 'text-game-cyan' : 'text-game-red')
+            }
+          >
+            {cupDelta > 0 ? '+' : ''}{cupDelta}
+          </div>
+        )}
+      </div>
+
       <div className="grid w-full max-w-xs grid-cols-2 gap-3 text-center">
         <div className="game-card p-4">
           <div className="text-xs uppercase text-white/60">{t('result.you')}</div>
           <div className="font-display text-3xl text-game-cyan">{youHp}</div>
         </div>
-        <div className="game-card p-4">
+        <button
+          type="button"
+          onClick={() => nav(`/u/${data.opponent.id}`)}
+          className="game-card p-4 text-left transition hover:bg-white/5 active:scale-[0.98]"
+          title={t('result.viewProfile', 'Открыть профиль')}
+        >
           <div className="truncate text-xs uppercase text-white/60">
             {data.opponent.username}
           </div>
           <div className="font-display text-3xl text-game-pink">{oppHp}</div>
-        </div>
+        </button>
       </div>
 
       <div className="text-sm text-white/60">
@@ -103,7 +200,8 @@ export function ResultPage() {
       <button
         type="button"
         onClick={() => nav('/home')}
-        className="game-btn game-btn-yellow game-btn-lg"
+        disabled={!btnEnabled}
+        className="game-btn game-btn-yellow game-btn-lg disabled:opacity-50 disabled:cursor-wait"
       >
         {t('result.back')}
       </button>

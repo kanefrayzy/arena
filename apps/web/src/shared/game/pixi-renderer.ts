@@ -609,8 +609,16 @@ export class PixiRenderer {
       };
       this.players.set(p.id, view);
     } else {
-      view.prevX = view.curX;
-      view.prevY = view.curY;
+      // Carry over the CURRENTLY-RENDERED visual position into prevX/prevY
+      // (not the previous authoritative curX), so when we have been
+      // extrapolating past t=1 because of network jitter the next
+      // interpolation starts from where the sprite actually is, not from
+      // a stale value. This eliminates the snap-back jitter that would
+      // otherwise appear every time a slightly-late snapshot landed.
+      const since = performance.now() - this.snapTime;
+      const t = Math.max(0, Math.min(3, since / 33));
+      view.prevX = view.prevX + (view.curX - view.prevX) * t;
+      view.prevY = view.prevY + (view.curY - view.prevY) * t;
       view.prevAngle = view.curAngle;
       view.curX = p.x;
       view.curY = p.y;
@@ -887,7 +895,18 @@ export class PixiRenderer {
 
   private tick(dtMs: number): void {
     const since = performance.now() - this.snapTime;
-    const t = Math.max(0, Math.min(1, since / 33));
+    // Snapshots arrive every ~33 ms (server tick). We interpolate over that
+    // window (t=0..1) and, when the next snapshot is late (jitter), we keep
+    // extrapolating along the last segment up to 2 extra ticks (~66 ms).
+    //
+    // Without this cap the sprite would freeze the moment a snapshot was
+    // delayed by even a few ms, producing the "my hero stutters but my friend
+    // is smooth" symptom users hit on noisier networks / slower clients.
+    // The renderer is purely cosmetic — the next snapshot snaps the position
+    // back to the authoritative server value, so the worst case is a small
+    // overshoot on direction change which is far less perceptible than a
+    // freeze frame.
+    const t = Math.max(0, Math.min(3, since / 33));
     for (const v of this.players.values()) {
       const x = v.prevX + (v.curX - v.prevX) * t;
       const y = v.prevY + (v.curY - v.prevY) * t;

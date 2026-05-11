@@ -1,39 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
+import { api } from '../../shared/api/client';
 
 export function SplashPage() {
   const nav = useNavigate();
-  const [netError, setNetError] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [logoFailed, setLogoFailed] = useState(false);
   // Cache-bust key so a newly-uploaded logo shows without a hard refresh.
   const cbRef = useRef(`?v=${Math.floor(Date.now() / 60_000)}`);
 
   useEffect(() => {
-    // Race the auth check against an 8s timeout so we never block the
-    // splash UI when the API is unreachable (e.g. RU ISPs blocking the
-    // host without VPN). A TypeError from fetch also means no network /
-    // blocked — surface a hint to the user.
-    const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), 8000);
-    void fetch('/api/auth/me', { credentials: 'include', signal: ctrl.signal })
-      .then(async (r) => {
-        clearTimeout(to);
-        if (r.ok) {
-          nav('/home', { replace: true });
-        } else if (r.status >= 500) {
-          setNetError(true);
-        }
-        // 401 / 4xx → not logged in, stay on splash
-      })
-      .catch(() => {
-        clearTimeout(to);
-        // Network error or abort → server unreachable from this network
-        setNetError(true);
-      });
-    return () => { clearTimeout(to); ctrl.abort(); };
+    void api.get('/auth/me')
+      .then(() => nav('/home', { replace: true }))
+      .catch(() => setChecking(false));
   }, [nav]);
   const { t } = useTranslation();
+
+  if (checking) return null;
 
   return (
     <div className="relative flex h-full flex-col items-center justify-center gap-10 overflow-hidden px-6 text-center">
@@ -60,12 +44,6 @@ export function SplashPage() {
           {t('splash.subtitle')}
         </p>
       </div>
-
-      {netError && (
-        <div className="relative max-w-xs rounded-2xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-xs text-amber-200">
-          {t('splash.netError', 'Не удаётся подключиться к серверу. В некоторых регионах требуется VPN.')}
-        </div>
-      )}
 
       <div className="relative flex w-full max-w-xs flex-col gap-4">
         <Link to="/login" className="game-btn game-btn-yellow game-btn-lg game-shimmer">

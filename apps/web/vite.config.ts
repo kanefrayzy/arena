@@ -28,15 +28,13 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api/, /^\/ws/, /^\/uploads/],
+        navigateFallbackDenylist: [/^\/api/, /^\/ws/],
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        // IMPORTANT: do NOT register any runtimeCaching rule for /api/.
-        // A NetworkOnly handler still wraps every fetch and re-throws as
-        // workbox "no-response" errors that flood the console when the
-        // network is blocked (e.g. users on Russian ISPs without VPN).
-        // With no rule, workbox stays out of the way and lets the browser
-        // surface a normal TypeError that our app code already handles.
         runtimeCaching: [
+          {
+            urlPattern: /\/api\//,
+            handler: 'NetworkOnly',
+          },
           {
             urlPattern: /\/uploads\//,
             handler: 'NetworkFirst',
