@@ -104,14 +104,15 @@ export function QueuePage() {
       if (ev.type === 'queue:status') {
         if (ev.state === 'idle') {
           // Server says we're not in the queue.
-          // If we were previously searching and now kicked out (e.g. match
-          // creation failed due to insufficient balance), count consecutive
-          // idle ticks and redirect home after 3 (~3s).
+          // If we were previously searching and now kicked out (match creation
+          // failed, or server-side cancel), count consecutive idle ticks and
+          // redirect home after 3 (~3s). For paid modes show a wallet hint,
+          // for free/casual show a generic message — we don't know the reason.
           if (sawSearchingRef.current) {
             idleAfterSearchCountRef.current += 1;
             if (idleAfterSearchCountRef.current >= 3 && !navigatedRef.current) {
               navigatedRef.current = true;
-              setError(t('queue.insufficient_balance'));
+              setError(mode === 'stake' ? t('queue.insufficient_balance') : t('queue.search_cancelled'));
               window.setTimeout(() => nav('/home'), 2000);
             }
           }

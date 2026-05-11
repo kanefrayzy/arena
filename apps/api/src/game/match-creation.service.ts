@@ -93,23 +93,34 @@ export class MatchCreationService {
     const roomStake = input.room.stakeUsd ? String(input.room.stakeUsd) : '0';
     let lockP1 = roomStake;
     let lockP2 = roomStake;
-    if (input.room.mode === 'CASUAL' && Number(roomStake) > 0 && !input.isBotMatch) {
+    if (input.room.mode === 'CASUAL' && Number(roomStake) > 0) {
       const setting = await this.prisma.setting.findUnique({ where: { key: 'rooms.casualEnabled' } });
       const casualInclusive = !!setting && (setting.value === true || (setting.value as unknown) === 'true');
       if (casualInclusive) {
-        const [w1, w2] = await Promise.all([
-          this.prisma.wallet.findUnique({ where: { userId: input.player1Id } }),
-          this.prisma.wallet.findUnique({ where: { userId: input.player2Id } }),
-        ]);
+        // Asymmetric lock: each side locks min(balance, stake). For bot matches
+        // only the human (player1) has a real wallet; lockP2 stays 0 because
+        // the bot side is settled vs SYSTEM using the human's effective lock.
         const need = new Prisma.Decimal(roomStake);
+        const w1 = await this.prisma.wallet.findUnique({ where: { userId: input.player1Id } });
         const b1 = new Prisma.Decimal(w1?.balance.toString() ?? '0');
-        const b2 = new Prisma.Decimal(w2?.balance.toString() ?? '0');
         lockP1 = (b1.gte(need) ? need : b1.gte(0) ? b1 : new Prisma.Decimal(0)).toString();
-        lockP2 = (b2.gte(need) ? need : b2.gte(0) ? b2 : new Prisma.Decimal(0)).toString();
-        if (lockP1 !== roomStake || lockP2 !== roomStake) {
+        if (input.isBotMatch) {
+          lockP2 = '0';
+        } else {
+          const w2 = await this.prisma.wallet.findUnique({ where: { userId: input.player2Id } });
+          const b2 = new Prisma.Decimal(w2?.balance.toString() ?? '0');
+          lockP2 = (b2.gte(need) ? need : b2.gte(0) ? b2 : new Prisma.Decimal(0)).toString();
+        }
+        if (lockP1 !== roomStake || (!input.isBotMatch && lockP2 !== roomStake)) {
           meta.casualInclusiveLocks = true;
         }
+      } else if (input.isBotMatch) {
+        // Non-inclusive CASUAL bot match: human locks full stake, bot side is 0.
+        lockP2 = '0';
       }
+    } else if (input.isBotMatch) {
+      // STAKE/FREE bot match: lockP2 is meaningless (no bot wallet).
+      lockP2 = '0';
     }
     // Persist per-player effective stakes for settle/abort paths. stakeUsd on
     // the Match row stays at the nominal room stake for display/history.
@@ -156,12 +167,12 @@ export class MatchCreationService {
         });
         throw err;
       }
-    } else if (input.isBotMatch && Number(roomStake) > 0) {
+    } else if (input.isBotMatch && Number(lockP1) > 0) {
       try {
-        await this.ledger.lockStake(match.id, input.player1Id, roomStake);
+        await this.ledger.lockStake(match.id, input.player1Id, lockP1);
       } catch (err) {
         this.log.error(`bot stake lock failed for match ${match.id}: ${(err as Error).message}`);
-        await this.ledger.unlockStake(match.id, input.player1Id, roomStake).catch(() => undefined);
+        await this.ledger.unlockStake(match.id, input.player1Id, lockP1).catch(() => undefined);
         await this.prisma.match.update({
           where: { id: match.id },
           data: { status: 'CANCELLED', meta: { ...meta, cancelReason: 'insufficient_balance' } as Prisma.InputJsonValue },

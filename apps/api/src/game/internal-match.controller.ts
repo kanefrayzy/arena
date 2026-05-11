@@ -83,39 +83,46 @@ export class InternalMatchController {
     const isBotMatch = match.player1Id === BOT_USER_ID || match.player2Id === BOT_USER_ID;
 
     if (isBotMatch && stake.gt(0)) {
-      // Bot match: only the human (player1) locked stake. System acts as
-      // counterparty. Refund the lock first, then credit/debit based on outcome.
+      // Bot match: only the human (player1 by construction) locked stake.
+      // System acts as counterparty. Use the effective per-player lock
+      // (CASUAL inclusive can lock less than the nominal stake).
       const humanId = match.player1Id === BOT_USER_ID ? match.player2Id : match.player1Id;
       const room = await this.prisma.room.findUnique({ where: { id: match.roomId } });
       const commissionPct = room?.commissionPct ?? 0;
 
-      await this.ledger.unlockStake(body.matchId, humanId, stake);
+      const metaObj = (match.meta && typeof match.meta === 'object' && !Array.isArray(match.meta))
+        ? (match.meta as Record<string, unknown>) : {};
+      const effective = new Prisma.Decimal(
+        typeof metaObj.lockP1 === 'string' ? metaObj.lockP1 : stake.toString(),
+      );
 
-      if (body.winnerId === humanId) {
-        await this.ledger.settleBotMatch({
-          matchId: body.matchId,
-          humanId,
-          humanWon: true,
-          stake,
-          commissionPct,
-        });
-      } else if (body.winnerId && body.winnerId !== humanId) {
-        // Bot won.
-        await this.ledger.settleBotMatch({
-          matchId: body.matchId,
-          humanId,
-          humanWon: false,
-          stake,
-          commissionPct,
-        });
-      } else {
-        // Draw — only unlock recorded.
-        await this.ledger.settleDraw(body.matchId);
-      }
+      if (effective.gt(0)) {
+        await this.ledger.unlockStake(body.matchId, humanId, effective);
 
-      const inv = await this.ledger.verifyInvariant(body.matchId);
-      if (!inv.ok) {
-        this.log.error(`INVARIANT VIOLATION bot match ${body.matchId}: sum=${inv.sum}`);
+        if (body.winnerId === humanId) {
+          await this.ledger.settleBotMatch({
+            matchId: body.matchId,
+            humanId,
+            humanWon: true,
+            stake: effective,
+            commissionPct,
+          });
+        } else if (body.winnerId && body.winnerId !== humanId) {
+          await this.ledger.settleBotMatch({
+            matchId: body.matchId,
+            humanId,
+            humanWon: false,
+            stake: effective,
+            commissionPct,
+          });
+        } else {
+          await this.ledger.settleDraw(body.matchId);
+        }
+
+        const inv = await this.ledger.verifyInvariant(body.matchId);
+        if (!inv.ok) {
+          this.log.error(`INVARIANT VIOLATION bot match ${body.matchId}: sum=${inv.sum}`);
+        }
       }
     } else if (!isBotMatch && stake.gt(0)) {
       const room = await this.prisma.room.findUnique({ where: { id: match.roomId } });
@@ -255,8 +262,15 @@ export class InternalMatchController {
       if (isBotMatch && stake.gt(0)) {
         // Bot match: only the human locked stake — refund just them.
         const humanId = match.player1Id === BOT_USER_ID ? match.player2Id : match.player1Id;
-        await this.ledger.unlockStake(body.matchId, humanId, stake);
-        await this.ledger.settleCancel(body.matchId);
+        const metaObj = (match.meta && typeof match.meta === 'object' && !Array.isArray(match.meta))
+          ? (match.meta as Record<string, unknown>) : {};
+        const effective = new Prisma.Decimal(
+          typeof metaObj.lockP1 === 'string' ? metaObj.lockP1 : stake.toString(),
+        );
+        if (effective.gt(0)) {
+          await this.ledger.unlockStake(body.matchId, humanId, effective);
+          await this.ledger.settleCancel(body.matchId);
+        }
       } else if (!isBotMatch && stake.gt(0)) {
         const metaObj = (match.meta && typeof match.meta === 'object' && !Array.isArray(match.meta))
           ? (match.meta as Record<string, unknown>) : {};
