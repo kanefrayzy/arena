@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../shared/api/client';
 import { useAuth } from '../../shared/store/auth';
@@ -14,6 +14,8 @@ interface MatchItem {
   durationMs: number | null;
   startedAt: string | null;
   finishedAt: string | null;
+  /** Signed net amount for this user (lock+unlock+win/loss). May be '0' for free matches. */
+  myDelta?: string;
 }
 
 function formatDuration(ms: number | null): string {
@@ -115,8 +117,32 @@ export function MatchHistoryModal({ onClose }: { onClose: () => void }) {
             }
 
             const stake = Number(m.stakeUsd);
+            const delta = Number(m.myDelta ?? '0');
             const dateStr = m.finishedAt ?? m.startedAt;
             const date = dateStr ? new Date(dateStr).toLocaleDateString('ru-RU') : '—';
+
+            // Money chip styling: win → green +X, loss → red −X, draw/zero → muted.
+            let amountNode: ReactNode = null;
+            if (delta > 0) {
+              amountNode = (
+                <div className="shrink-0 rounded-lg bg-game-green/15 px-2 py-0.5 text-xs font-mono font-bold text-game-green ring-1 ring-game-green/30">
+                  +${delta.toFixed(2)}
+                </div>
+              );
+            } else if (delta < 0) {
+              amountNode = (
+                <div className="shrink-0 rounded-lg bg-game-red/15 px-2 py-0.5 text-xs font-mono font-bold text-game-red ring-1 ring-game-red/30">
+                  −${Math.abs(delta).toFixed(2)}
+                </div>
+              );
+            } else if (stake > 0) {
+              // Stake match that didn't move money for this user (e.g. CASUAL inclusive 0-lock).
+              amountNode = (
+                <div className="shrink-0 rounded-lg bg-white/5 px-2 py-0.5 text-xs font-mono text-white/40 ring-1 ring-white/10">
+                  ${stake.toFixed(2)}
+                </div>
+              );
+            }
 
             return (
               <div key={m.id} className="flex items-center gap-3 border-b border-white/5 px-5 py-3">
@@ -131,10 +157,7 @@ export function MatchHistoryModal({ onClose }: { onClose: () => void }) {
                     {m.room.name || m.room.mode} · {formatDuration(m.durationMs)} · {date}
                   </div>
                 </div>
-                {/* Stake */}
-                {stake > 0 && (
-                  <div className="shrink-0 text-xs font-mono text-game-yellow">${stake.toFixed(2)}</div>
-                )}
+                {amountNode}
               </div>
             );
           })}

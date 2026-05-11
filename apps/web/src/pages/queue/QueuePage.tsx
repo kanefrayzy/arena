@@ -227,8 +227,8 @@ export function QueuePage() {
         </>
       ) : (
         <>
-          <div className="game-chip game-chip-yellow text-base">
-            {roomName || t(`home.mode.${mode}`)}
+          <div className="game-chip game-chip-yellow text-base min-w-[6rem] text-center">
+            {roomName || '…'}
           </div>
 
           <div className="relative flex h-44 w-44 items-center justify-center">
