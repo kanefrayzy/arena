@@ -137,9 +137,9 @@ export function LoadoutPage() {
                   <div className="absolute bottom-2 left-1/2 h-2 w-16 -translate-x-1/2 rounded-full bg-black/50 blur-sm" />
                   {c.spriteUrl ? (
                     /\.webm(\?|$)/i.test(c.spriteUrl) ? (
-                      <video src={c.spriteUrl} autoPlay loop muted playsInline className="relative max-h-[88%] max-w-[88%] animate-float object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]" />
+                      <video src={c.spriteUrl} autoPlay loop muted playsInline className="relative h-[88%] w-[88%] animate-float object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]" />
                     ) : (
-                      <img src={c.spriteUrl} alt={c.name} className="relative max-h-[88%] max-w-[88%] animate-float object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]" />
+                      <img src={c.spriteUrl} alt={c.name} className="relative h-[88%] w-[88%] animate-float object-contain drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)]" />
                     )
                   ) : (
                     <div className="relative h-14 w-14 animate-float rounded-full bg-white/20" />
@@ -246,9 +246,9 @@ function CharInfoModal({
           <div className="absolute bottom-0 left-1/2 h-6 w-32 -translate-x-1/2 rounded-full bg-black/40 blur-md" />
           {char.spriteUrl ? (
             /\.webm(\?|$)/i.test(char.spriteUrl) ? (
-              <video src={char.spriteUrl} autoPlay loop muted playsInline className="relative mb-4 max-h-36 object-contain drop-shadow-[0_8px_8px_rgba(0,0,0,0.6)]" />
+              <video src={char.spriteUrl} autoPlay loop muted playsInline className="relative mb-4 max-h-[80%] w-auto object-contain drop-shadow-[0_8px_8px_rgba(0,0,0,0.6)]" />
             ) : (
-              <img src={char.spriteUrl} alt={char.name} className="relative mb-4 max-h-36 object-contain drop-shadow-[0_8px_8px_rgba(0,0,0,0.6)]" />
+              <img src={char.spriteUrl} alt={char.name} className="relative mb-4 max-h-[80%] w-auto object-contain drop-shadow-[0_8px_8px_rgba(0,0,0,0.6)]" />
             )
           ) : (
             <div className="relative mb-8 h-20 w-20 rounded-full bg-white/20" />
