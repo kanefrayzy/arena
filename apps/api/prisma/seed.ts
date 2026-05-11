@@ -284,9 +284,12 @@ async function main() {
   ];
 
   for (const s of defaultSettings) {
+    // IMPORTANT: never overwrite admin-edited values on re-seed. Only insert
+    // missing keys. The previous `update: { value }` blew away every change
+    // (cup_win, bot wait, etc.) on each container restart.
     await prisma.setting.upsert({
       where: { key: s.key },
-      update: { value: s.value as never },
+      update: {},
       create: { key: s.key, value: s.value as never },
     });
   }
