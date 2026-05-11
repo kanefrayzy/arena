@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException, StreamableFile } from '@nestjs/common';
 import { createReadStream, existsSync } from 'node:fs';
 import { Prisma } from '@prisma/client';
-import { SYSTEM_USER_ID } from '@arena/shared';
+import { SYSTEM_USER_ID, BOT_USER_ID } from '@arena/shared';
 import { PrismaService } from '../common/prisma/prisma.module';
 import { LedgerService } from '../wallet/ledger.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -94,6 +94,49 @@ export class AdminService {
       matches24h: r._count._all,
     }));
 
+    // ─── Bot match stats ───
+    // A "bot match" is any match whose opponent is the canonical BOT_USER_ID.
+    // We surface volume + platform earnings so the admin can audit how much
+    // of the gameplay/revenue comes from PvE rather than PvP.
+    const botMatchFilter: Prisma.MatchWhereInput = { player2Id: BOT_USER_ID };
+    const [botTotal, botToday, bot7d, botFinishedRows] = await Promise.all([
+      this.prisma.match.count({ where: botMatchFilter }),
+      this.prisma.match.count({ where: { ...botMatchFilter, finishedAt: { gt: startOfDay } } }),
+      this.prisma.match.count({ where: { ...botMatchFilter, finishedAt: { gt: weekAgo } } }),
+      this.prisma.match.findMany({
+        where: { ...botMatchFilter, status: 'FINISHED' },
+        select: { id: true },
+      }),
+    ]);
+    const botMatchIds = botFinishedRows.map((m) => m.id);
+    // Platform earnings from bot matches = everything that landed on the
+    // SYSTEM wallet (commission + lost stakes when the human lost to the bot)
+    // minus everything paid out from system (when the human beat the bot and
+    // collected the bot's "phantom" stake). Net positive = platform profit.
+    const botSystemNet = botMatchIds.length
+      ? await this.prisma.ledger.aggregate({
+          where: { userId: SYSTEM_USER_ID, refType: 'match', refId: { in: botMatchIds } },
+          _sum: { amount: true },
+        })
+      : { _sum: { amount: null as Prisma.Decimal | null } };
+    const botCommission = botMatchIds.length
+      ? await this.prisma.ledger.aggregate({
+          where: { userId: SYSTEM_USER_ID, type: 'COMMISSION', refType: 'match', refId: { in: botMatchIds } },
+          _sum: { amount: true },
+        })
+      : { _sum: { amount: null as Prisma.Decimal | null } };
+    const botStats = {
+      total: botTotal,
+      today: botToday,
+      last7d: bot7d,
+      // Bot share of all played matches (running/finished/cancelled all included).
+      sharePct: matchesTotal > 0 ? Math.round((botTotal * 1000) / matchesTotal) / 10 : 0,
+      // Net delta to the system wallet from bot matches (positive = profit).
+      netSystemUsd: botSystemNet._sum.amount ? botSystemNet._sum.amount.toString() : '0',
+      // Commission alone (the 5% rake collected on settled bot matches).
+      commissionUsd: botCommission._sum.amount ? botCommission._sum.amount.toString() : '0',
+    };
+
     return {
       users: {
         total: users,
@@ -119,6 +162,7 @@ export class AdminService {
         walletLockedTotal: walletTotal._sum.locked?.toString() ?? '0',
       },
       topRooms,
+      bots: botStats,
       // Legacy flat fields kept for backward compatibility with the admin UI.
       banned,
       matchesTotal,

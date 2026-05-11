@@ -100,6 +100,28 @@ export class QueueController {
   }
 
   /**
+   * Lightweight catalog of joinable rooms — used by the queue page so it can
+   * show the real room.name (e.g. "Аркада $1") instead of a generic mode
+   * label. Public-ish (requires auth, but does not leak anything sensitive).
+   */
+  @Get('rooms')
+  async rooms(): Promise<{ items: Array<{ id: number; name: string; mode: 'FREE' | 'CASUAL' | 'STAKE'; stakeUsd: string | null }> }> {
+    const rows = await this.prisma.room.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, mode: true, stakeUsd: true },
+      orderBy: [{ mode: 'asc' }, { stakeUsd: 'asc' }],
+    });
+    return {
+      items: rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        mode: r.mode,
+        stakeUsd: r.stakeUsd ? String(r.stakeUsd) : null,
+      })),
+    };
+  }
+
+  /**
    * HTTP fallback for the lobby WebSocket. The web client polls this when the
    * WS goes silent, so a player is never stranded on the queue page when their
    * `match:found` push was lost (Redis pub/sub flake, lobby socket flap, etc.).

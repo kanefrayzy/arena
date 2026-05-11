@@ -9,9 +9,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png', 'offline.html'],
       manifest: {
-        name: 'Arena1v1 — Skill PvP',
-        short_name: 'Arena1v1',
-        description: 'Skill-based 1v1 PvP arena. Real money, pure skill.',
+        name: 'FAOOR',
+        short_name: 'FAOOR',
+        description: 'FAOOR — skill-based 1v1 PvP arena. Real money, pure skill.',
         theme_color: '#0b0d12',
         background_color: '#0b0d12',
         display: 'standalone',
@@ -20,7 +20,13 @@ export default defineConfig({
         scope: '/',
         lang: 'ru',
         categories: ['games', 'entertainment'],
+        // Admin-uploaded icons (Branding → PWA-иконка 192/512) take priority;
+        // /icons/* fallbacks ship with the build so the manifest is never
+        // broken before the first upload.
         icons: [
+          { src: '/uploads/branding/icon192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/uploads/branding/icon512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/uploads/branding/icon512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
           { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
           { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },

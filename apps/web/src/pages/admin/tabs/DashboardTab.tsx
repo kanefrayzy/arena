@@ -16,6 +16,14 @@ interface Stats {
     walletLockedTotal: string;
   };
   topRooms: Array<{ roomId: number; name: string; stake: string | null; matches24h: number }>;
+  bots?: {
+    total: number;
+    today: number;
+    last7d: number;
+    sharePct: number;
+    netSystemUsd: string;
+    commissionUsd: string;
+  };
 }
 
 const fmt = (v: number | string) => {
@@ -166,6 +174,19 @@ export function DashboardTab() {
           </div>
         )}
       </section>
+
+      {s.bots && (
+        <section>
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-white/40">Боты</h3>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatCard label="Игр с ботами (всего)" value={fmt(s.bots.total)} hint={`${s.bots.sharePct}% от всех матчей`} />
+            <StatCard label="Сегодня" value={fmt(s.bots.today)} tone={s.bots.today > 0 ? 'success' : 'default'} />
+            <StatCard label="За 7 дней" value={fmt(s.bots.last7d)} />
+            <StatCard label="Чистый доход с ботов" value={money(s.bots.netSystemUsd)} tone="success" hint="System wallet net" />
+            <StatCard label="Комиссия с ботов" value={money(s.bots.commissionUsd)} tone="accent" hint="5% rake на ботовых матчах" />
+          </div>
+        </section>
+      )}
     </div>
   );
 }

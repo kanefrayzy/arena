@@ -357,11 +357,30 @@ export function WalletPage() {
               {history.length === 0 && (
                 <li className="game-card px-3 py-4 text-center text-white/60">{t('wallet.empty')}</li>
               )}
-              {history.map((p) => (
+              {history.map((p) => {
+                // Don't leak the upstream payment provider name to the user
+                // (BETRA, WESTWALLET, etc.) — show the kind of operation in
+                // human-readable Russian instead. Falls back to the type tag.
+                const opLabel = (() => {
+                  const t = (p.type || '').toUpperCase();
+                  if (t === 'DEPOSIT') return 'Пополнение';
+                  if (t === 'WITHDRAWAL') return 'Вывод';
+                  if (t === 'REFUND') return 'Возврат';
+                  return p.type;
+                })();
+                const methodLabel = (() => {
+                  const slug = p.methodSlug ?? '';
+                  if (/card|карт/i.test(slug)) return 'Карта';
+                  if (/sbp/i.test(slug)) return 'СБП';
+                  if (/crypto|usdt|btc|trx|eth|ton/i.test(slug)) return 'Крипто';
+                  if (slug) return slug.replace(/_/g, ' ');
+                  return '';
+                })();
+                return (
                 <li key={p.id} className="flex items-center justify-between rounded-xl border-2 border-white/10 bg-black/30 px-3 py-2">
                   <div>
                     <div className="font-display text-sm uppercase text-white/90">
-                      {p.type} <span className="text-xs text-white/50">({p.provider})</span>
+                      {opLabel}{methodLabel && <span className="text-xs text-white/50"> · {methodLabel}</span>}
                     </div>
                     <div className="text-xs text-white/50">
                       {new Date(p.createdAt).toLocaleString()} · {p.status}
@@ -374,7 +393,8 @@ export function WalletPage() {
                     )}
                   </div>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </section>
         )}

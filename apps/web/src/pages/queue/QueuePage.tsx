@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../../shared/api/client';
 import { lobby, type LobbyEvent } from '../../shared/ws/lobby';
+import { DesktopControlsHint } from '../../shared/ui/desktop-controls-hint';
 
 interface QueueStatusResponse {
   inQueue: boolean;
@@ -27,6 +28,20 @@ export function QueuePage() {
   const [seconds, setSeconds] = useState(0);
   const [longWait, setLongWait] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Server-known room display name for the queue this user is in. We fetch
+   *  /queue/rooms on mount and pick the room matching `mode`+`roomId` so the
+   *  UI shows "Аркада" / custom room name instead of the generic "CASUAL"
+   *  mode label. Empty string until the fetch settles — UI falls back to the
+   *  i18n mode chip in that case. */
+  const [roomName, setRoomName] = useState<string>('');
+  /** Hide the on-screen "controls" hint on touch devices — they already have
+   *  the joystick/FIRE/ability buttons visible inside the match. */
+  const [touchUi] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    if (window.matchMedia?.('(pointer: coarse)').matches) return true;
+    if ('ontouchstart' in window || (navigator?.maxTouchPoints ?? 0) > 0) return true;
+    return false;
+  });
   const joinedRef = useRef(false);
   const sawSearchingRef = useRef(false);
   const idleAfterSearchCountRef = useRef(0);
@@ -52,6 +67,21 @@ export function QueuePage() {
         }
       })();
     }
+    // Fetch the room catalog so we can show a real room name. Cheap call,
+    // public endpoint, no problem to do it every visit.
+    void (async () => {
+      try {
+        type RoomItem = { id: number; name: string; mode: 'FREE' | 'CASUAL' | 'STAKE'; stakeUsd: string | null };
+        const r = await api.get<{ items: RoomItem[] }>('/queue/rooms');
+        const wantMode = mode.toUpperCase();
+        const match = roomId
+          ? r.items.find((x) => x.id === Number(roomId))
+          // No specific room → pick the first room matching the requested mode
+          // (casual/free typically have a single room each).
+          : r.items.find((x) => x.mode === wantMode);
+        if (match) setRoomName(match.name);
+      } catch { /* ignore — UI falls back to mode label */ }
+    })();
 
     const navigateToMatch = (m: NonNullable<QueueStatusResponse['activeMatch']>) => {
       if (navigatedRef.current) return;
@@ -197,7 +227,7 @@ export function QueuePage() {
       ) : (
         <>
           <div className="game-chip game-chip-yellow text-base">
-            {t(`home.mode.${mode}`)}
+            {roomName || t(`home.mode.${mode}`)}
           </div>
 
           <div className="relative flex h-44 w-44 items-center justify-center">
@@ -217,6 +247,11 @@ export function QueuePage() {
           <button type="button" onClick={cancel} className="game-btn game-btn-red">
             {t('queue.cancel')}
           </button>
+          {!touchUi && (
+            <div className="mt-4 w-full max-w-md">
+              <DesktopControlsHint />
+            </div>
+          )}
         </>
       )}
     </div>

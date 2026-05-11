@@ -7,6 +7,7 @@ import { PixiRenderer } from '../../shared/game/pixi-renderer';
 import * as sfx from '../../shared/game/audio';
 import { useAuth } from '../../shared/store/auth';
 import type { SWelcome, SSnapshot, SMatchEnd } from '@arena/protocol';
+import { DesktopControlsHint } from '../../shared/ui/desktop-controls-hint';
 
 interface MatchInfo {
   matchToken: string;
@@ -52,6 +53,14 @@ export function MatchPage() {
   const inputBlockedRef = useRef(true);
   const countdownStartedRef = useRef(false);
   const lostRef = useRef(false);
+  /**
+   * True once the LOCAL player's HP reaches 0 in a server snapshot. Movement,
+   * fire and ability inputs are zeroed for the remainder of the match so the
+   * dead body doesn't keep walking around the map (especially important on
+   * the client because of input prediction — without this gate the predicted
+   * sprite would happily slide for the ~1.5s grace before MatchEnd arrives).
+   */
+  const youDeadRef = useRef(false);
 
   useEffect(() => {
     if (!matchId) return;
@@ -194,6 +203,10 @@ export function MatchPage() {
           const opp = msg.players.find((p) => p.id !== youId);
           if (me) setCdMs(me.abilityCdMs);
           setHp({ you: me?.hp ?? 0, opp: opp?.hp ?? 0 });
+          // Latch death flag as soon as the server reports hp<=0. Once dead,
+          // stay dead for the rest of the match — server may bounce us back to
+          // 100 hp on respawn modes, but in 1v1 there's no respawn.
+          if (me && me.hp <= 0) youDeadRef.current = true;
           setRemainingMs(msg.remainingMs);
           if (!rendererReady) {
             pendingSnapshot = msg;
@@ -315,6 +328,14 @@ export function MatchPage() {
         const inp = controls.read(1, W, H);
         if (inputBlockedRef.current) {
           // Suppress controls during countdown.
+          inp.dx = 0;
+          inp.dy = 0;
+          inp.fire = false;
+          inp.ability = false;
+        }
+        if (youDeadRef.current) {
+          // Dead = no movement, no shooting. Match-end timeout will move the
+          // user to the result screen shortly.
           inp.dx = 0;
           inp.dy = 0;
           inp.fire = false;
@@ -517,6 +538,11 @@ export function MatchPage() {
               {countdown === 0 ? 'FIGHT!' : countdown}
             </div>
           </div>
+          {!touchUi && (
+            <div className="absolute inset-x-0 bottom-6 flex justify-center px-4 pointer-events-none">
+              <DesktopControlsHint />
+            </div>
+          )}
         </div>
       )}
       {/* Mobile controls — hidden on desktop (pointer:fine, no touch) but still
