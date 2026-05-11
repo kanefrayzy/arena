@@ -262,7 +262,7 @@ async function main() {
     { key: 'gameplay.bot_in_free', value: true },
     { key: 'gameplay.cup_win', value: 25 },
     { key: 'gameplay.cup_loss', value: 15 },
-    { key: 'rooms.casualEnabled', value: false },
+    { key: 'rooms.casualEnabled', value: true },
     { key: 'wallet.auto_withdrawal', value: false },
     { key: 'legal.minAge', value: 18 },
     { key: 'legal.blockedCountries', value: [] },

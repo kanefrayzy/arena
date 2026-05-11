@@ -31,12 +31,14 @@ export class QueueController {
   ): Promise<{ ok: true }> {
     // Balance check for paid modes — actual lock happens at match creation.
     if (body.mode !== 'free') {
-      // Casual: if rooms.casualEnabled=true, treat as free (no stake required)
+      // Casual inclusivity: when rooms.casualEnabled=true, zero-balance players
+      // are allowed to queue Casual (the match itself will run free for both
+      // if either side can't afford the stake, see MatchCreationService).
       if (body.mode === 'casual') {
         const setting = await this.prisma.setting.findUnique({ where: { key: 'rooms.casualEnabled' } });
-        const casualFree = setting && (setting.value === true || (setting.value as unknown) === 'true');
-        if (!casualFree) {
-          // Casual rooms always required a stake in this case; fall through to balance check
+        const casualInclusive = setting && (setting.value === true || (setting.value as unknown) === 'true');
+        if (!casualInclusive) {
+          // Normal paid-casual: enforce balance >= stake at queue time too.
           const stake = await this.computeRequiredStake('casual', body.roomId);
           if (stake.gt(0)) {
             const wallet = await this.prisma.wallet.findUnique({ where: { userId: req.user.sub } });
@@ -47,7 +49,7 @@ export class QueueController {
             }
           }
         }
-        // casualFree=true → no balance check
+        // casualInclusive=true → no balance check, anyone can queue casual
       } else {
         const stake = await this.computeRequiredStake(body.mode, body.roomId);
         if (stake.gt(0)) {

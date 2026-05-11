@@ -85,6 +85,31 @@ export class PixiRenderer {
   private oppId = 0;
   private snapTime = 0;
   private cameraScale = 1;
+  /**
+   * Client-side prediction state for the LOCAL player only.
+   *
+   * Online action games hide ping with two complementary techniques:
+   *  1. Other players are rendered with snapshot interpolation (already done
+   *     in `tick` via prev/cur lerp).
+   *  2. The local player is rendered with INPUT PREDICTION — the moment you
+   *     press W, the sprite moves locally at the simulated speed; the
+   *     authoritative server position is then gently reconciled in.
+   *
+   * Without (2), your own hero visibly lags by RTT/2 + 1 server tick, which
+   * is jarring on >100 ms ping. The numbers below are in display-space coords
+   * (same space as `view.curX/Y`, which already has the camera Y-flip baked
+   * in via `mapPlayer`), so we don't have to round-trip through `mapY`.
+   */
+  private predEnabled = false;
+  private predX = 0;
+  private predY = 0;
+  /** Last input vector (display-space, magnitude ≤ 1). Set every frame from MatchPage. */
+  private predDx = 0;
+  private predDy = 0;
+  /** Movement speed of the local player in units/sec (from welcome.you.stats.speed). */
+  private predSpeed = 250;
+  /** Display-space obstacle list (recomputed when flip is decided). */
+  private predObstacles: Obstacle[] = [];
   private textures: Partial<Record<SpriteSlot, Texture>> = {};
   private gifBuffers: Partial<Record<SpriteSlot, ArrayBuffer>> = {};
   private playerCharTex = new Map<number, Texture>();
@@ -190,7 +215,11 @@ export class PixiRenderer {
     this.youId = welcome.you.id;
     this.oppId = welcome.opponent.id;
     this.obstacles = welcome.obstacles ?? [];
+    // Pick up local-player speed for client-side prediction. Falls back to
+    // 250 (the default character speed) if the welcome doesn't include stats.
+    this.predSpeed = welcome.you.stats?.speed ?? 250;
     this.drawObstacles();
+    this.rebuildPredObstacles();
     // Per-player sprites (admin-uploaded, sent via welcome).
     for (const wp of [welcome.you, welcome.opponent]) {
       if (wp.characterSpriteUrl) {
@@ -282,7 +311,12 @@ export class PixiRenderer {
     const p = this.players.get(this.youId);
     if (!p) return null;
     const t = this.world.worldTransform;
-    return { x: p.curX * t.a + t.tx, y: p.curY * t.d + t.ty };
+    // Use predicted position so the crosshair / aim math operates on the
+    // SAME coords the user is visually controlling — otherwise aim-from-pos
+    // would lag by RTT on high ping.
+    const px = this.predEnabled ? this.predX : p.curX;
+    const py = this.predEnabled ? this.predY : p.curY;
+    return { x: px * t.a + t.tx, y: py * t.d + t.ty };
   }
 
   getOppCanvasPos(): { x: number; y: number } | null {
@@ -300,6 +334,41 @@ export class PixiRenderer {
     return this.flipY;
   }
 
+  /**
+   * Feed the current input vector (in DISPLAY space — same axes the user sees
+   * on screen) to the local-player predictor. Magnitude is expected ≤ 1.
+   * Call this every frame from the match page right after `controls.read`.
+   */
+  setLocalInput(dx: number, dy: number): void {
+    this.predDx = dx;
+    this.predDy = dy;
+  }
+
+  /** Build the obstacle list in display coords (camera Y-flip baked in). */
+  private rebuildPredObstacles(): void {
+    this.predObstacles = this.obstacles.map((o) =>
+      this.flipY ? { ...o, y: MAP_HEIGHT - o.y - o.h } : o,
+    );
+  }
+
+  /** Resolve circle-vs-AABB collision on the X axis only (mirrors server). */
+  private resolveAxisX(x: number, y: number): number {
+    const r = PLAYER_RADIUS;
+    for (const ob of this.predObstacles) {
+      const push = circleAabbPushX(x, y, r, ob);
+      if (push !== 0) x += push;
+    }
+    return x;
+  }
+  private resolveAxisY(x: number, y: number): number {
+    const r = PLAYER_RADIUS;
+    for (const ob of this.predObstacles) {
+      const push = circleAabbPushY(x, y, r, ob);
+      if (push !== 0) y += push;
+    }
+    return y;
+  }
+
   applySnapshot(snap: SSnapshot): void {
     this.snapTime = performance.now();
 
@@ -311,6 +380,11 @@ export class PixiRenderer {
         this.flipDecided = true;
         // Re-emit obstacles so they get the correct mapped Y.
         this.drawObstacles();
+        this.rebuildPredObstacles();
+        // Seed the predicted position from the first authoritative pos.
+        this.predX = you.x;
+        this.predY = this.flipY ? MAP_HEIGHT - you.y : you.y;
+        this.predEnabled = true;
       }
     }
 
@@ -893,10 +967,45 @@ export class PixiRenderer {
     // late (rather than overshooting and visibly snapping back).
     const t = Math.min(1, since / 33);
     for (const v of this.players.values()) {
-      const x = v.prevX + (v.curX - v.prevX) * t;
-      const y = v.prevY + (v.curY - v.prevY) * t;
-      v.root.x = x;
-      v.root.y = y;
+      if (v.isYou && this.predEnabled) {
+        // ── Local player: client-side prediction ──
+        // Step 1: advance predicted position by the player's last input.
+        const dtS = Math.min(0.05, dtMs / 1000); // cap to avoid huge steps after tab-resume
+        if ((this.predDx !== 0 || this.predDy !== 0)) {
+          const stepX = this.predDx * this.predSpeed * dtS;
+          const stepY = this.predDy * this.predSpeed * dtS;
+          this.predX = this.resolveAxisX(this.predX + stepX, this.predY);
+          this.predY = this.resolveAxisY(this.predX, this.predY + stepY);
+        }
+        // Clamp to map bounds.
+        this.predX = Math.max(PLAYER_RADIUS, Math.min(MAP_WIDTH - PLAYER_RADIUS, this.predX));
+        this.predY = Math.max(PLAYER_RADIUS, Math.min(MAP_HEIGHT - PLAYER_RADIUS, this.predY));
+        // Step 2: reconcile with the latest authoritative server position
+        // (v.curX/curY). Small drift → smooth blend at ~12/sec; large drift
+        // → snap (teleport, knockback, slow-buff change).
+        const driftX = v.curX - this.predX;
+        const driftY = v.curY - this.predY;
+        const driftSq = driftX * driftX + driftY * driftY;
+        if (driftSq > 90 * 90) {
+          this.predX = v.curX;
+          this.predY = v.curY;
+        } else {
+          // Exponential smoothing — 1 - exp(-k*dt). k tuned so half the
+          // drift is corrected in ~80 ms (k ≈ 8.7). Tight enough that walls
+          // feel solid, loose enough that high-ping rubber-banding is gone.
+          const k = 8.7;
+          const alpha = 1 - Math.exp(-k * dtS);
+          this.predX += driftX * alpha;
+          this.predY += driftY * alpha;
+        }
+        v.root.x = this.predX;
+        v.root.y = this.predY;
+      } else {
+        const x = v.prevX + (v.curX - v.prevX) * t;
+        const y = v.prevY + (v.curY - v.prevY) * t;
+        v.root.x = x;
+        v.root.y = y;
+      }
     }
     const dt = dtMs;
     for (let i = this.particles.length - 1; i >= 0; i--) {
@@ -1027,4 +1136,30 @@ function drawObstacleProcedural(g: Graphics, ob: Obstacle): void {
     g.moveTo(8, 8).lineTo(w - 8, h - 8).stroke({ color: 0x4a2f17, width: 2, alpha: 0.8 });
     g.moveTo(w - 8, 8).lineTo(8, h - 8).stroke({ color: 0x4a2f17, width: 2, alpha: 0.8 });
   }
+}
+
+/**
+ * Per-axis circle vs AABB push-out, matching `circleAabbResolve` from
+ * `apps/game/src/sim.ts`. We compute X and Y separately so the player
+ * slides along walls instead of getting stuck on a corner. Returns the
+ * delta to ADD to the input coordinate (0 = no overlap).
+ */
+function circleAabbPushX(cx: number, cy: number, r: number, ob: Obstacle): number {
+  const closestX = Math.max(ob.x, Math.min(cx, ob.x + ob.w));
+  const closestY = Math.max(ob.y, Math.min(cy, ob.y + ob.h));
+  const dx = cx - closestX;
+  const dy = cy - closestY;
+  if (dx * dx + dy * dy >= r * r) return 0;
+  // Push out along X only.
+  if (cx < ob.x + ob.w / 2) return ob.x - r - cx;
+  return ob.x + ob.w + r - cx;
+}
+function circleAabbPushY(cx: number, cy: number, r: number, ob: Obstacle): number {
+  const closestX = Math.max(ob.x, Math.min(cx, ob.x + ob.w));
+  const closestY = Math.max(ob.y, Math.min(cy, ob.y + ob.h));
+  const dx = cx - closestX;
+  const dy = cy - closestY;
+  if (dx * dx + dy * dy >= r * r) return 0;
+  if (cy < ob.y + ob.h / 2) return ob.y - r - cy;
+  return ob.y + ob.h + r - cy;
 }

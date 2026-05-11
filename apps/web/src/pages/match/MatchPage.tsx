@@ -12,7 +12,7 @@ interface MatchInfo {
   matchToken: string;
   gameWsUrl: string;
   opponent: { id: number; username: string };
-  room: { id: number; mode: 'FREE' | 'CASUAL' | 'STAKE'; stakeUsd?: string };
+  room: { id: number; name?: string; mode: 'FREE' | 'CASUAL' | 'STAKE'; stakeUsd?: string };
 }
 
 export function MatchPage() {
@@ -37,6 +37,16 @@ export function MatchPage() {
   const [waitingForOpp, setWaitingForOpp] = useState(false);
   /** Set to attempt# (1+) while a reconnect is in flight; null otherwise. */
   const [reconnecting, setReconnecting] = useState<number | null>(null);
+  // Detect touch / coarse-pointer once on mount. We still render the joystick
+  // and action buttons in the DOM (controls.attach needs them to bind touch
+  // listeners on hot-swap to a mobile browser), but they are hidden on
+  // desktop where the player aims with mouse + WASD.
+  const [touchUi] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    if (window.matchMedia?.('(pointer: coarse)').matches) return true;
+    if ('ontouchstart' in window || (navigator?.maxTouchPoints ?? 0) > 0) return true;
+    return false;
+  });
   /** True after all reconnect attempts have failed and the user must go home. */
   const [lost, setLost] = useState(false);
   const inputBlockedRef = useRef(true);
@@ -310,6 +320,10 @@ export function MatchPage() {
           inp.fire = false;
           inp.ability = false;
         }
+        // Feed the local input vector to the renderer for client-side
+        // prediction BEFORE we flip dy for the server — the renderer thinks
+        // in display-space (camera-flipped) coords.
+        renderer!.setLocalInput(inp.dx, inp.dy);
         // Camera may mirror world by Y so YOU is always at the bottom — invert
         // input axes back into world coordinates before sending to server.
         if (renderer!.isFlipped()) {
@@ -505,9 +519,14 @@ export function MatchPage() {
           </div>
         </div>
       )}
-      {/* Mobile controls */}
+      {/* Mobile controls — hidden on desktop (pointer:fine, no touch) but still
+       *  rendered so the controls.attach() refs are always wired in case the
+       *  user hot-plugs a touch device or rotates a 2-in-1 into tablet mode. */}
       <div
-        className="pointer-events-auto absolute bottom-6 left-6 h-32 w-32 rounded-full bg-white/15 backdrop-blur border border-white/20 md:opacity-30 flex items-center justify-center"
+        className={
+          'pointer-events-auto absolute bottom-6 left-6 h-32 w-32 rounded-full bg-white/15 backdrop-blur border border-white/20 md:opacity-30 flex items-center justify-center ' +
+          (touchUi ? '' : 'hidden')
+        }
         ref={joyRef as never}
       >
         {/* Inner direction dot */}
@@ -520,14 +539,20 @@ export function MatchPage() {
       <button
         ref={fireRef}
         type="button"
-        className="pointer-events-auto absolute bottom-6 right-6 h-24 w-24 select-none rounded-full bg-gradient-to-b from-[#ffe066]/25 to-[#f5b800]/25 font-display text-lg uppercase text-white/60 shadow-[0_4px_0_rgba(184,130,0,0.2)] active:translate-y-[3px] active:shadow-[0_2px_0_rgba(184,130,0,0.2)] backdrop-blur-sm border border-[#ffe066]/20"
+        className={
+          'pointer-events-auto absolute bottom-6 right-6 h-24 w-24 select-none rounded-full bg-gradient-to-b from-[#ffe066]/25 to-[#f5b800]/25 font-display text-lg uppercase text-white/60 shadow-[0_4px_0_rgba(184,130,0,0.2)] active:translate-y-[3px] active:shadow-[0_2px_0_rgba(184,130,0,0.2)] backdrop-blur-sm border border-[#ffe066]/20 ' +
+          (touchUi ? '' : 'hidden')
+        }
       >
         FIRE
       </button>
       <button
         ref={abRef}
         type="button"
-        className="pointer-events-auto absolute bottom-32 right-12 h-16 w-16 select-none rounded-full bg-gradient-to-b from-[#a774ff]/25 to-[#7a3eff]/25 overflow-hidden shadow-[0_4px_0_rgba(77,31,184,0.2)] active:translate-y-[2px] active:shadow-[0_2px_0_rgba(77,31,184,0.2)] backdrop-blur-sm border border-[#a774ff]/20 flex items-center justify-center"
+        className={
+          'pointer-events-auto absolute bottom-32 right-12 h-16 w-16 select-none rounded-full bg-gradient-to-b from-[#a774ff]/25 to-[#7a3eff]/25 overflow-hidden shadow-[0_4px_0_rgba(77,31,184,0.2)] active:translate-y-[2px] active:shadow-[0_2px_0_rgba(77,31,184,0.2)] backdrop-blur-sm border border-[#a774ff]/20 flex items-center justify-center ' +
+          (touchUi ? '' : 'hidden')
+        }
       >
         {/* Ability icon or fallback letter */}
         {welcome?.you.ability?.iconUrl ? (

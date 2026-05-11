@@ -7,7 +7,7 @@ interface MatchItem {
   id: string;
   player1: { id: number; username: string };
   player2: { id: number; username: string };
-  room: { mode: string };
+  room: { mode: string; name?: string };
   stakeUsd: string;
   winnerId: number | null;
   status: string;
@@ -128,7 +128,7 @@ export function MatchHistoryModal({ onClose }: { onClose: () => void }) {
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-semibold text-white">vs {opp.username}</div>
                   <div className="text-xs text-white/40">
-                    {m.room.mode} · {formatDuration(m.durationMs)} · {date}
+                    {m.room.name || m.room.mode} · {formatDuration(m.durationMs)} · {date}
                   </div>
                 </div>
                 {/* Stake */}

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { Room } from '@prisma/client';
+import { Prisma, type Room } from '@prisma/client';
 import { BOT_USER_ID } from '@arena/shared';
 import { PrismaService } from '../common/prisma/prisma.module';
 import { RedisService } from '../common/redis/redis.module';
@@ -34,7 +34,7 @@ export interface MatchFoundEvent {
   matchToken: string;
   gameWsUrl: string;
   opponent: { id: number; username: string };
-  room: { id: number; mode: 'FREE' | 'CASUAL' | 'STAKE'; stakeUsd?: string };
+  room: { id: number; name?: string; mode: 'FREE' | 'CASUAL' | 'STAKE'; stakeUsd?: string };
 }
 
 interface CreateMatchInput {
@@ -64,16 +64,27 @@ export class MatchCreationService {
       meta.botUsername = pickBotName();
     }
 
-    // CASUAL "free ranked" toggle — when rooms.casualEnabled=true, override
-    // the room's stake to zero so we don't lock balances or settle a pot.
-    // The mode/room selection still matches MMR-tracked CASUAL rooms.
+    // CASUAL inclusivity toggle (rooms.casualEnabled=true) lets zero-balance
+    // players still queue and play MMR — the match is then run free (no
+    // lock, no payout). Players who CAN afford the stake play paid as usual.
+    // If either side can't afford, the match runs free for both (we cannot
+    // have asymmetric stakes — ledger requires equal locks).
     let effectiveStake: string = input.room.stakeUsd ? String(input.room.stakeUsd) : '0';
-    if (input.room.mode === 'CASUAL') {
+    if (input.room.mode === 'CASUAL' && Number(effectiveStake) > 0 && !input.isBotMatch) {
       const setting = await this.prisma.setting.findUnique({ where: { key: 'rooms.casualEnabled' } });
-      const casualFree = !!setting && (setting.value === true || (setting.value as unknown) === 'true');
-      if (casualFree) {
-        effectiveStake = '0';
-        meta.casualFree = true;
+      const casualInclusive = !!setting && (setting.value === true || (setting.value as unknown) === 'true');
+      if (casualInclusive) {
+        const [w1, w2] = await Promise.all([
+          this.prisma.wallet.findUnique({ where: { userId: input.player1Id } }),
+          this.prisma.wallet.findUnique({ where: { userId: input.player2Id } }),
+        ]);
+        const need = Number(effectiveStake);
+        const b1 = Number(w1?.balance ?? 0);
+        const b2 = Number(w2?.balance ?? 0);
+        if (b1 < need || b2 < need) {
+          effectiveStake = '0';
+          meta.casualFree = true;
+        }
       }
     }
 
@@ -94,7 +105,7 @@ export class MatchCreationService {
         player2CharId: p2Loadout.characterId,
         player2SkinId: p2Loadout.skinId,
         status: 'PENDING',
-        meta,
+        meta: meta as Prisma.InputJsonValue,
       },
     });
 
@@ -111,7 +122,7 @@ export class MatchCreationService {
         await this.ledger.unlockStake(match.id, input.player2Id, stake).catch(() => undefined);
         await this.prisma.match.update({
           where: { id: match.id },
-          data: { status: 'CANCELLED', meta: { ...meta, cancelReason: 'insufficient_balance' } },
+          data: { status: 'CANCELLED', meta: { ...meta, cancelReason: 'insufficient_balance' } as Prisma.InputJsonValue },
         });
         throw err;
       }
@@ -152,6 +163,7 @@ export class MatchCreationService {
       matchId: match.id,
       mode: input.room.mode,
       roomId: input.room.id,
+      roomName: input.room.name,
       stakeUsd: Number(effectiveStake) > 0 ? effectiveStake : undefined,
       tickRate,
       durationMs: 90_000,
@@ -197,6 +209,7 @@ export class MatchCreationService {
         opponent: { id: other.id, username: other.username },
         room: {
           id: input.room.id,
+          name: input.room.name,
           mode: input.room.mode,
           ...(Number(effectiveStake) > 0 ? { stakeUsd: effectiveStake } : {}),
         },

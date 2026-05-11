@@ -48,6 +48,8 @@ export interface MatchSeed {
   matchId: string;
   mode: 'FREE' | 'CASUAL' | 'STAKE';
   roomId: number;
+  /** Admin-set human-friendly room name (used in UI instead of the raw mode label). */
+  roomName?: string;
   stakeUsd?: string;
   tickRate: number;
   durationMs?: number;
@@ -571,6 +573,7 @@ export class Match {
       room: {
         id: this.seed.roomId,
         mode: this.seed.mode,
+        ...(this.seed.roomName ? { name: this.seed.roomName } : {}),
         ...(this.seed.stakeUsd ? { stakeUsd: this.seed.stakeUsd } : {}),
       },
       obstacles: this.sim.obstacles,

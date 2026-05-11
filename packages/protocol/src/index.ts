@@ -102,7 +102,7 @@ export interface SWelcome {
   mapH: number;
   tickRate: number;
   matchDurationMs: number;
-  room: { id: number; mode: 'FREE' | 'CASUAL' | 'STAKE'; stakeUsd?: string };
+  room: { id: number; name?: string; mode: 'FREE' | 'CASUAL' | 'STAKE'; stakeUsd?: string };
   obstacles: Obstacle[];
   /** True when reconnecting to an already-running match; client should skip the pre-game countdown. */
   started?: boolean;

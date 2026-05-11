@@ -14,7 +14,7 @@ interface QueueStatusResponse {
     matchToken: string;
     gameWsUrl: string;
     opponent: { id: number; username: string };
-    room: { id: number; mode: 'FREE' | 'CASUAL' | 'STAKE'; stakeUsd?: string };
+    room: { id: number; name?: string; mode: 'FREE' | 'CASUAL' | 'STAKE'; stakeUsd?: string };
   };
 }
 

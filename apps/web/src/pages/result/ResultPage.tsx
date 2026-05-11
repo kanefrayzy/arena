@@ -12,7 +12,7 @@ interface ResultData {
   durationMs: number;
   score: Record<string, number>;
   opponent: { id: number; username: string };
-  room?: { id: number; mode: 'FREE' | 'CASUAL' | 'STAKE'; stakeUsd?: string };
+  room?: { id: number; name?: string; mode: 'FREE' | 'CASUAL' | 'STAKE'; stakeUsd?: string };
   /** Embedded by MatchPage so the result page renders even when the global
    *  auth store hasn't bootstrapped yet (e.g. after a mid-match page refresh
    *  the user lands on /result without ever passing through HomePage). */
@@ -141,7 +141,7 @@ export function ResultPage() {
       )}
       <ResultFx outcome={outcome} />
 
-      <div className={`game-title text-7xl uppercase animate-pop-in ${titleClass}`}>
+      <div className={`game-title animate-pop-in max-w-[92vw] px-2 text-center leading-none uppercase break-words text-5xl sm:text-7xl ${titleClass}`}>
         {t(`result.${outcome}`)}
       </div>
 

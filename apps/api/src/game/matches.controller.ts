@@ -29,7 +29,7 @@ export class MatchesController {
       include: {
         player1: { select: { id: true, username: true } },
         player2: { select: { id: true, username: true } },
-        room:    { select: { mode: true } },
+        room:    { select: { mode: true, name: true } },
       },
     });
     // For bot matches, override player2.username with the per-match bot name
