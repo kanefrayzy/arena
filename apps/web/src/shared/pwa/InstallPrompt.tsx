@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { subscribeBranding } from '../seo/applyBrandingAndSeo';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -9,10 +10,21 @@ const LAUNCH_KEY = 'arena.launches';
 const DISMISS_KEY = 'arena.installDismissedAt';
 const DISMISS_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const MIN_LAUNCHES = 2;
+const DEFAULT_NAME = 'FAOOR';
 
 export function InstallPrompt() {
   const [evt, setEvt] = useState<BeforeInstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
+  const [siteName, setSiteName] = useState<string>(DEFAULT_NAME);
+  const [iconUrl, setIconUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsub = subscribeBranding(({ seo, branding }) => {
+      setSiteName(seo.site_name || DEFAULT_NAME);
+      setIconUrl(branding.icon192 || branding.icon512 || branding.favicon || null);
+    });
+    return unsub;
+  }, []);
 
   useEffect(() => {
     // bump launch counter once per page load
@@ -62,9 +74,20 @@ export function InstallPrompt() {
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex justify-center p-4">
       <div className="pointer-events-auto w-full max-w-sm rounded-2xl border border-white/10 bg-surface/95 p-4 shadow-2xl backdrop-blur">
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-bg font-bold">A1</div>
+          {iconUrl ? (
+            <img
+              src={iconUrl}
+              alt=""
+              className="h-10 w-10 shrink-0 rounded-xl object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-bg font-bold">
+              {siteName.slice(0, 2).toUpperCase()}
+            </div>
+          )}
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-semibold">Установить Arena1v1</div>
+            <div className="text-sm font-semibold">Установить {siteName}</div>
             <p className="mt-0.5 text-xs text-white/60">
               Добавьте на главный экран — играйте в полноэкранном режиме без браузерной строки.
             </p>

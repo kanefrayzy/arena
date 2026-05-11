@@ -6,6 +6,21 @@ interface SeoPayload {
   branding: Record<string, string>;
 }
 
+// Cached payload from /api/seo so UI components (InstallPrompt, splash, etc.)
+// can read the live site name & icon without refetching.
+let cached: SeoPayload | null = null;
+const listeners = new Set<(p: SeoPayload) => void>();
+
+export function getBrandingSnapshot(): SeoPayload | null {
+  return cached;
+}
+
+export function subscribeBranding(fn: (p: SeoPayload) => void): () => void {
+  listeners.add(fn);
+  if (cached) fn(cached);
+  return () => { listeners.delete(fn); };
+}
+
 function setMeta(name: string, content: string, attr: 'name' | 'property' = 'name'): void {
   if (!content) return;
   let el = document.head.querySelector<HTMLMetaElement>(`meta[${attr}="${name}"]`);
@@ -75,6 +90,10 @@ export async function applyBrandingAndSeo(): Promise<void> {
     const r = await fetch('/api/seo', { credentials: 'omit' });
     if (!r.ok) return;
     const data = (await r.json()) as SeoPayload;
+    cached = data;
+    for (const fn of listeners) {
+      try { fn(data); } catch { /* ignore */ }
+    }
     const { seo, branding } = data;
 
     // Title
