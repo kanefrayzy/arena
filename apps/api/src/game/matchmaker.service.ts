@@ -119,6 +119,35 @@ export class MatchmakerService implements OnModuleInit, OnModuleDestroy {
       waiters = waiters.filter((_, i) => !flags[i]);
     }
 
+    // Drop anyone who already has a live (PENDING/RUNNING) match in the DB.
+    // Without this guard, the matchmaker can create a SECOND match for a user
+    // who is still in their first one, e.g. when they ended up queued during
+    // an ongoing match (race between match-creation finalising and queue/join
+    // arriving). The second match would then ambush them on next return to
+    // /queue and they'd see the bot appear "instantly" instead of after the
+    // 10s timer.
+    if (waiters.length > 0) {
+      const ids = waiters.map((w) => w.userId);
+      const busy = await this.prisma.match.findMany({
+        where: {
+          OR: [{ player1Id: { in: ids } }, { player2Id: { in: ids } }],
+          status: { in: ['PENDING', 'RUNNING'] },
+        },
+        select: { player1Id: true, player2Id: true },
+      });
+      if (busy.length > 0) {
+        const busySet = new Set<number>();
+        for (const m of busy) { busySet.add(m.player1Id); busySet.add(m.player2Id); }
+        const removed = waiters.filter((w) => busySet.has(w.userId)).map((w) => w.userId);
+        if (removed.length > 0) {
+          // Yank them out of Redis so they don't keep getting filtered every tick.
+          await this.queue.removeUsers(key, ...removed).catch(() => undefined);
+          this.log.warn(`evicted ${removed.length} waiters with active matches: ${removed.join(',')}`);
+        }
+        waiters = waiters.filter((w) => !busySet.has(w.userId));
+      }
+    }
+
     // Pair off 2-by-2.
     while (waiters.length >= 2) {
       const a = waiters.shift();

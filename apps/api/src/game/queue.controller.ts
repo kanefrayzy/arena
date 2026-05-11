@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, HttpCode, Post, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, Get, HttpCode, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { Prisma } from '@prisma/client';
 import { queueJoinSchema, type QueueJoinInput } from '@arena/shared';
@@ -29,6 +29,26 @@ export class QueueController {
     @Req() req: AuthedRequest,
     @Body(new ZodValidationPipe(queueJoinSchema)) body: QueueJoinInput,
   ): Promise<{ ok: true }> {
+    // Reject if the user already has a live match — without this guard a
+    // player who opens /queue in a second tab (or refreshes during a match)
+    // can stack a NEW pending match while the old one is still running. The
+    // matchmaker would then immediately deliver that stale match on their
+    // next join, making it look like the 10s bot timer didn't fire.
+    // Stale matches (game-server seed gone) are cancelled below and don't
+    // count toward this guard.
+    await this.cancelStaleMatches(req.user.sub);
+    const active = await this.prisma.match.findFirst({
+      where: {
+        OR: [{ player1Id: req.user.sub }, { player2Id: req.user.sub }],
+        status: { in: ['PENDING', 'RUNNING'] },
+      },
+      orderBy: { id: 'desc' },
+      select: { id: true },
+    });
+    if (active) {
+      throw new ConflictException({ code: 'ACTIVE_MATCH_EXISTS', matchId: active.id });
+    }
+
     // Balance check for paid modes — actual lock happens at match creation.
     if (body.mode !== 'free') {
       // CASUAL inclusivity ("free ranked"): when rooms.casualEnabled=true,

@@ -59,6 +59,17 @@ export function QueuePage() {
           if (roomId) body.roomId = Number(roomId);
           await api.post('/queue/join', body);
         } catch (e) {
+          if (e instanceof ApiError && e.code === 'ACTIVE_MATCH_EXISTS') {
+            // Server says we already have a live match — jump straight to it
+            // instead of leaving the user stuck on a perpetual "searching"
+            // screen. The matchId comes back in error details.
+            const details = e.details as { matchId?: string } | undefined;
+            if (details?.matchId && !navigatedRef.current) {
+              navigatedRef.current = true;
+              nav(`/match/${details.matchId}`);
+            }
+            return;
+          }
           if (e instanceof ApiError && e.code === 'INSUFFICIENT_BALANCE') {
             setError(t('queue.insufficient_balance'));
           } else {

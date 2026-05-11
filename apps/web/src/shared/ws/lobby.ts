@@ -71,12 +71,22 @@ class LobbyClient {
       }
       for (const l of this.listeners) l(msg);
     });
-    ws.addEventListener('close', () => {
+    ws.addEventListener('close', (ev) => {
       if (this.pingTimer) {
         clearInterval(this.pingTimer);
         this.pingTimer = null;
       }
       this.ws = null;
+      // Server uses code 4000 "replaced" when the same user opens a second
+      // tab and that tab's lobby socket displaces this one. Reconnecting
+      // would create a ping-pong where both tabs keep displacing each other
+      // multiple times per second — flooding the API with `user X connected`
+      // log spam and triggering false `idle` frames on the surviving tab.
+      // Stop reconnecting permanently on 4000; the other tab owns the lobby.
+      if (ev.code === 4000) {
+        this.wantOpen = false;
+        return;
+      }
       if (this.wantOpen) this.scheduleReconnect();
     });
     ws.addEventListener('error', () => {
