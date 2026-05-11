@@ -52,3 +52,4 @@ nul.json
 
 # local deploy scripts
 .deploy/
+_q.sql
