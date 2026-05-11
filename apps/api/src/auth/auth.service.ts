@@ -20,9 +20,13 @@ export class AuthService {
   async register(input: RegisterInput, ip?: string) {
     const existing = await this.prisma.user.findFirst({
       where: { OR: [{ email: input.email }, { username: input.username }] },
+      select: { email: true, username: true },
     });
     if (existing) {
-      throw new ConflictException('email or username already taken');
+      if (existing.email === input.email) {
+        throw new ConflictException({ code: 'EMAIL_TAKEN', message: 'Этот email уже зарегистрирован' });
+      }
+      throw new ConflictException({ code: 'USERNAME_TAKEN', message: 'Это имя пользователя уже занято' });
     }
 
     const passwordHash = await argon2.hash(input.password, {
@@ -59,10 +63,10 @@ export class AuthService {
   async login(input: LoginInput) {
     const user = await this.prisma.user.findUnique({ where: { email: input.email } });
     if (!user || user.isBanned) {
-      throw new UnauthorizedException('invalid credentials');
+      throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: 'Неверный email или пароль' });
     }
     const ok = await argon2.verify(user.passwordHash, input.password);
-    if (!ok) throw new UnauthorizedException('invalid credentials');
+    if (!ok) throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: 'Неверный email или пароль' });
     const tokens = await this.issueTokens(user.id, user.role);
     return { user: this.publicUser(user), tokens };
   }

@@ -4,6 +4,19 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../../shared/api/client';
 import { useAuth, type Me } from '../../shared/store/auth';
 
+const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function describeApiError(e: ApiError): string {
+  if (e.code === 'INVALID_CREDENTIALS') return 'Неверный email или пароль';
+  const details = e.details as { fieldErrors?: Record<string, string[] | undefined> } | null | undefined;
+  const fe = details?.fieldErrors;
+  if (fe) {
+    const msgs = fe.email ?? fe.password;
+    if (msgs && msgs.length > 0) return msgs[0]!;
+  }
+  return e.message || 'Ошибка входа';
+}
+
 export function LoginPage() {
   const { t } = useTranslation();
   const nav = useNavigate();
@@ -12,9 +25,19 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [touched, setTouched] = useState<{ email?: boolean; password?: boolean }>({});
+
+  const emailErr = !email
+    ? 'Введите email'
+    : !EMAIL_RX.test(email)
+      ? 'Некорректный email'
+      : null;
+  const passwordErr = !password ? 'Введите пароль' : null;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    setTouched({ email: true, password: true });
+    if (emailErr || passwordErr) return;
     setError(null);
     setLoading(true);
     try {
@@ -22,11 +45,13 @@ export function LoginPage() {
       setMe(out.user);
       nav('/home');
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Login failed');
+      setError(e instanceof ApiError ? describeApiError(e) : 'Ошибка входа');
     } finally {
       setLoading(false);
     }
   }
+
+  const fieldErrCls = 'mt-0.5 text-xs text-game-red';
 
   return (
     <div className="relative flex h-full flex-col items-center justify-center overflow-hidden px-6">
@@ -38,24 +63,32 @@ export function LoginPage() {
         <h2 className="game-title mb-2 text-center text-3xl text-game-yellow">
           {t('splash.login')}
         </h2>
-        <input
-          type="email"
-          autoComplete="email"
-          placeholder={t('auth.email')}
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          className="game-input"
-        />
-        <input
-          type="password"
-          autoComplete="current-password"
-          placeholder={t('auth.password')}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          className="game-input"
-        />
+        <div>
+          <input
+            type="email"
+            autoComplete="email"
+            placeholder={t('auth.email')}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onBlur={() => setTouched((s) => ({ ...s, email: true }))}
+            required
+            className="game-input w-full"
+          />
+          {touched.email && emailErr && <p className={fieldErrCls}>{emailErr}</p>}
+        </div>
+        <div>
+          <input
+            type="password"
+            autoComplete="current-password"
+            placeholder={t('auth.password')}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onBlur={() => setTouched((s) => ({ ...s, password: true }))}
+            required
+            className="game-input w-full"
+          />
+          {touched.password && passwordErr && <p className={fieldErrCls}>{passwordErr}</p>}
+        </div>
         {error && <p className="text-center text-sm font-semibold text-game-red">{error}</p>}
         <button type="submit" disabled={loading} className="game-btn game-btn-yellow mt-2">
           {t('auth.submit_login')}

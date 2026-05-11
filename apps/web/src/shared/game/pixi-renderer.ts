@@ -981,19 +981,27 @@ export class PixiRenderer {
         this.predX = Math.max(PLAYER_RADIUS, Math.min(MAP_WIDTH - PLAYER_RADIUS, this.predX));
         this.predY = Math.max(PLAYER_RADIUS, Math.min(MAP_HEIGHT - PLAYER_RADIUS, this.predY));
         // Step 2: reconcile with the latest authoritative server position
-        // (v.curX/curY). Small drift → smooth blend at ~12/sec; large drift
-        // → snap (teleport, knockback, slow-buff change).
+        // (v.curX/curY). While the player is actively moving, the server lags
+        // the predictor by RTT (the input hasn't arrived yet), so the snapshot
+        // looks "behind". If we exponentially smooth toward the snapshot every
+        // frame we create a rubber-band drag that feels heavy. Strategy:
+        //   • active input → only correct large drift (>40 px) by snapping.
+        //     small drift is tolerated until the server catches up.
+        //   • idle (no input) → smoothly converge to the snapshot.
+        // Large drift (>90 px) always snaps — handles teleport / knockback.
         const driftX = v.curX - this.predX;
         const driftY = v.curY - this.predY;
         const driftSq = driftX * driftX + driftY * driftY;
+        const inputActive = this.predDx !== 0 || this.predDy !== 0;
         if (driftSq > 90 * 90) {
           this.predX = v.curX;
           this.predY = v.curY;
+        } else if (inputActive && driftSq < 40 * 40) {
+          // Trust the predictor while moving — no correction.
         } else {
-          // Exponential smoothing — 1 - exp(-k*dt). k tuned so half the
-          // drift is corrected in ~80 ms (k ≈ 8.7). Tight enough that walls
-          // feel solid, loose enough that high-ping rubber-banding is gone.
-          const k = 8.7;
+          // Idle convergence or medium drift. k=6 → half-life ~115 ms; soft
+          // enough that the hero doesn't feel anchored.
+          const k = inputActive ? 4 : 6;
           const alpha = 1 - Math.exp(-k * dtS);
           this.predX += driftX * alpha;
           this.predY += driftY * alpha;

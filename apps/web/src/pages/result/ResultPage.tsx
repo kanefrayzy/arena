@@ -178,21 +178,16 @@ export function ResultPage() {
       </div>
 
       <div className="grid w-full max-w-xs grid-cols-2 gap-3 text-center">
-        <div className="game-card p-4">
+        <div className="game-card p-4 flex flex-col items-center justify-center">
           <div className="text-xs uppercase text-white/60">{t('result.you')}</div>
           <div className="font-display text-3xl text-game-cyan">{youHp}</div>
         </div>
-        <button
-          type="button"
-          onClick={() => nav(`/u/${data.opponent.id}`)}
-          className="game-card p-4 text-left transition hover:bg-white/5 active:scale-[0.98]"
-          title={t('result.viewProfile', 'Открыть профиль')}
-        >
-          <div className="truncate text-xs uppercase text-white/60">
+        <div className="game-card p-4 flex flex-col items-center justify-center">
+          <div className="max-w-full truncate text-xs uppercase text-white/60">
             {data.opponent.username}
           </div>
           <div className="font-display text-3xl text-game-pink">{oppHp}</div>
-        </button>
+        </div>
       </div>
 
       <div className="text-sm text-white/60">

@@ -4,14 +4,14 @@ export const emailSchema = z.string().email().max(255).toLowerCase().trim();
 
 export const usernameSchema = z
   .string()
-  .min(3)
-  .max(24)
-  .regex(/^[a-zA-Z0-9_]+$/, 'username: only letters, digits and underscore');
+  .min(4, 'Имя пользователя: от 4 до 20 символов')
+  .max(20, 'Имя пользователя: от 4 до 20 символов')
+  .regex(/^[a-zA-Z0-9_]+$/, 'Имя пользователя: только латинские буквы, цифры и _');
 
 export const passwordSchema = z
   .string()
-  .min(8, 'password must be at least 8 characters')
-  .max(128);
+  .min(5, 'Пароль: минимум 5 символов')
+  .max(128, 'Пароль: максимум 128 символов');
 
 export const registerSchema = z.object({
   email: emailSchema,
