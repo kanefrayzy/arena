@@ -191,16 +191,21 @@ export class LedgerService {
     matchId: string;
     winnerId: number;
     loserId: number;
-    stake: Prisma.Decimal | string;
+    /** Symmetric stake (legacy callers). If set, winnerLock=loserLock=stake. */
+    stake?: Prisma.Decimal | string;
+    /** Asymmetric locks (CASUAL inclusive). Take precedence over `stake`. */
+    winnerLock?: Prisma.Decimal | string;
+    loserLock?: Prisma.Decimal | string;
     commissionPct: number;
   }): Promise<void> {
-    const stake = new Prisma.Decimal(opts.stake);
-    if (stake.lte(0)) return; // free / casual no-stake — nothing to settle
+    const winnerLock = new Prisma.Decimal(opts.winnerLock ?? opts.stake ?? 0);
+    const loserLock = new Prisma.Decimal(opts.loserLock ?? opts.stake ?? 0);
+    const pool = winnerLock.plus(loserLock);
+    if (pool.lte(0)) return; // free match — nothing to settle
 
-    const pool = stake.mul(2);
     const commission = pool.mul(opts.commissionPct).div(100).toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
     const prize = pool.minus(commission);
-    const winnerNet = prize.minus(stake); // what winner actually gains over their unlocked stake
+    const winnerNet = prize.minus(winnerLock); // what winner actually gains over their unlocked stake
 
     const winnerKey = `match:${opts.matchId}:win:${opts.winnerId}`;
     const loserKey = `match:${opts.matchId}:loss:${opts.loserId}`;
@@ -228,12 +233,12 @@ export class LedgerService {
         });
       }
 
-      if (!have.has(loserKey)) {
-        await this.applyDelta(tx, opts.loserId, stake.negated());
+      if (!have.has(loserKey) && loserLock.gt(0)) {
+        await this.applyDelta(tx, opts.loserId, loserLock.negated());
         await tx.ledger.create({
           data: {
             userId: opts.loserId,
-            amount: stake.negated(),
+            amount: loserLock.negated(),
             type: 'MATCH_LOSS',
             refType: 'match',
             refId: opts.matchId,
@@ -258,7 +263,7 @@ export class LedgerService {
     });
 
     this.log.log(
-      `match ${opts.matchId} settled: winner=${opts.winnerId} (+${winnerNet}), loser=${opts.loserId} (−${stake}), commission=${commission}`,
+      `match ${opts.matchId} settled: winner=${opts.winnerId} (+${winnerNet}), loser=${opts.loserId} (−${loserLock}), commission=${commission}`,
     );
   }
 

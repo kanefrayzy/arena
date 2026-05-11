@@ -83,13 +83,17 @@ export class MatchCreationService {
       meta.botUsername = pickBotName();
     }
 
-    // CASUAL inclusivity toggle (rooms.casualEnabled=true) lets zero-balance
-    // players still queue and play MMR — the match is then run free (no
-    // lock, no payout). Players who CAN afford the stake play paid as usual.
-    // If either side can't afford, the match runs free for both (we cannot
-    // have asymmetric stakes — ledger requires equal locks).
-    let effectiveStake: string = input.room.stakeUsd ? String(input.room.stakeUsd) : '0';
-    if (input.room.mode === 'CASUAL' && Number(effectiveStake) > 0 && !input.isBotMatch) {
+    // CASUAL inclusivity ("free ranked"): when rooms.casualEnabled=true, players
+    // with 0 balance are allowed to queue and play Casual. The match still
+    // settles for real money — players who can afford the stake lock the full
+    // amount, players who can't lock only what they have (down to 0). On
+    // settlement the winner takes the actual pool (≤ 2× stake), losers lose
+    // only what they locked. casualEnabled=false → behave like STAKE: require
+    // full balance to enter.
+    const roomStake = input.room.stakeUsd ? String(input.room.stakeUsd) : '0';
+    let lockP1 = roomStake;
+    let lockP2 = roomStake;
+    if (input.room.mode === 'CASUAL' && Number(roomStake) > 0 && !input.isBotMatch) {
       const setting = await this.prisma.setting.findUnique({ where: { key: 'rooms.casualEnabled' } });
       const casualInclusive = !!setting && (setting.value === true || (setting.value as unknown) === 'true');
       if (casualInclusive) {
@@ -97,15 +101,20 @@ export class MatchCreationService {
           this.prisma.wallet.findUnique({ where: { userId: input.player1Id } }),
           this.prisma.wallet.findUnique({ where: { userId: input.player2Id } }),
         ]);
-        const need = Number(effectiveStake);
-        const b1 = Number(w1?.balance ?? 0);
-        const b2 = Number(w2?.balance ?? 0);
-        if (b1 < need || b2 < need) {
-          effectiveStake = '0';
-          meta.casualFree = true;
+        const need = new Prisma.Decimal(roomStake);
+        const b1 = new Prisma.Decimal(w1?.balance.toString() ?? '0');
+        const b2 = new Prisma.Decimal(w2?.balance.toString() ?? '0');
+        lockP1 = (b1.gte(need) ? need : b1.gte(0) ? b1 : new Prisma.Decimal(0)).toString();
+        lockP2 = (b2.gte(need) ? need : b2.gte(0) ? b2 : new Prisma.Decimal(0)).toString();
+        if (lockP1 !== roomStake || lockP2 !== roomStake) {
+          meta.casualInclusiveLocks = true;
         }
       }
     }
+    // Persist per-player effective stakes for settle/abort paths. stakeUsd on
+    // the Match row stays at the nominal room stake for display/history.
+    meta.lockP1 = lockP1;
+    meta.lockP2 = lockP2;
 
     // Resolve loadouts (character+skin) for both players. Bot: pick first active char/default skin.
     const p1Loadout = await this.resolveLoadout(input.player1Id);
@@ -116,7 +125,7 @@ export class MatchCreationService {
     const match = await this.prisma.match.create({
       data: {
         roomId: input.room.id,
-        stakeUsd: effectiveStake,
+        stakeUsd: roomStake,
         player1Id: input.player1Id,
         player2Id: input.player2Id,
         player1CharId: p1Loadout.characterId,
@@ -129,16 +138,17 @@ export class MatchCreationService {
     });
 
     // Lock stakes for paid (non-bot) matches. Bot matches are always free.
-    const stake = effectiveStake;
-    if (!input.isBotMatch && Number(stake) > 0) {
+    // CASUAL with casualEnabled can yield asymmetric locks (one side 0 if
+    // they queued with insufficient balance).
+    if (!input.isBotMatch && (Number(lockP1) > 0 || Number(lockP2) > 0)) {
       try {
-        await this.ledger.lockStake(match.id, input.player1Id, stake);
-        await this.ledger.lockStake(match.id, input.player2Id, stake);
+        if (Number(lockP1) > 0) await this.ledger.lockStake(match.id, input.player1Id, lockP1);
+        if (Number(lockP2) > 0) await this.ledger.lockStake(match.id, input.player2Id, lockP2);
       } catch (err) {
         this.log.error(`stake lock failed for match ${match.id}: ${(err as Error).message}`);
         // Roll back: try to unlock whichever side already locked, mark match cancelled.
-        await this.ledger.unlockStake(match.id, input.player1Id, stake).catch(() => undefined);
-        await this.ledger.unlockStake(match.id, input.player2Id, stake).catch(() => undefined);
+        await this.ledger.unlockStake(match.id, input.player1Id, lockP1).catch(() => undefined);
+        await this.ledger.unlockStake(match.id, input.player2Id, lockP2).catch(() => undefined);
         await this.prisma.match.update({
           where: { id: match.id },
           data: { status: 'CANCELLED', meta: { ...meta, cancelReason: 'insufficient_balance' } as Prisma.InputJsonValue },
@@ -183,7 +193,7 @@ export class MatchCreationService {
       mode: input.room.mode,
       roomId: input.room.id,
       roomName: input.room.name,
-      stakeUsd: Number(effectiveStake) > 0 ? effectiveStake : undefined,
+      stakeUsd: Number(roomStake) > 0 ? roomStake : undefined,
       tickRate,
       durationMs: 90_000,
       isBotMatch: !!input.isBotMatch,
@@ -230,7 +240,7 @@ export class MatchCreationService {
           id: input.room.id,
           name: input.room.name,
           mode: input.room.mode,
-          ...(Number(effectiveStake) > 0 ? { stakeUsd: effectiveStake } : {}),
+          ...(Number(roomStake) > 0 ? { stakeUsd: roomStake } : {}),
         },
       };
       // Store as fallback for players whose lobby WS was not connected at this exact moment.

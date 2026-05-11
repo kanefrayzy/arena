@@ -628,10 +628,15 @@ export class AdminService {
     }
     const room = await this.prisma.room.findUnique({ where: { id: m.roomId } });
     const stake = m.stakeUsd;
+    // Per-player effective locks (CASUAL inclusive). Fallback to nominal stake.
+    const metaObj = (m.meta && typeof m.meta === 'object' && !Array.isArray(m.meta))
+      ? (m.meta as Record<string, unknown>) : {};
+    const lockP1Str = typeof metaObj.lockP1 === 'string' ? metaObj.lockP1 : stake.toString();
+    const lockP2Str = typeof metaObj.lockP2 === 'string' ? metaObj.lockP2 : stake.toString();
     if (winnerId == null) {
       // Refund both: unlock stakes (idempotent on match key), cancel.
-      await this.ledger.unlockStake(matchId, m.player1Id, stake);
-      await this.ledger.unlockStake(matchId, m.player2Id, stake);
+      await this.ledger.unlockStake(matchId, m.player1Id, lockP1Str);
+      await this.ledger.unlockStake(matchId, m.player2Id, lockP2Str);
       await this.prisma.match.update({
         where: { id: matchId },
         data: { status: 'CANCELLED', finishedAt: new Date(), meta: { adminAction: 'refund', adminId, reason } },
@@ -639,13 +644,14 @@ export class AdminService {
       return { id: matchId, status: 'CANCELLED', refunded: true };
     }
     const loserId = winnerId === m.player1Id ? m.player2Id : m.player1Id;
-    await this.ledger.unlockStake(matchId, m.player1Id, stake);
-    await this.ledger.unlockStake(matchId, m.player2Id, stake);
+    await this.ledger.unlockStake(matchId, m.player1Id, lockP1Str);
+    await this.ledger.unlockStake(matchId, m.player2Id, lockP2Str);
     await this.ledger.settleMatch({
       matchId,
       winnerId,
       loserId,
-      stake,
+      winnerLock: winnerId === m.player1Id ? lockP1Str : lockP2Str,
+      loserLock: loserId === m.player1Id ? lockP1Str : lockP2Str,
       commissionPct: room?.commissionPct ?? 20,
     });
     await this.prisma.match.update({

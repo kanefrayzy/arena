@@ -22,8 +22,8 @@ export const SETTING_META: Record<string, SettingMeta> = {
     group: 'gameplay',
   },
   'rooms.casualEnabled': {
-    label: 'CASUAL: бесплатный ранкед',
-    description: 'Игроки с балансом 0 могут играть CASUAL-матчи (без ставки, но с MMR).',
+    label: 'CASUAL: бесплатный вход в очередь',
+    description: 'Игроки с нулевым балансом могут вставать в CASUAL-очередь. Матч всегда платный: победитель забирает пул, проигравший теряет только то, что было на балансе (до ставки). Если выключено — CASUAL работает как STAKE: нужен баланс ≥ ставки.',
     type: 'boolean',
     example: 'true',
     group: 'rooms',

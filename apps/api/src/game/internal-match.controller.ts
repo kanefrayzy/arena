@@ -86,17 +86,27 @@ export class InternalMatchController {
       const room = await this.prisma.room.findUnique({ where: { id: match.roomId } });
       const commissionPct = room?.commissionPct ?? 0;
 
-      // Always unlock first (refund both sides their locked stake).
-      await this.ledger.unlockStake(body.matchId, match.player1Id, stake);
-      await this.ledger.unlockStake(body.matchId, match.player2Id, stake);
+      // Per-player effective locks (CASUAL inclusive). Fallback to nominal
+      // stake for matches created before this field existed.
+      const metaObj = (match.meta && typeof match.meta === 'object' && !Array.isArray(match.meta))
+        ? (match.meta as Record<string, unknown>) : {};
+      const lockP1 = new Prisma.Decimal(typeof metaObj.lockP1 === 'string' ? metaObj.lockP1 : stake.toString());
+      const lockP2 = new Prisma.Decimal(typeof metaObj.lockP2 === 'string' ? metaObj.lockP2 : stake.toString());
+
+      // Always unlock first (refund both sides their actual locked stake).
+      if (lockP1.gt(0)) await this.ledger.unlockStake(body.matchId, match.player1Id, lockP1);
+      if (lockP2.gt(0)) await this.ledger.unlockStake(body.matchId, match.player2Id, lockP2);
 
       if (body.winnerId && (body.winnerId === match.player1Id || body.winnerId === match.player2Id)) {
         const loserId = body.winnerId === match.player1Id ? match.player2Id : match.player1Id;
+        const winnerLock = body.winnerId === match.player1Id ? lockP1 : lockP2;
+        const loserLock = loserId === match.player1Id ? lockP1 : lockP2;
         await this.ledger.settleMatch({
           matchId: body.matchId,
           winnerId: body.winnerId,
           loserId,
-          stake,
+          winnerLock,
+          loserLock,
           commissionPct,
         });
       } else {
@@ -208,8 +218,12 @@ export class InternalMatchController {
       const stake = new Prisma.Decimal(match.stakeUsd.toString());
       const isBotMatch = match.player1Id === BOT_USER_ID || match.player2Id === BOT_USER_ID;
       if (!isBotMatch && stake.gt(0)) {
-        await this.ledger.unlockStake(body.matchId, match.player1Id, stake);
-        await this.ledger.unlockStake(body.matchId, match.player2Id, stake);
+        const metaObj = (match.meta && typeof match.meta === 'object' && !Array.isArray(match.meta))
+          ? (match.meta as Record<string, unknown>) : {};
+        const lockP1 = new Prisma.Decimal(typeof metaObj.lockP1 === 'string' ? metaObj.lockP1 : stake.toString());
+        const lockP2 = new Prisma.Decimal(typeof metaObj.lockP2 === 'string' ? metaObj.lockP2 : stake.toString());
+        if (lockP1.gt(0)) await this.ledger.unlockStake(body.matchId, match.player1Id, lockP1);
+        if (lockP2.gt(0)) await this.ledger.unlockStake(body.matchId, match.player2Id, lockP2);
         await this.ledger.settleCancel(body.matchId);
       }
     }
