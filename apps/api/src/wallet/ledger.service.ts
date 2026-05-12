@@ -413,7 +413,12 @@ export class LedgerService {
     const w = await tx.wallet.findUnique({ where: { userId } });
     if (!w) throw new BadRequestException(`wallet missing for user ${userId}`);
     const next = new Prisma.Decimal(w.balance.toString()).plus(delta);
-    if (next.isNegative()) {
+    // SYSTEM_USER_ID is the house bankroll — it represents the casino's
+    // outstanding equity/liability and MUST be allowed to dip negative
+    // (e.g. fresh install paying out the first winner from $0 balance).
+    // Over the long run commissions on PvP matches keep it solvent.
+    // Real-user wallets are strictly non-negative.
+    if (userId !== SYSTEM_USER_ID && next.isNegative()) {
       throw new BadRequestException(`insufficient balance for user ${userId}`);
     }
     await tx.wallet.update({ where: { userId }, data: { balance: next } });
