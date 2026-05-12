@@ -7,6 +7,12 @@ import { useAuth, type Me } from '../../shared/store/auth';
 const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME_RX = /^[A-Za-z0-9_]+$/;
 
+function readRefCookie(): string | null {
+  if (typeof document === 'undefined') return null;
+  const m = document.cookie.match(/(?:^|;\s*)arena_ref=([^;]+)/);
+  return m ? decodeURIComponent(m[1]!) : null;
+}
+
 function describeApiError(e: ApiError): string {
   switch (e.code) {
     case 'EMAIL_TAKEN': return 'Этот email уже зарегистрирован';
@@ -31,7 +37,7 @@ export function RegisterPage() {
   const nav = useNavigate();
   const setMe = useAuth((s) => s.setMe);
   const [searchParams] = useSearchParams();
-  const refCode = searchParams.get('ref');
+  const refCode = searchParams.get('ref') ?? readRefCookie();
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');

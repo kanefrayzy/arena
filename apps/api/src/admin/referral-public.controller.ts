@@ -40,8 +40,7 @@ export class ReferralPublicController {
     // can layer them on top of the campaign code.
     const passThru = new URL(req.url, 'http://x').searchParams;
     const qs = new URLSearchParams();
-    if (ok) qs.set('ref', cleaned);
     for (const [k, v] of passThru.entries()) qs.set(k, v);
-    res.redirect(302, `/register${qs.toString() ? `?${qs.toString()}` : ''}`);
+    res.redirect(302, `/${qs.toString() ? `?${qs.toString()}` : ''}`);
   }
 }
