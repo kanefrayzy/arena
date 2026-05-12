@@ -136,9 +136,19 @@ async function main() {
   // Only create the base character if absent; never overwrite admin edits to
   // HP, speed, damage, weapon type, etc. We do enforce isStarter/isActive so
   // a player always has a starter to fall back to.
+  //
+  // Special case: if the default character exists but has no ability linked
+  // (e.g. admin accidentally cleared the ability dropdown when editing), we
+  // restore the dash link. The default character MUST have a working ability
+  // otherwise the Q key does nothing and the in-game icon is missing.
+  const existingDefault = await prisma.character.findUnique({ where: { slug: 'default' }, select: { id: true, abilityId: true } });
   const row = await prisma.character.upsert({
     where: { slug: 'default' },
-    update: { isStarter: true, isActive: true },
+    update: {
+      isStarter: true,
+      isActive: true,
+      ...(existingDefault && existingDefault.abilityId == null && dashAbility ? { abilityId: dashAbility.id } : {}),
+    },
     create: charData,
   });
   charBySlug.set('default', row.id);
