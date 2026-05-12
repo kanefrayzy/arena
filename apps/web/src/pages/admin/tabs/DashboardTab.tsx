@@ -114,13 +114,27 @@ export function DashboardTab() {
 
       <section>
         <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-white/40">Игроки</h3>
+        <div className="mb-3 overflow-hidden rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/15 via-emerald-500/5 to-transparent px-5 py-4 shadow-[0_0_40px_-12px_rgba(16,185,129,0.55)]">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="relative flex h-3 w-3" aria-hidden>
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.9)]" />
+              </span>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-200/90">Онлайн сейчас</div>
+                <div className="text-[10px] text-white/40">Обновляется каждые 5 секунд</div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-4xl font-bold tabular-nums text-emerald-100 drop-shadow-[0_0_12px_rgba(16,185,129,0.45)]">
+                {online == null ? '—' : fmt(online)}
+              </div>
+              <div className="text-[10px] uppercase tracking-wider text-white/40">в лобби</div>
+            </div>
+          </div>
+        </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard
-            label="Онлайн сейчас"
-            value={online == null ? '—' : fmt(online)}
-            tone={online && online > 0 ? 'success' : 'default'}
-            hint="Обновляется каждые 5 сек"
-          />
           <StatCard label="Всего пользователей" value={fmt(s.users.total)} />
           <StatCard label="Новых за 24ч" value={fmt(s.users.new24h)} tone={s.users.new24h > 0 ? 'success' : 'default'} hint="Регистрации" />
           <StatCard label="Новых за 7 дней" value={fmt(s.users.new7d)} hint="Регистрации" />

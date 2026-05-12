@@ -67,6 +67,18 @@ export function LanguagesTab() {
     }
   };
 
+  const onUploadFile = async (file: File) => {
+    setError(null);
+    try {
+      const text = await file.text();
+      // Validate JSON locally so we can surface a nicer error than the server's.
+      JSON.parse(text);
+      setEditText(text);
+    } catch (e) {
+      setError(`Не удалось прочитать JSON: ${(e as Error).message}`);
+    }
+  };
+
   const saveEdit = async () => {
     if (!editCode) return;
     setEditBusy(true);
@@ -151,6 +163,27 @@ export function LanguagesTab() {
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-lg font-semibold">Перевод: {editCode}</h3>
               <button className="game-btn game-btn-sm game-btn-ghost" onClick={() => setEditCode(null)} disabled={editBusy}>×</button>
+            </div>
+            <p className="mb-2 text-xs text-white/50">
+              Можно вставить как «плоский» JSON (<code>{'{"key":"value"}'}</code>),
+              так и вложенный (<code>{'{"common":{"ok":"OK"}}'}</code>) — сервер автоматически
+              сплющит вложенные ключи в точечную нотацию.
+            </p>
+            <div className="mb-2 flex items-center gap-2">
+              <label className="game-btn game-btn-sm game-btn-ghost cursor-pointer">
+                Загрузить .json
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void onUploadFile(f);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+              <span className="text-xs text-white/40">или отредактируйте текст ниже</span>
             </div>
             <textarea
               className="flex-1 rounded-md border border-white/10 bg-black/30 p-3 font-mono text-xs text-white"

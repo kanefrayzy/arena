@@ -12,7 +12,10 @@ const addLangSchema = z.object({
 });
 
 const updateResourcesSchema = z.object({
-  resources: z.record(z.string(), z.string()),
+  // Accept any JSON value at each leaf — the service flattens nested objects
+  // and coerces primitives to strings, so a translator can paste either a
+  // flat `{ "key": "value" }` dictionary or a nested namespaced JSON.
+  resources: z.record(z.string(), z.unknown()),
 });
 
 @Controller('admin/i18n')
@@ -44,7 +47,7 @@ export class AdminI18nController {
     @Param('code') code: string,
     @Body(new ZodValidationPipe(updateResourcesSchema)) body: z.infer<typeof updateResourcesSchema>,
   ) {
-    this.i18n.updateResources(code, body.resources);
+    this.i18n.updateResources(code, body.resources as Record<string, unknown>);
     return { ok: true };
   }
 

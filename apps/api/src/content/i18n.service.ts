@@ -123,18 +123,49 @@ export class I18nService {
     return meta;
   }
 
-  /** Admin: replace an existing language's resource bundle. */
-  updateResources(code: string, dict: Record<string, string>): void {
+  /**
+   * Admin: replace an existing language's resource bundle.
+   *
+   * Accepts both flat (`{ "a.b": "v" }`) and nested (`{ "a": { "b": "v" } }`)
+   * JSON shapes — translators frequently produce the nested form, so we
+   * flatten on the way in. Primitive non-string leaves (number/bool) are
+   * coerced to string; arrays and null are dropped.
+   */
+  updateResources(code: string, dict: Record<string, unknown>): void {
     const reg = this.readRegistry();
     const found = reg.languages.find((l) => l.code === code);
     if (!found) throw new BadRequestException({ code: 'NOT_FOUND' });
     if (typeof dict !== 'object' || !dict) throw new BadRequestException({ code: 'INVALID_PAYLOAD' });
-    // Keep only string values.
+
     const clean: Record<string, string> = {};
-    for (const [k, v] of Object.entries(dict)) {
-      if (typeof v === 'string') clean[k] = v;
+    const walk = (prefix: string, value: unknown): void => {
+      if (value == null) return;
+      if (typeof value === 'string') {
+        clean[prefix] = value;
+        return;
+      }
+      if (typeof value === 'number' || typeof value === 'boolean') {
+        clean[prefix] = String(value);
+        return;
+      }
+      if (Array.isArray(value)) return; // i18next does not support array leaves here
+      if (typeof value === 'object') {
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+          walk(prefix ? `${prefix}.${k}` : k, v);
+        }
+      }
+    };
+    for (const [k, v] of Object.entries(dict)) walk(k, v);
+
+    if (Object.keys(clean).length === 0) {
+      throw new BadRequestException({
+        code: 'EMPTY_PAYLOAD',
+        detail: 'no usable string keys found — check JSON shape',
+      });
     }
+
     writeFileSync(join(ROOT, `${code}.json`), JSON.stringify(clean, null, 2), 'utf8');
+    this.log.log(`updated language ${code}: ${Object.keys(clean).length} keys`);
   }
 
   getResources(code: string): Record<string, string> {
