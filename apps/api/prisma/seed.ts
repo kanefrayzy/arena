@@ -108,9 +108,10 @@ async function main() {
     { slug: 'heal', name: 'Лечение', description: 'Восстанавливает 30 HP.', type: 'heal', cooldownMs: 15000, damageAmount: 30, durationMs: 0, range: 0 },
   ];
   for (const a of abilitySeedData) {
+    // Only insert if missing. Never overwrite admin tweaks to cooldown/damage/etc.
     await prisma.ability.upsert({
       where: { slug: a.slug },
-      update: { name: a.name, description: a.description, type: a.type, cooldownMs: a.cooldownMs, damageAmount: a.damageAmount, durationMs: a.durationMs, range: a.range },
+      update: {},
       create: a,
     });
   }
@@ -132,9 +133,12 @@ async function main() {
   };
 
   const charBySlug = new Map<string, number>();
+  // Only create the base character if absent; never overwrite admin edits to
+  // HP, speed, damage, weapon type, etc. We do enforce isStarter/isActive so
+  // a player always has a starter to fall back to.
   const row = await prisma.character.upsert({
     where: { slug: 'default' },
-    update: charData,
+    update: { isStarter: true, isActive: true },
     create: charData,
   });
   charBySlug.set('default', row.id);
@@ -207,16 +211,10 @@ async function main() {
     { slug: 'rifle', name: 'Rifle', isStarter: false, damage: 28, fireRateMs: 360, bulletSpeed: 800, priceUsd: '10' },
   ] as const;
   for (const w of weapons) {
+    // Only insert if missing. Never overwrite admin tweaks to damage / fire rate / price.
     await prisma.weapon.upsert({
       where: { slug: w.slug },
-      update: {
-        name: w.name,
-        isStarter: w.isStarter,
-        damage: w.damage,
-        fireRateMs: w.fireRateMs,
-        bulletSpeed: w.bulletSpeed,
-        priceUsd: w.priceUsd,
-      },
+      update: {},
       create: {
         slug: w.slug,
         name: w.name,
@@ -369,25 +367,31 @@ async function main() {
     console.log(`✓ starter backfill: ${granted} skins granted, ${loadouts} loadouts created`);
   }
 
-  // ---------- Payment methods (idempotent) ----------
-  const paymentMethods = [
-    { slug: 'betra_card_azn', label: 'Карта (AZN)', kind: 'betra_card', currency: 'AZN', isDeposit: true, isWithdraw: false, sortOrder: 10 },
-    { slug: 'betra_card_rub', label: 'Карта (RUB)', kind: 'betra_card', currency: 'RUB', isDeposit: true, isWithdraw: false, sortOrder: 11 },
-    { slug: 'betra_card_kzt', label: 'Карта (KZT)', kind: 'betra_card', currency: 'KZT', isDeposit: true, isWithdraw: false, sortOrder: 12 },
-    { slug: 'betra_payout_azn', label: 'Выплата на карту (AZN)', kind: 'betra_payout', currency: 'AZN', isDeposit: false, isWithdraw: true, sortOrder: 20 },
-    { slug: 'betra_payout_kzt', label: 'Выплата на карту (KZT)', kind: 'betra_payout', currency: 'KZT', isDeposit: false, isWithdraw: true, sortOrder: 21 },
-    { slug: 'betra_payout_usdt', label: 'Выплата USDT (TRC20)', kind: 'betra_payout', currency: 'USDT', isDeposit: false, isWithdraw: true, sortOrder: 22 },
-    { slug: 'west_btc', label: 'Bitcoin', kind: 'westwallet', currency: 'BTC', isDeposit: true, isWithdraw: true, sortOrder: 30 },
-    { slug: 'west_usdt_trc', label: 'USDT TRC-20', kind: 'westwallet', currency: 'USDTTRC', isDeposit: true, isWithdraw: true, sortOrder: 31 },
-    { slug: 'west_eth', label: 'Ethereum', kind: 'westwallet', currency: 'ETH', isDeposit: true, isWithdraw: true, sortOrder: 32 },
-    { slug: 'west_ltc', label: 'Litecoin', kind: 'westwallet', currency: 'LTC', isDeposit: true, isWithdraw: true, sortOrder: 33 },
-  ] as const;
-  for (const pm of paymentMethods) {
-    await prisma.paymentMethod.upsert({
-      where: { slug: pm.slug },
-      update: {}, // do not overwrite admin edits
-      create: pm,
-    });
+  // ---------- Payment methods ----------
+  // Seed defaults ONLY on a fresh install. Once any payment method exists,
+  // we never touch the table again — otherwise admin deletions would be
+  // reverted on every container restart and admin edits would be a constant
+  // fight against the seed script.
+  const pmCount = await prisma.paymentMethod.count();
+  if (pmCount === 0) {
+    const paymentMethods = [
+      { slug: 'betra_card_azn', label: 'Карта (AZN)', kind: 'betra_card', currency: 'AZN', isDeposit: true, isWithdraw: false, sortOrder: 10 },
+      { slug: 'betra_card_rub', label: 'Карта (RUB)', kind: 'betra_card', currency: 'RUB', isDeposit: true, isWithdraw: false, sortOrder: 11 },
+      { slug: 'betra_card_kzt', label: 'Карта (KZT)', kind: 'betra_card', currency: 'KZT', isDeposit: true, isWithdraw: false, sortOrder: 12 },
+      { slug: 'betra_payout_azn', label: 'Выплата на карту (AZN)', kind: 'betra_payout', currency: 'AZN', isDeposit: false, isWithdraw: true, sortOrder: 20 },
+      { slug: 'betra_payout_kzt', label: 'Выплата на карту (KZT)', kind: 'betra_payout', currency: 'KZT', isDeposit: false, isWithdraw: true, sortOrder: 21 },
+      { slug: 'betra_payout_usdt', label: 'Выплата USDT (TRC20)', kind: 'betra_payout', currency: 'USDT', isDeposit: false, isWithdraw: true, sortOrder: 22 },
+      { slug: 'west_btc', label: 'Bitcoin', kind: 'westwallet', currency: 'BTC', isDeposit: true, isWithdraw: true, sortOrder: 30 },
+      { slug: 'west_usdt_trc', label: 'USDT TRC-20', kind: 'westwallet', currency: 'USDTTRC', isDeposit: true, isWithdraw: true, sortOrder: 31 },
+      { slug: 'west_eth', label: 'Ethereum', kind: 'westwallet', currency: 'ETH', isDeposit: true, isWithdraw: true, sortOrder: 32 },
+      { slug: 'west_ltc', label: 'Litecoin', kind: 'westwallet', currency: 'LTC', isDeposit: true, isWithdraw: true, sortOrder: 33 },
+    ] as const;
+    for (const pm of paymentMethods) {
+      await prisma.paymentMethod.create({ data: pm });
+    }
+    console.log(`✓ created ${paymentMethods.length} default payment methods (fresh install)`);
+  } else {
+    console.log(`↩ payment methods already exist (${pmCount} rows) — skipping seed (admin edits preserved)`);
   }
 
   console.log('✓ seed completed');
