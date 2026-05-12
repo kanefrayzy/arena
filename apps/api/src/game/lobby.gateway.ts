@@ -2,12 +2,14 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { JwtService } from '@nestjs/jwt';
 import IORedis from 'ioredis';
 import type { IncomingMessage } from 'http';
+import { Prisma } from '@prisma/client';
 import { WebSocketServer, WebSocket } from 'ws';
-import { QUEUE_TIMEOUT_FIRST_OFFER_MS } from '@arena/shared';
+import { BOT_USER_ID, QUEUE_TIMEOUT_FIRST_OFFER_MS } from '@arena/shared';
 import { QueueService } from './queue.service';
 import { RedisService } from '../common/redis/redis.module';
 import { PrismaService } from '../common/prisma/prisma.module';
 import { MatchTokenService } from './match-token.service';
+import { LedgerService } from '../wallet/ledger.service';
 import { MATCH_FOUND_CHANNEL, type MatchFoundEvent } from './match-creation.service';
 
 const ACCESS_COOKIE = 'arena_access';
@@ -63,6 +65,7 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
     private readonly redis: RedisService,
     private readonly prisma: PrismaService,
     private readonly tokens: MatchTokenService,
+    private readonly ledger: LedgerService,
   ) {}
 
   onModuleInit(): void {
@@ -379,12 +382,36 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
     if (!seedExists) {
       // Stale match — game server doesn't know about it. Mark CANCELLED so it
       // doesn't shadow new matchmaking sessions and stop trying to deliver it.
+      // CRITICAL: also refund any locked stake on both sides — otherwise
+      // wallet.locked permanently leaks (orphan lock balance) and the user
+      // loses access to the staked funds. This was the root cause of the
+      // "Залочено $X.XX в активных матчах" leak on the admin dashboard
+      // even when no matches were actually running.
       try {
+        const metaObj = (match.meta && typeof match.meta === 'object' && !Array.isArray(match.meta))
+          ? (match.meta as Record<string, unknown>)
+          : {};
+        const lockP1Str = typeof metaObj.lockP1 === 'string' ? metaObj.lockP1 : String(match.stakeUsd);
+        const lockP2Str = typeof metaObj.lockP2 === 'string' ? metaObj.lockP2 : String(match.stakeUsd);
+        const lockP1 = new Prisma.Decimal(lockP1Str);
+        const lockP2 = new Prisma.Decimal(lockP2Str);
+        const isBotMatch = match.player1Id === BOT_USER_ID || match.player2Id === BOT_USER_ID;
+        if (lockP1.gt(0)) {
+          await this.ledger.unlockStake(match.id, match.player1Id, lockP1).catch((e) =>
+            this.log.error(`stale-cancel unlock p1 failed for ${match.id}: ${(e as Error).message}`),
+          );
+        }
+        if (!isBotMatch && lockP2.gt(0)) {
+          await this.ledger.unlockStake(match.id, match.player2Id, lockP2).catch((e) =>
+            this.log.error(`stale-cancel unlock p2 failed for ${match.id}: ${(e as Error).message}`),
+          );
+        }
         await this.prisma.match.update({
           where: { id: match.id },
           data: {
             status: 'CANCELLED',
-            meta: { ...(match.meta as object | null ?? {}), cancelReason: 'stale_no_seed' },
+            finishedAt: new Date(),
+            meta: { ...metaObj, cancelReason: 'stale_no_seed' } as Prisma.InputJsonValue,
           },
         });
         this.log.warn(`cancelled stale match ${match.id} (no seed) for user ${sock.userId}`);
