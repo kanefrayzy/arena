@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException, StreamableFile } from '@nestjs/common';
-import { createReadStream, existsSync } from 'node:fs';
+import { createReadStream, existsSync, unlinkSync } from 'node:fs';
 import { Prisma } from '@prisma/client';
 import { SYSTEM_USER_ID, BOT_USER_ID } from '@arena/shared';
 import { PrismaService } from '../common/prisma/prisma.module';
@@ -597,7 +597,8 @@ export class AdminService {
     const limit = Math.min(opts.limit ?? 50, 200);
     const rows = await this.prisma.match.findMany({
       where: opts.status ? { status: opts.status as Prisma.MatchWhereInput['status'] } : {},
-      orderBy: { startedAt: 'desc' },
+      // Newest first; matches with NULL startedAt (PENDING) sink to bottom.
+      orderBy: [{ startedAt: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }],
       take: limit,
     });
     return {
@@ -614,6 +615,43 @@ export class AdminService {
         replayUrl: m.replayUrl ?? null,
       })),
     };
+  }
+
+  /**
+   * Wipes finished/cancelled matches from the DB and removes their replay
+   * files from disk. PENDING/RUNNING/DISPUTED matches are preserved so live
+   * games and unresolved disputes are never destroyed.
+   *
+   * Ledger entries that reference deleted matches are NOT removed — they
+   * remain as audit trail. Their refId will dangle, which is intentional.
+   *
+   * Also removes MatchReport rows tied to the deleted matches.
+   */
+  async clearMatchHistory(adminId: number): Promise<{ deletedMatches: number; deletedReplays: number; deletedReports: number }> {
+    const targets = await this.prisma.match.findMany({
+      where: { status: { in: ['FINISHED', 'CANCELLED'] } },
+      select: { id: true, replayUrl: true },
+    });
+    if (targets.length === 0) {
+      this.log.log(`admin ${adminId} cleared match history: nothing to delete`);
+      return { deletedMatches: 0, deletedReplays: 0, deletedReports: 0 };
+    }
+    const ids = targets.map((m) => m.id);
+    let deletedReplays = 0;
+    for (const m of targets) {
+      if (m.replayUrl && existsSync(m.replayUrl)) {
+        try {
+          unlinkSync(m.replayUrl);
+          deletedReplays++;
+        } catch (e) {
+          this.log.warn(`failed to delete replay ${m.replayUrl}: ${(e as Error).message}`);
+        }
+      }
+    }
+    const reports = await this.prisma.matchReport.deleteMany({ where: { matchId: { in: ids } } });
+    const matches = await this.prisma.match.deleteMany({ where: { id: { in: ids } } });
+    this.log.warn(`admin ${adminId} cleared match history: ${matches.count} matches, ${reports.count} reports, ${deletedReplays} replay files`);
+    return { deletedMatches: matches.count, deletedReplays, deletedReports: reports.count };
   }
 
   async getReplayStream(matchId: string): Promise<StreamableFile> {

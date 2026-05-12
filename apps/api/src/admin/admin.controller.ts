@@ -377,6 +377,11 @@ export class AdminController {
     return this.admin.listMatches({ status, limit: limit ? parseInt(limit, 10) : undefined });
   }
 
+  @Delete('matches/history')
+  clearMatchHistory(@Req() req: Request) {
+    return this.admin.clearMatchHistory(this.adminId(req));
+  }
+
   @Post('matches/:id/force-finish')
   forceFinish(
     @Param('id') id: string,

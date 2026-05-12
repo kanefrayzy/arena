@@ -271,8 +271,8 @@ async function main() {
     { key: 'bots.queue_min_wait_s', value: 30 },
     { key: 'bots.queue_max_wait_s', value: 40 },
     // SEO
-    { key: 'seo.site_name', value: 'Arena1v1' },
-    { key: 'seo.title', value: 'Arena1v1 — Skill PvP 1 на 1 на реальные деньги' },
+    { key: 'seo.site_name', value: 'FAOOR' },
+    { key: 'seo.title', value: 'FAOOR — Skill PvP 1 на 1 на реальные деньги' },
     { key: 'seo.description', value: 'Браузерная PvP-игра 1 на 1. Skill-based, никакого RNG. Играй и зарабатывай реальные деньги.' },
     { key: 'seo.keywords', value: 'arena, pvp, 1v1, skill, browser game, real money, esports' },
     { key: 'seo.og_image_url', value: '' },

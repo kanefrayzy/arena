@@ -25,7 +25,7 @@ export class MatchesController {
         OR: [{ player1Id: userId }, { player2Id: userId }],
         status: 'FINISHED',
       },
-      orderBy: { startedAt: 'desc' },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       take,
       include: {
         player1: { select: { id: true, username: true } },

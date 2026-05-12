@@ -276,9 +276,6 @@ export function WalletPage() {
           <div className="game-title text-5xl text-game-yellow drop-shadow-[0_4px_0_rgba(0,0,0,0.4)]">
             ${wallet ? Number(wallet.balance).toFixed(2) : '—'}
           </div>
-          {wallet && Number(wallet.locked) > 0 && (
-            <div className="game-chip text-xs">{t('wallet.locked')}: ${Number(wallet.locked).toFixed(2)}</div>
-          )}
         </section>
 
         <div className="mt-4 flex gap-2 px-6">

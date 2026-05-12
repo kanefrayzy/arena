@@ -27,6 +27,9 @@ export function MatchesTab() {
   const [forceFinishOf, setForceFinishOf] = useState<Match | null>(null);
   const [refundOf, setRefundOf] = useState<Match | null>(null);
   const [replayOf, setReplayOf] = useState<Match | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [clearResult, setClearResult] = useState<string | null>(null);
 
   async function load() {
     setErr(null);
@@ -38,13 +41,29 @@ export function MatchesTab() {
     }
   }
 
+  async function doClearHistory() {
+    setClearing(true);
+    setErr(null);
+    setClearResult(null);
+    try {
+      const r = await api.delete<{ deletedMatches: number; deletedReplays: number; deletedReports: number }>('/admin/matches/history');
+      setClearResult(`Удалено: ${r.deletedMatches} матчей, ${r.deletedReplays} реплеев, ${r.deletedReports} жалоб`);
+      setConfirmClear(false);
+      await load();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'clear failed');
+    } finally {
+      setClearing(false);
+    }
+  }
+
   useEffect(() => {
     void load();
   }, [status]);
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         {STATUSES.map((s) => (
           <button
             key={s}
@@ -58,7 +77,19 @@ export function MatchesTab() {
             {s || 'All'}
           </button>
         ))}
+        <div className="ml-auto">
+          <button
+            type="button"
+            onClick={() => setConfirmClear(true)}
+            className="rounded-md bg-red-500/15 px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-500/25"
+          >
+            Очистить историю
+          </button>
+        </div>
       </div>
+      {clearResult && (
+        <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300">{clearResult}</div>
+      )}
       {err && <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</div>}
 
       <div className="overflow-hidden rounded-lg border border-white/10">
@@ -157,6 +188,26 @@ export function MatchesTab() {
         setBusy={setBusy}
         setErr={setErr}
       />
+
+      <Modal open={confirmClear} onClose={() => !clearing && setConfirmClear(false)} title="Очистить историю матчей?">
+        <div className="flex flex-col gap-3">
+          <p className="text-sm text-white/70">
+            Будут безвозвратно удалены все матчи со статусом <b>FINISHED</b> и <b>CANCELLED</b>, связанные с ними реплеи на диске и жалобы игроков.
+            Активные матчи (PENDING / RUNNING / DISPUTED) затронуты не будут. Записи в журнале баланса (ledger) сохранятся как аудит-след.
+          </p>
+          <div className="flex justify-end gap-2 pt-1">
+            <GhostButton onClick={() => setConfirmClear(false)} disabled={clearing}>Отмена</GhostButton>
+            <button
+              type="button"
+              onClick={doClearHistory}
+              disabled={clearing}
+              className="rounded-md bg-red-500/80 px-4 py-1.5 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-40"
+            >
+              {clearing ? 'Удаление…' : 'Удалить'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -12,7 +12,7 @@ export function startSW(): void {
       toast.push({
         variant: 'info',
         title: 'Доступно обновление',
-        message: 'Новая версия Arena1v1 готова к установке.',
+        message: 'Новая версия FAOOR готова к установке.',
         durationMs: 0,
         action: {
           label: 'Обновить',
