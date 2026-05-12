@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../../shared/api/client';
 import { useAuth, type Me } from '../../shared/store/auth';
 
@@ -30,6 +30,8 @@ export function RegisterPage() {
   const { t } = useTranslation();
   const nav = useNavigate();
   const setMe = useAuth((s) => s.setMe);
+  const [searchParams] = useSearchParams();
+  const refCode = searchParams.get('ref');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -77,6 +79,7 @@ export function RegisterPage() {
         acceptTos,
         acceptAge,
         acceptSkillGame: acceptSkill,
+        ...(refCode ? { ref: refCode } : {}),
       });
       setMe(out.user);
       nav('/home');

@@ -26,6 +26,7 @@ export const registerSchema = z.object({
   acceptSkillGame: z.literal(true, {
     errorMap: () => ({ message: 'Skill-game acknowledgement is required' }),
   }),
+  ref: z.string().max(40).regex(/^[a-zA-Z0-9_-]+$/).optional(),
 });
 export type RegisterInput = z.infer<typeof registerSchema>;
 

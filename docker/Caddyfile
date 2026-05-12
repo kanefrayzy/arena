@@ -22,6 +22,12 @@
 		reverse_proxy api:3000
 	}
 
+	# Referral redirects: /r/:code -> API sets cookie + 302 to /register?ref=...
+	@ref path /r/*
+	handle @ref {
+		reverse_proxy api:3000
+	}
+
 	@seo_meta path /robots.txt /sitemap.xml /manifest.webmanifest
 	handle @seo_meta {
 		reverse_proxy api:3000
