@@ -2,14 +2,51 @@
 # Usage: docker compose -f compose.prod.yml up -d --build
 name: arena1v1
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+
 services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+    # Tuned for an 8 vCPU / 30 GB RAM host targeting ~1000 concurrent users.
+    # Reference: https://pgtune.leopard.in.ua/ (Web Application profile).
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=300"
+      - "-c"
+      - "shared_buffers=2GB"
+      - "-c"
+      - "effective_cache_size=8GB"
+      - "-c"
+      - "maintenance_work_mem=512MB"
+      - "-c"
+      - "work_mem=16MB"
+      - "-c"
+      - "wal_buffers=16MB"
+      - "-c"
+      - "checkpoint_completion_target=0.9"
+      - "-c"
+      - "random_page_cost=1.1"
+      - "-c"
+      - "effective_io_concurrency=200"
+      - "-c"
+      - "max_worker_processes=8"
+      - "-c"
+      - "max_parallel_workers_per_gather=4"
+      - "-c"
+      - "max_parallel_workers=8"
+      - "-c"
+      - "log_min_duration_statement=500"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -21,6 +58,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    logging: *default-logging
     command: >
       redis-server
       --appendonly yes
@@ -41,11 +79,12 @@ services:
       dockerfile: docker/api.Dockerfile
       target: prod
     restart: unless-stopped
+    logging: *default-logging
     env_file: .env
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?connection_limit=50&pool_timeout=20
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
     depends_on:
       postgres:
@@ -62,6 +101,7 @@ services:
       dockerfile: docker/game.Dockerfile
       target: prod
     restart: unless-stopped
+    logging: *default-logging
     env_file: .env
     environment:
       NODE_ENV: production
@@ -79,10 +119,12 @@ services:
       dockerfile: docker/web.Dockerfile
       target: prod
     restart: unless-stopped
+    logging: *default-logging
 
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    logging: *default-logging
     depends_on:
       - api
       - game

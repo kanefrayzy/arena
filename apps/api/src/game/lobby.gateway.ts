@@ -16,6 +16,13 @@ interface AuthedSocket {
   userId: number;
   ws: WebSocket;
   longWaitNotified: boolean;
+  /**
+   * Cooldown timestamp (epoch ms) until which the periodic tick will skip the
+   * DB-backed active-match recovery query for this socket. The recovery is
+   * still performed on connect; this throttle prevents 1 DB query per online
+   * user per second when nothing is happening (would be 1000 qps at 1k users).
+   */
+  dbRecoveryCooldownUntil: number;
 }
 
 function parseCookies(header: string | undefined): Record<string, string> {
@@ -159,7 +166,7 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
         // ignore
       }
     }
-    const sock: AuthedSocket = { userId, ws, longWaitNotified: false };
+    const sock: AuthedSocket = { userId, ws, longWaitNotified: false, dbRecoveryCooldownUntil: 0 };
     this.clients.set(userId, sock);
     this.log.log(`user ${userId} connected (total=${this.clients.size})`);
 
@@ -244,11 +251,20 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
         if (redelivered) continue;
         // DB-backed safety net: catches every scenario where the Redis
         // pending-match key is gone (expired, redelivered, Redis restart).
+        // Throttled to ~once per 30s per socket to avoid hammering Postgres
+        // with one query per online user per second.
+        if (Date.now() < sock.dbRecoveryCooldownUntil) {
+          if (sock.longWaitNotified) sock.longWaitNotified = false;
+          this.send(sock, { type: 'queue:status', state: 'idle' });
+          continue;
+        }
         const dbDelivered = await this.deliverActiveMatchFromDb(sock).catch((e) => {
           this.log.warn(`db active-match redeliver failed for user ${sock.userId}: ${(e as Error).message}`);
           return false;
         });
         if (dbDelivered) continue;
+        // No active match in DB — back off for 30s before checking again.
+        sock.dbRecoveryCooldownUntil = Date.now() + 30_000;
         if (sock.longWaitNotified) sock.longWaitNotified = false;
         this.send(sock, { type: 'queue:status', state: 'idle' });
         continue;
@@ -392,6 +408,9 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
       },
     });
     this.log.log(`recovered active match ${match.id} for user ${sock.userId} from DB`);
+    // Re-delivery succeeded; the client is expected to navigate within seconds.
+    // Suppress further DB lookups for 10s so we don't spam match:found every tick.
+    sock.dbRecoveryCooldownUntil = Date.now() + 10_000;
     return true;
   }
 

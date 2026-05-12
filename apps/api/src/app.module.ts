@@ -5,6 +5,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { RedisModule } from './common/redis/redis.module';
 import { HealthController } from './common/health.controller';
+import { ReplayCleanupService } from './common/replay-cleanup.service';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { WalletModule } from './wallet/wallet.module';
@@ -37,6 +38,7 @@ import { ReportsModule } from './reports/reports.module';
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
     },
+    ReplayCleanupService,
   ],
 })
 export class AppModule {}
