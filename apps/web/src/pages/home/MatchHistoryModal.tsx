@@ -121,7 +121,11 @@ export function MatchHistoryModal({ onClose }: { onClose: () => void }) {
             const dateStr = m.finishedAt ?? m.startedAt;
             const date = dateStr ? new Date(dateStr).toLocaleDateString('ru-RU') : '—';
 
-            // Money chip styling: win → green +X, loss → red −X, draw/zero → muted.
+            // Money chip styling: win → green +X, loss → red −X.
+            // If no money moved for this user (e.g. CASUAL inclusive 0-lock
+            // entry where they didn't actually risk anything), omit the chip
+            // entirely so the row doesn't lie about a stake that was never
+            // taken.
             let amountNode: ReactNode = null;
             if (delta > 0) {
               amountNode = (
@@ -135,14 +139,9 @@ export function MatchHistoryModal({ onClose }: { onClose: () => void }) {
                   −${Math.abs(delta).toFixed(2)}
                 </div>
               );
-            } else if (stake > 0) {
-              // Stake match that didn't move money for this user (e.g. CASUAL inclusive 0-lock).
-              amountNode = (
-                <div className="shrink-0 rounded-lg bg-white/5 px-2 py-0.5 text-xs font-mono text-white/40 ring-1 ring-white/10">
-                  ${stake.toFixed(2)}
-                </div>
-              );
             }
+            // Suppress unused `stake` var warning in builds; kept for future re-use.
+            void stake;
 
             return (
               <div key={m.id} className="flex items-center gap-3 border-b border-white/5 px-5 py-3">

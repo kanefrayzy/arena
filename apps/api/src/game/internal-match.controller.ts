@@ -158,6 +158,10 @@ export class InternalMatchController {
           loserId,
           winnerLock,
           loserLock,
+          // Winner ALWAYS gets the full nominal prize — SYSTEM covers any
+          // shortfall when the loser couldn't afford the full stake
+          // (CASUAL inclusive). See LedgerService.settleMatch for details.
+          nominalStake: stake,
           commissionPct,
         });
       } else {

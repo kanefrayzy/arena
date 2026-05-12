@@ -196,16 +196,37 @@ export class LedgerService {
     /** Asymmetric locks (CASUAL inclusive). Take precedence over `stake`. */
     winnerLock?: Prisma.Decimal | string;
     loserLock?: Prisma.Decimal | string;
+    /**
+     * Nominal room stake. The winner ALWAYS receives the full nominal prize
+     * (2·nominal − commission) regardless of how much each side actually
+     * locked — the SYSTEM (house bankroll) covers any shortfall when locks
+     * are below nominal (CASUAL inclusive / 0-balance entry). The loser is
+     * debited only what they actually locked (never goes negative).
+     * Falls back to `stake` for legacy callers.
+     */
+    nominalStake?: Prisma.Decimal | string;
     commissionPct: number;
   }): Promise<void> {
     const winnerLock = new Prisma.Decimal(opts.winnerLock ?? opts.stake ?? 0);
     const loserLock = new Prisma.Decimal(opts.loserLock ?? opts.stake ?? 0);
-    const pool = winnerLock.plus(loserLock);
-    if (pool.lte(0)) return; // free match — nothing to settle
+    const nominal = new Prisma.Decimal(
+      opts.nominalStake ?? opts.stake ?? Prisma.Decimal.max(winnerLock, loserLock),
+    );
+    if (nominal.lte(0)) return; // free match — nothing to settle
 
-    const commission = pool.mul(opts.commissionPct).div(100).toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
-    const prize = pool.minus(commission);
-    const winnerNet = prize.minus(winnerLock); // what winner actually gains over their unlocked stake
+    // Prize is always computed from nominal pool so winners are made whole
+    // even when their opponent locked less than the room stake.
+    const expectedPool = nominal.mul(2);
+    const commission = expectedPool.mul(opts.commissionPct).div(100).toDecimalPlaces(8, Prisma.Decimal.ROUND_DOWN);
+    const prize = expectedPool.minus(commission);
+    const winnerNet = prize.minus(winnerLock); // credited on top of the unlocked stake
+    // SYSTEM subsidy: keeps per-match Σ=0 invariant when actual locks
+    // (winnerLock + loserLock) are less than the nominal pool.
+    //   sys = winnerLock + loserLock − 2·nominal + commission
+    // When both sides locked nominal stake: sys = commission (the classic
+    // PvP house cut). When CASUAL inclusive: sys is negative (house funds
+    // the shortfall).
+    const sysDelta = winnerLock.plus(loserLock).minus(expectedPool).plus(commission);
 
     const winnerKey = `match:${opts.matchId}:win:${opts.winnerId}`;
     const loserKey = `match:${opts.matchId}:loss:${opts.loserId}`;
@@ -247,23 +268,32 @@ export class LedgerService {
         });
       }
 
-      if (!have.has(sysKey) && commission.gt(0)) {
-        await this.applyDelta(tx, SYSTEM_USER_ID, commission);
+      if (!have.has(sysKey) && !sysDelta.isZero()) {
+        await this.applyDelta(tx, SYSTEM_USER_ID, sysDelta);
         await tx.ledger.create({
           data: {
             userId: SYSTEM_USER_ID,
-            amount: commission,
-            type: 'COMMISSION',
+            amount: sysDelta,
+            // Positive sysDelta = net house cut (classic). Negative = house
+            // subsidised the winner's prize (CASUAL inclusive shortfall).
+            type: sysDelta.isPositive() ? 'COMMISSION' : 'MATCH_LOSS',
             refType: 'match',
             refId: opts.matchId,
             idempotencyKey: sysKey,
+            meta: {
+              commission: commission.toString(),
+              prize: prize.toString(),
+              nominal: nominal.toString(),
+              winnerLock: winnerLock.toString(),
+              loserLock: loserLock.toString(),
+            },
           },
         });
       }
     });
 
     this.log.log(
-      `match ${opts.matchId} settled: winner=${opts.winnerId} (+${winnerNet}), loser=${opts.loserId} (−${loserLock}), commission=${commission}`,
+      `match ${opts.matchId} settled: winner=${opts.winnerId} (+${winnerNet}), loser=${opts.loserId} (−${loserLock}), sys=${sysDelta} (nominal=${nominal})`,
     );
   }
 
