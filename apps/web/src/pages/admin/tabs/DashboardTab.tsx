@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../../shared/api/client';
+import { Modal, GhostButton } from '../components/Modal';
+import { Badge } from '../components/Badge';
 
 interface Stats {
   users: { total: number; banned: number; new24h: number; new7d: number; online?: number };
@@ -63,6 +65,7 @@ export function DashboardTab() {
   const [loading, setLoading] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [online, setOnline] = useState<number | null>(null);
+  const [showOnline, setShowOnline] = useState(false);
 
   async function load() {
     setLoading(true); setErr(null);
@@ -115,7 +118,12 @@ export function DashboardTab() {
       <section>
         <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-white/40">Игроки</h3>
         <div className="mb-3 overflow-hidden rounded-xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/15 via-emerald-500/5 to-transparent px-5 py-4 shadow-[0_0_40px_-12px_rgba(16,185,129,0.55)]">
-          <div className="flex items-center justify-between gap-4">
+          <button
+            type="button"
+            onClick={() => setShowOnline(true)}
+            className="flex w-full items-center justify-between gap-4 text-left"
+            title="Нажмите, чтобы увидеть список"
+          >
             <div className="flex items-center gap-3">
               <span className="relative flex h-3 w-3" aria-hidden>
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
@@ -130,9 +138,9 @@ export function DashboardTab() {
               <div className="text-4xl font-bold tabular-nums text-emerald-100 drop-shadow-[0_0_12px_rgba(16,185,129,0.45)]">
                 {online == null ? '—' : fmt(online)}
               </div>
-              <div className="text-[10px] uppercase tracking-wider text-white/40">в лобби</div>
+              <div className="text-[10px] uppercase tracking-wider text-white/40">в лобби · клик</div>
             </div>
-          </div>
+          </button>
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard label="Всего пользователей" value={fmt(s.users.total)} />
@@ -220,6 +228,118 @@ export function DashboardTab() {
           </div>
         </section>
       )}
+
+      <OnlineUsersModal open={showOnline} onClose={() => setShowOnline(false)} />
     </div>
+  );
+}
+
+interface OnlineUser {
+  id: number;
+  email: string;
+  username: string;
+  role: string;
+  isBanned: boolean;
+  balance: string;
+  locked: string;
+  mmr: number;
+  cup: number;
+  wins: number;
+  losses: number;
+}
+
+function OnlineUsersModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [items, setItems] = useState<OnlineUser[]>([]);
+  const [total, setTotal] = useState(0);
+  const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      setErr(null);
+      try {
+        const r = await api.get<{ items: OnlineUser[]; total: number }>('/admin/online/users');
+        if (cancelled) return;
+        setItems(r.items);
+        setTotal(r.total);
+      } catch (e) {
+        if (!cancelled) setErr(e instanceof Error ? e.message : 'load failed');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void load();
+    const t = setInterval(() => void load(), 5_000);
+    return () => {
+      cancelled = true;
+      clearInterval(t);
+    };
+  }, [open]);
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={`Онлайн сейчас · ${total}`}
+      width="max-w-3xl"
+      footer={<GhostButton onClick={onClose}>Закрыть</GhostButton>}
+    >
+      {err && <div className="mb-2 rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">{err}</div>}
+      {loading && items.length === 0 && <div className="py-6 text-center text-sm text-white/40">Загрузка…</div>}
+      {!loading && items.length === 0 && !err && (
+        <div className="py-6 text-center text-sm text-white/40">Нет игроков в лобби</div>
+      )}
+      {items.length > 0 && (
+        <div className="overflow-hidden rounded-md border border-white/10">
+          <table className="w-full text-sm">
+            <thead className="bg-white/5 text-left text-[11px] uppercase tracking-wider text-white/50">
+              <tr>
+                <th className="px-3 py-2">Игрок</th>
+                <th className="px-3 py-2 text-right">Баланс</th>
+                <th className="px-3 py-2 text-right">MMR</th>
+                <th className="px-3 py-2 text-right">🏆</th>
+                <th className="px-3 py-2 text-right">W/L</th>
+                <th className="px-3 py-2">Статус</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {items.map((u) => (
+                <tr key={u.id} className="hover:bg-white/[0.02]">
+                  <td className="px-3 py-2">
+                    <div className="font-medium">@{u.username}</div>
+                    <div className="text-[10px] text-white/40">#{u.id}</div>
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono tabular-nums">
+                    {money(u.balance)}
+                    {Number(u.locked) > 0 && (
+                      <div className="text-[10px] text-white/40">+{money(u.locked)} locked</div>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">{u.mmr}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{u.cup}</td>
+                  <td className="px-3 py-2 text-right">
+                    <span className="text-green-300">{u.wins}</span>
+                    <span className="text-white/30">/</span>
+                    <span className="text-red-300">{u.losses}</span>
+                  </td>
+                  <td className="px-3 py-2">
+                    {u.role === 'ADMIN' ? (
+                      <Badge tone="info">ADMIN</Badge>
+                    ) : u.isBanned ? (
+                      <Badge tone="danger">banned</Badge>
+                    ) : (
+                      <Badge tone="success">online</Badge>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Modal>
   );
 }

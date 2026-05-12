@@ -17,7 +17,7 @@ export class AuthService {
     private readonly content: ContentService,
   ) {}
 
-  async register(input: RegisterInput, ip?: string) {
+  async register(input: RegisterInput, ip?: string, refCode?: string | null) {
     const existing = await this.prisma.user.findFirst({
       where: { OR: [{ email: input.email }, { username: input.username }] },
       select: { email: true, username: true },
@@ -36,6 +36,17 @@ export class AuthService {
       parallelism: 1,
     });
 
+    // Validate referral code if provided. Unknown codes silently dropped so a
+    // stale cookie never blocks signup.
+    let boundRefCode: string | null = null;
+    if (refCode && /^[a-zA-Z0-9_-]{1,40}$/.test(refCode)) {
+      const ref = await this.prisma.referral.findUnique({
+        where: { code: refCode },
+        select: { code: true, isActive: true },
+      });
+      if (ref && ref.isActive) boundRefCode = ref.code;
+    }
+
     const user = await this.prisma.user.create({
       data: {
         email: input.email,
@@ -43,6 +54,7 @@ export class AuthService {
         passwordHash,
         acceptedTosAt: new Date(),
         meta: { acceptedFromIp: ip ?? null },
+        refCode: boundRefCode,
         wallet: { create: {} },
         stats: { create: {} },
       },

@@ -66,6 +66,20 @@ type AdjustInput = z.infer<typeof adjustBalanceSchema>;
 
 const banSchema = z.object({ reason: z.string().max(500).optional() });
 
+const referralCreateSchema = z.object({
+  code: z.string().min(1).max(40).regex(/^[a-zA-Z0-9_-]+$/),
+  name: z.string().min(1).max(100),
+  notes: z.string().max(500).nullish(),
+});
+type ReferralCreateInput = z.infer<typeof referralCreateSchema>;
+
+const referralUpdateSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  notes: z.string().max(500).nullish(),
+  isActive: z.boolean().optional(),
+});
+type ReferralUpdateInput = z.infer<typeof referralUpdateSchema>;
+
 const obstacleSchema = z.object({
   x: z.number().int().min(0).max(2000),
   y: z.number().int().min(0).max(2000),
@@ -186,6 +200,38 @@ export class AdminController {
   @Get('stats/online')
   online() {
     return this.admin.getOnline();
+  }
+
+  // Online players (with balance / cup / W-L) for the dashboard drilldown.
+  @Get('online/users')
+  onlineUsers() {
+    return this.admin.listOnlineUsers();
+  }
+
+  // Referrals / ad-tracking links
+  @Get('referrals')
+  listReferrals() {
+    return this.admin.listReferrals();
+  }
+
+  @Post('referrals')
+  createReferral(
+    @Body(new ZodValidationPipe(referralCreateSchema)) body: ReferralCreateInput,
+  ) {
+    return this.admin.createReferral(body);
+  }
+
+  @Patch('referrals/:id')
+  updateReferral(
+    @Param('id', ParseIntPipe) id: number,
+    @Body(new ZodValidationPipe(referralUpdateSchema)) body: ReferralUpdateInput,
+  ) {
+    return this.admin.updateReferral(id, body);
+  }
+
+  @Delete('referrals/:id')
+  deleteReferral(@Param('id', ParseIntPipe) id: number) {
+    return this.admin.deleteReferral(id);
   }
 
   // Users

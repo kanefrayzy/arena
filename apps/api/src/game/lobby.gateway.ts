@@ -116,6 +116,11 @@ export class LobbyGateway implements OnModuleInit, OnModuleDestroy {
     return this.clients.size;
   }
 
+  /** Distinct userIds with an open lobby socket. Cheap snapshot of in-memory map. */
+  getOnlineUserIds(): number[] {
+    return Array.from(this.clients.keys());
+  }
+
   /** Called from main.ts on http server upgrade event for /ws/lobby. */
   handleUpgrade(req: IncomingMessage, socket: import('net').Socket, head: Buffer): void {
     if (!this.wss) return socket.destroy();

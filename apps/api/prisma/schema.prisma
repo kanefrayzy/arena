@@ -60,6 +60,8 @@ model User {
   acceptedTosAt DateTime?
   createdAt     DateTime  @default(now())
   meta          Json?
+  /// Referral code that brought this user (set at registration if `arena_ref` cookie is present).
+  refCode       String?
 
   wallet        Wallet?
   inventory     UserInventory[]
@@ -70,6 +72,8 @@ model User {
   stats         UserStats?
   matchesAsP1   Match[]   @relation("p1")
   matchesAsP2   Match[]   @relation("p2")
+
+  @@index([refCode])
 }
 
 model Wallet {
@@ -404,3 +408,17 @@ model CryptoAddress {
   @@unique([userId, currency, provider])
   @@index([address])
 }
+
+/// Tracked referral / ad link. Created in admin panel; clicks increment via /r/:code redirect.
+/// User.refCode is bound to Referral.code at registration time (cookie `arena_ref`).
+model Referral {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  clicks    Int      @default(0)
+  /// Optional notes / campaign description.
+  notes     String?
+  createdAt DateTime @default(now())
+}
+

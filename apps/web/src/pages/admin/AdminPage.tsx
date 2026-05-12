@@ -17,8 +17,9 @@ import { AbilitiesTab } from './tabs/AbilitiesTab';
 import { BrandingTab } from './tabs/BrandingTab';
 import { ReportsTab } from './tabs/ReportsTab';
 import { LanguagesTab } from './tabs/LanguagesTab';
+import { ReferralsTab } from './tabs/ReferralsTab';
 
-type Tab = 'dash' | 'users' | 'rooms' | 'content' | 'matches' | 'payments' | 'withdrawals' | 'methods' | 'settings' | 'sprites' | 'abilities' | 'branding' | 'reports' | 'languages';
+type Tab = 'dash' | 'users' | 'rooms' | 'content' | 'matches' | 'payments' | 'withdrawals' | 'methods' | 'settings' | 'sprites' | 'abilities' | 'branding' | 'reports' | 'languages' | 'referrals';
 
 const TABS: { key: Tab; label: string; desc: string; icon: string }[] = [
   { key: 'dash', label: 'Дашборд', desc: 'Ключевые метрики', icon: '▦' },
@@ -35,6 +36,7 @@ const TABS: { key: Tab; label: string; desc: string; icon: string }[] = [
   { key: 'settings', label: 'Настройки', desc: 'Флаги и параметры', icon: '⚙' },
   { key: 'branding', label: 'Брендинг', desc: 'Лого, фавикон, иконки', icon: '🎨' },
   { key: 'languages', label: 'Языки', desc: 'i18n + перевод', icon: '🌐' },
+  { key: 'referrals', label: 'Реф. ссылки', desc: 'Реклама / трафик', icon: '🔗' },
 ];
 
 export function AdminPage() {
@@ -175,6 +177,7 @@ export function AdminPage() {
             {tab === 'branding' && <BrandingTab />}
             {tab === 'reports' && <ReportsTab />}
             {tab === 'languages' && <LanguagesTab />}
+            {tab === 'referrals' && <ReferralsTab />}
           </div>
         </main>
       </div>

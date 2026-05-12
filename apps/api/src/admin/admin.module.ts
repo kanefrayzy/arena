@@ -5,6 +5,7 @@ import { SpritesController, PublicSpritesController } from './sprites.controller
 import { BrandingController, PublicBrandingController } from './branding.controller';
 import { AdminSeoController, PublicSeoController, PublicManifestController } from './seo.controller';
 import { AdminI18nController } from './i18n.admin.controller';
+import { ReferralPublicController } from './referral-public.controller';
 import { WalletModule } from '../wallet/wallet.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ContentModule } from '../content/content.module';
@@ -22,6 +23,7 @@ import { GameModule } from '../game/game.module';
     PublicSeoController,
     PublicManifestController,
     AdminI18nController,
+    ReferralPublicController,
   ],
   providers: [AdminService],
 })

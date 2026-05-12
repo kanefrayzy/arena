@@ -185,6 +185,136 @@ export class AdminService {
     };
   }
 
+  // ───────────────────────── Online players ─────────────────────────
+  /**
+   * Returns a list of users currently connected to the lobby WebSocket,
+   * enriched with the same fields as listUsers (balance, MMR, cup, W/L).
+   */
+  async listOnlineUsers() {
+    const ids = this.lobby.getOnlineUserIds();
+    if (ids.length === 0) return { items: [], total: 0 };
+    const rows = await this.prisma.user.findMany({
+      where: { id: { in: ids } },
+      include: { wallet: true, stats: true },
+      orderBy: { id: 'asc' },
+    });
+    return {
+      total: rows.length,
+      items: rows.map((u) => ({
+        id: u.id,
+        email: u.email,
+        username: u.username,
+        role: u.role,
+        isBanned: u.isBanned,
+        createdAt: u.createdAt.toISOString(),
+        balance: u.wallet?.balance.toString() ?? '0',
+        locked: u.wallet?.locked.toString() ?? '0',
+        mmr: u.stats?.mmr ?? 1000,
+        cup: u.stats?.cup ?? 0,
+        wins: u.stats?.wins ?? 0,
+        losses: u.stats?.losses ?? 0,
+      })),
+    };
+  }
+
+  // ───────────────────────── Referrals ─────────────────────────
+  async listReferrals() {
+    const rows = await this.prisma.referral.findMany({ orderBy: { createdAt: 'desc' } });
+    if (rows.length === 0) return { items: [] };
+    const codes = rows.map((r) => r.code);
+    // Aggregate signups + deposit volume per code in one pass.
+    const signups = await this.prisma.user.groupBy({
+      by: ['refCode'],
+      where: { refCode: { in: codes } },
+      _count: { _all: true },
+    });
+    const signupMap = new Map<string, number>(
+      signups.map((s) => [s.refCode ?? '', s._count._all]),
+    );
+    // Map userId → refCode, then aggregate completed deposits per refCode.
+    const refUsers = await this.prisma.user.findMany({
+      where: { refCode: { in: codes } },
+      select: { id: true, refCode: true },
+    });
+    const userRef = new Map<number, string>(
+      refUsers.map((u) => [u.id, u.refCode ?? '']),
+    );
+    const deposits = refUsers.length
+      ? await this.prisma.payment.findMany({
+          where: {
+            userId: { in: refUsers.map((u) => u.id) },
+            type: 'DEPOSIT',
+            status: 'COMPLETED',
+          },
+          select: { userId: true, amountUsd: true },
+        })
+      : [];
+    const depositMap = new Map<string, Prisma.Decimal>();
+    for (const d of deposits) {
+      const code = userRef.get(d.userId);
+      if (!code) continue;
+      const prev = depositMap.get(code) ?? new Prisma.Decimal(0);
+      depositMap.set(code, prev.add(d.amountUsd));
+    }
+    return {
+      items: rows.map((r) => ({
+        id: r.id,
+        code: r.code,
+        name: r.name,
+        notes: r.notes,
+        isActive: r.isActive,
+        clicks: r.clicks,
+        signups: signupMap.get(r.code) ?? 0,
+        depositsTotalUsd: (depositMap.get(r.code) ?? new Prisma.Decimal(0)).toString(),
+        createdAt: r.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  async createReferral(input: { code: string; name: string; notes?: string | null | undefined }) {
+    const code = input.code.trim();
+    if (!/^[a-zA-Z0-9_-]{1,40}$/.test(code)) {
+      throw new BadRequestException({ code: 'BAD_CODE', message: 'code must be 1–40 chars [a-zA-Z0-9_-]' });
+    }
+    const existing = await this.prisma.referral.findUnique({ where: { code } });
+    if (existing) throw new BadRequestException({ code: 'CODE_TAKEN', message: 'this code is already in use' });
+    const r = await this.prisma.referral.create({
+      data: { code, name: input.name.trim() || code, notes: input.notes ?? null },
+    });
+    return { id: r.id, code: r.code };
+  }
+
+  async updateReferral(id: number, input: { name?: string | undefined; notes?: string | null | undefined; isActive?: boolean | undefined }) {
+    const data: Prisma.ReferralUpdateInput = {};
+    if (typeof input.name === 'string') data.name = input.name.trim();
+    if (typeof input.notes !== 'undefined') data.notes = input.notes;
+    if (typeof input.isActive === 'boolean') data.isActive = input.isActive;
+    await this.prisma.referral.update({ where: { id }, data });
+    return { id };
+  }
+
+  async deleteReferral(id: number) {
+    await this.prisma.referral.delete({ where: { id } });
+    return { id };
+  }
+
+  /**
+   * Public click tracker — called by the redirect endpoint /r/:code.
+   * Returns true if the code exists & is active, false otherwise.
+   */
+  async trackReferralClick(code: string): Promise<boolean> {
+    try {
+      const r = await this.prisma.referral.update({
+        where: { code },
+        data: { clicks: { increment: 1 } },
+        select: { isActive: true },
+      });
+      return r.isActive;
+    } catch {
+      return false;
+    }
+  }
+
   // ───────────────────────── Users ─────────────────────────
   async listUsers(opts: {
     search?: string | undefined;

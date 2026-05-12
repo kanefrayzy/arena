@@ -43,8 +43,18 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const ip = req.ip ?? req.socket.remoteAddress ?? undefined;
-    const out = await this.auth.register(body as never, ip);
+    // Referral source: either explicit body.ref, ?ref= query param, or arena_ref cookie.
+    const bodyRef =
+      typeof (body as { ref?: unknown }).ref === 'string'
+        ? ((body as { ref?: string }).ref as string)
+        : null;
+    const queryRef = typeof req.query?.ref === 'string' ? (req.query.ref as string) : null;
+    const cookieRef = (req.cookies?.['arena_ref'] ?? null) as string | null;
+    const refCode = bodyRef || queryRef || cookieRef;
+    const out = await this.auth.register(body as never, ip, refCode);
     this.setAuthCookies(res, out.tokens);
+    // Best-effort: clear the referral cookie once consumed.
+    if (cookieRef) res.clearCookie('arena_ref', { path: '/' });
     return { user: out.user };
   }
 

@@ -54,6 +54,7 @@ async function bootstrap() {
       'manifest.webmanifest',
       'robots.txt',
       'sitemap.xml',
+      'r/(.*)',
     ],
   });
   // Note: Zod-based validation is applied per-route via ZodValidationPipe.
