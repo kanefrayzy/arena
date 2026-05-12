@@ -141,6 +141,17 @@ services:
       - caddy_data:/data
       - caddy_config:/config
 
+  # External uptime / status dashboard. Reachable at https://status.{DOMAIN}.
+  # First-time setup: open the URL and create the admin account, then add HTTP
+  # monitors (https://faoor.com, https://faoor.com/api/health) and notification
+  # channels (Telegram, email, etc.).
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    restart: unless-stopped
+    logging: *default-logging
+    volumes:
+      - uptime_kuma_data:/app/data
+
 volumes:
   pgdata:
   redisdata:
@@ -148,3 +159,4 @@ volumes:
   uploads:
   caddy_data:
   caddy_config:
+  uptime_kuma_data:

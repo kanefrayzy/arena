@@ -41,3 +41,10 @@
 		reverse_proxy web:80
 	}
 }
+
+# External uptime / status dashboard (Uptime Kuma).
+# Requires DNS A record: status.{$DOMAIN} -> server IP.
+status.{$DOMAIN} {
+	encode gzip zstd
+	reverse_proxy uptime-kuma:3001
+}
