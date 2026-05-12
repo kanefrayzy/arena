@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../../shared/api/client';
 import { Modal, PrimaryButton, GhostButton, Field, inputCls } from '../components/Modal';
 import { Badge, statusTone } from '../components/Badge';
+import { SortableTh, Pagination, type SortDir } from '../components/Table';
 
 interface Payment {
   id: string;
@@ -24,7 +25,12 @@ const STATUSES = ['', 'PENDING', 'COMPLETED', 'FAILED', 'REJECTED'];
 
 export function PaymentsTab() {
   const [items, setItems] = useState<Payment[]>([]);
+  const [total, setTotal] = useState(0);
   const [status, setStatus] = useState('PENDING');
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [rejectOf, setRejectOf] = useState<Payment | null>(null);
@@ -32,10 +38,17 @@ export function PaymentsTab() {
   async function load() {
     setErr(null);
     try {
-      const qs = new URLSearchParams({ type: 'DEPOSIT' });
+      const qs = new URLSearchParams({
+        type: 'DEPOSIT',
+        limit: String(pageSize),
+        offset: String(page * pageSize),
+        sortBy,
+        sortDir,
+      });
       if (status) qs.set('status', status);
-      const r = await api.get<{ items: Payment[] }>(`/admin/payments?${qs.toString()}`);
+      const r = await api.get<{ items: Payment[]; total: number }>(`/admin/payments?${qs.toString()}`);
       setItems(r.items);
+      setTotal(r.total ?? 0);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'load failed');
     }
@@ -43,7 +56,14 @@ export function PaymentsTab() {
 
   useEffect(() => {
     void load();
-  }, [status]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, page, pageSize, sortBy, sortDir]);
+
+  function handleSort(key: string, dir: SortDir) {
+    setSortBy(key);
+    setSortDir(dir);
+    setPage(0);
+  }
 
   async function approve(p: Payment) {
     setBusy(p.id);
@@ -64,7 +84,7 @@ export function PaymentsTab() {
           <button
             key={s}
             type="button"
-            onClick={() => setStatus(s)}
+            onClick={() => { setStatus(s); setPage(0); }}
             className={
               'rounded-md px-3 py-1.5 text-xs font-medium transition ' +
               (status === s ? 'bg-accent text-bg' : 'bg-white/5 text-white/70 hover:bg-white/10')
@@ -81,11 +101,11 @@ export function PaymentsTab() {
           <thead className="bg-white/5 text-left text-xs uppercase tracking-wider text-white/50">
             <tr>
               <th className="px-3 py-2.5">User</th>
-              <th className="px-3 py-2.5 text-right">Amount</th>
+              <SortableTh label="Amount" sortKey="amountUsd" activeKey={sortBy} dir={sortDir} onChange={handleSort} align="right" />
               <th className="hidden px-3 py-2.5 md:table-cell">Method</th>
-              <th className="hidden px-3 py-2.5 md:table-cell">Provider</th>
-              <th className="px-3 py-2.5">Status</th>
-              <th className="px-3 py-2.5">Created</th>
+              <SortableTh label="Provider" sortKey="provider" activeKey={sortBy} dir={sortDir} onChange={handleSort} className="hidden md:table-cell" />
+              <SortableTh label="Status" sortKey="status" activeKey={sortBy} dir={sortDir} onChange={handleSort} />
+              <SortableTh label="Created" sortKey="createdAt" activeKey={sortBy} dir={sortDir} onChange={handleSort} />
               <th className="px-3 py-2.5 text-right">Actions</th>
             </tr>
           </thead>
@@ -144,6 +164,14 @@ export function PaymentsTab() {
           </tbody>
         </table>
       </div>
+
+      <Pagination
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        onChange={setPage}
+        onPageSizeChange={(n) => { setPageSize(n); setPage(0); }}
+      />
 
       <RejectModal
         payment={rejectOf}

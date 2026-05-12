@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../../../shared/api/client';
 import { Modal, PrimaryButton, GhostButton, Field, inputCls } from '../components/Modal';
 import { Badge } from '../components/Badge';
+import { SortableTh, Pagination, type SortDir } from '../components/Table';
 
 interface User {
   id: number;
@@ -15,11 +16,17 @@ interface User {
   cup: number;
   wins: number;
   losses: number;
+  createdAt: string;
 }
 
 export function UsersTab() {
   const [items, setItems] = useState<User[]>([]);
+  const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   const [adjustOf, setAdjustOf] = useState<User | null>(null);
@@ -28,10 +35,16 @@ export function UsersTab() {
   async function load() {
     setErr(null);
     try {
-      const r = await api.get<{ items: User[] }>(
-        `/admin/users${search ? `?search=${encodeURIComponent(search)}` : ''}`,
-      );
+      const qs = new URLSearchParams({
+        limit: String(pageSize),
+        offset: String(page * pageSize),
+        sortBy,
+        sortDir,
+      });
+      if (search) qs.set('search', search);
+      const r = await api.get<{ items: User[]; total: number }>(`/admin/users?${qs.toString()}`);
       setItems(r.items);
+      setTotal(r.total ?? 0);
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'load failed');
     }
@@ -39,7 +52,19 @@ export function UsersTab() {
 
   useEffect(() => {
     void load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize, sortBy, sortDir]);
+
+  function applySearch() {
+    if (page !== 0) setPage(0);
+    else void load();
+  }
+
+  function handleSort(key: string, dir: SortDir) {
+    setSortBy(key);
+    setSortDir(dir);
+    setPage(0);
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -48,7 +73,7 @@ export function UsersTab() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && void load()}
+            onKeyDown={(e) => e.key === 'Enter' && applySearch()}
             placeholder="Search by email or username…"
             className={inputCls + ' pl-9'}
           />
@@ -57,7 +82,7 @@ export function UsersTab() {
             <path d="M9.5 9.5L13 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         </div>
-        <GhostButton onClick={() => void load()}>Search</GhostButton>
+        <GhostButton onClick={applySearch}>Search</GhostButton>
       </div>
       {err && <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</div>}
 
@@ -65,13 +90,14 @@ export function UsersTab() {
         <table className="w-full text-sm">
           <thead className="bg-white/5 text-left text-xs uppercase tracking-wider text-white/50">
             <tr>
-              <th className="px-3 py-2.5">User</th>
+              <SortableTh label="User" sortKey="username" activeKey={sortBy} dir={sortDir} onChange={handleSort} />
               <th className="px-3 py-2.5">Role</th>
-              <th className="px-3 py-2.5 text-right">Balance</th>
-              <th className="hidden px-3 py-2.5 text-right md:table-cell">MMR</th>
-              <th className="hidden px-3 py-2.5 text-right md:table-cell">🏆 Cup</th>
-              <th className="hidden px-3 py-2.5 text-right md:table-cell">W/L</th>
+              <SortableTh label="Balance" sortKey="balance" activeKey={sortBy} dir={sortDir} onChange={handleSort} align="right" />
+              <SortableTh label="MMR" sortKey="mmr" activeKey={sortBy} dir={sortDir} onChange={handleSort} align="right" className="hidden md:table-cell" />
+              <SortableTh label="🏆 Cup" sortKey="cup" activeKey={sortBy} dir={sortDir} onChange={handleSort} align="right" className="hidden md:table-cell" />
+              <SortableTh label="W/L" sortKey="wins" activeKey={sortBy} dir={sortDir} onChange={handleSort} align="right" className="hidden md:table-cell" />
               <th className="px-3 py-2.5">Status</th>
+              <SortableTh label="Created" sortKey="createdAt" activeKey={sortBy} dir={sortDir} onChange={handleSort} align="right" />
               <th className="px-3 py-2.5 text-right">Actions</th>
             </tr>
           </thead>
@@ -101,6 +127,9 @@ export function UsersTab() {
                 <td className="px-3 py-2.5">
                   {u.isBanned ? <Badge tone="danger">banned</Badge> : <Badge tone="success">active</Badge>}
                 </td>
+                <td className="px-3 py-2.5 text-right text-xs text-white/60 whitespace-nowrap">
+                  {new Date(u.createdAt).toLocaleDateString()}
+                </td>
                 <td className="px-3 py-2.5">
                   <div className="flex justify-end gap-1">
                     <button
@@ -127,7 +156,7 @@ export function UsersTab() {
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-3 py-8 text-center text-sm text-white/40">
+                <td colSpan={9} className="px-3 py-8 text-center text-sm text-white/40">
                   No users found
                 </td>
               </tr>
@@ -135,6 +164,17 @@ export function UsersTab() {
           </tbody>
         </table>
       </div>
+
+      <Pagination
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        onChange={setPage}
+        onPageSizeChange={(n) => {
+          setPageSize(n);
+          setPage(0);
+        }}
+      />
 
       <AdjustModal
         user={adjustOf}

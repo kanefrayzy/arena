@@ -186,8 +186,29 @@ export class AdminService {
   }
 
   // ───────────────────────── Users ─────────────────────────
-  async listUsers(opts: { search?: string; limit?: number }) {
+  async listUsers(opts: {
+    search?: string | undefined;
+    limit?: number | undefined;
+    offset?: number | undefined;
+    sortBy?: string | undefined;
+    sortDir?: 'asc' | 'desc' | undefined;
+  }) {
     const limit = Math.min(opts.limit ?? 50, 200);
+    const offset = Math.max(opts.offset ?? 0, 0);
+    const dir: 'asc' | 'desc' = opts.sortDir === 'asc' ? 'asc' : 'desc';
+    // Whitelist of sortable fields → Prisma orderBy.
+    const sortMap: Record<string, Prisma.UserOrderByWithRelationInput> = {
+      createdAt: { createdAt: dir },
+      username: { username: dir },
+      email: { email: dir },
+      balance: { wallet: { balance: dir } },
+      mmr: { stats: { mmr: dir } },
+      cup: { stats: { cup: dir } },
+      wins: { stats: { wins: dir } },
+      losses: { stats: { losses: dir } },
+    };
+    const orderBy: Prisma.UserOrderByWithRelationInput =
+      (opts.sortBy && sortMap[opts.sortBy]) || { createdAt: dir };
     const where: Prisma.UserWhereInput = opts.search
       ? {
           OR: [
@@ -196,13 +217,18 @@ export class AdminService {
           ],
         }
       : {};
-    const rows = await this.prisma.user.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-      include: { wallet: true, stats: true },
-    });
+    const [total, rows] = await this.prisma.$transaction([
+      this.prisma.user.count({ where }),
+      this.prisma.user.findMany({
+        where,
+        orderBy,
+        skip: offset,
+        take: limit,
+        include: { wallet: true, stats: true },
+      }),
+    ]);
     return {
+      total,
       items: rows.map((u) => ({
         id: u.id,
         email: u.email,
@@ -721,16 +747,39 @@ export class AdminService {
   }
 
   // ───────────────────────── Payments ─────────────────────────
-  async listPayments(opts: { status?: string; type?: string; limit?: number }) {
+  async listPayments(opts: {
+    status?: string | undefined;
+    type?: string | undefined;
+    limit?: number | undefined;
+    offset?: number | undefined;
+    sortBy?: string | undefined;
+    sortDir?: 'asc' | 'desc' | undefined;
+  }) {
     const limit = Math.min(opts.limit ?? 50, 200);
+    const offset = Math.max(opts.offset ?? 0, 0);
+    const dir: 'asc' | 'desc' = opts.sortDir === 'asc' ? 'asc' : 'desc';
+    const sortMap: Record<string, Prisma.PaymentOrderByWithRelationInput> = {
+      createdAt: { createdAt: dir },
+      finishedAt: { finishedAt: dir },
+      amountUsd: { amountUsd: dir },
+      status: { status: dir },
+      type: { type: dir },
+      provider: { provider: dir },
+    };
+    const orderBy: Prisma.PaymentOrderByWithRelationInput =
+      (opts.sortBy && sortMap[opts.sortBy]) || { createdAt: dir };
     const where: Prisma.PaymentWhereInput = {};
     if (opts.status) where.status = opts.status;
     if (opts.type) where.type = opts.type;
-    const rows = await this.prisma.payment.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-    });
+    const [total, rows] = await this.prisma.$transaction([
+      this.prisma.payment.count({ where }),
+      this.prisma.payment.findMany({
+        where,
+        orderBy,
+        skip: offset,
+        take: limit,
+      }),
+    ]);
     const userIds = Array.from(new Set(rows.map((r) => r.userId)));
     const users = userIds.length
       ? await this.prisma.user.findMany({
@@ -740,6 +789,7 @@ export class AdminService {
       : [];
     const userMap = new Map(users.map((u) => [u.id, u]));
     return {
+      total,
       items: rows.map((p) => {
         const u = userMap.get(p.userId);
         return {

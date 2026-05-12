@@ -190,8 +190,20 @@ export class AdminController {
 
   // Users
   @Get('users')
-  listUsers(@Query('search') search?: string, @Query('limit') limit?: string) {
-    return this.admin.listUsers({ search, limit: limit ? parseInt(limit, 10) : undefined });
+  listUsers(
+    @Query('search') search?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortDir') sortDir?: string,
+  ) {
+    return this.admin.listUsers({
+      search,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      offset: offset ? parseInt(offset, 10) : undefined,
+      sortBy,
+      sortDir: sortDir === 'asc' ? 'asc' : sortDir === 'desc' ? 'desc' : undefined,
+    });
   }
 
   @Post('users/:id/ban')
@@ -412,8 +424,18 @@ export class AdminController {
     @Query('status') status?: string,
     @Query('type') type?: string,
     @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortDir') sortDir?: string,
   ) {
-    return this.admin.listPayments({ status, type, limit: limit ? parseInt(limit, 10) : undefined });
+    return this.admin.listPayments({
+      status,
+      type,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      offset: offset ? parseInt(offset, 10) : undefined,
+      sortBy,
+      sortDir: sortDir === 'asc' ? 'asc' : sortDir === 'desc' ? 'desc' : undefined,
+    });
   }
 
   @Post('payments/:id/approve')
