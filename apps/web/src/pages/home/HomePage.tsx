@@ -151,7 +151,7 @@ export function HomePage() {
             $
           </span>
           <span className="font-mono text-[15px] font-semibold leading-none text-white tabular-nums">
-            {wallet ? Number(wallet.balance).toFixed(2) : '—'}
+            {wallet ? Number(wallet.balance).toFixed(4) : '—'}
           </span>
           <svg viewBox="0 0 12 12" className="h-3 w-3 text-white/40 transition group-hover:text-game-yellow" fill="currentColor" aria-hidden>
             <path d="M6 2v8M6 2l3 3M6 2l-3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none" transform="rotate(180 6 6)" />

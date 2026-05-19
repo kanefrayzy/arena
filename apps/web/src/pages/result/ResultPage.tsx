@@ -34,6 +34,8 @@ export function ResultPage() {
   /** Animated cup counter (interpolates from cupBefore to cupAfter). */
   const [displayedCup, setDisplayedCup] = useState<number | null>(null);
   const [cupAfter, setCupAfter] = useState<number | null>(null);
+  /** Actual net delta from the ledger (what was truly credited/debited). */
+  const [myDelta, setMyDelta] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -81,6 +83,30 @@ export function ResultPage() {
     return () => { cancelled = true; };
   }, [data, me?.cup, setMe]);
 
+  // Fetch actual payout delta from the ledger. Retries until the match is
+  // settled (myDelta !== '0') or ~3 s have elapsed.
+  useEffect(() => {
+    if (!id || !data) return;
+    const stake = Number(data.room?.stakeUsd ?? 0);
+    if (stake === 0) return; // free mode — no money moved
+    let cancelled = false;
+    let attempt = 0;
+    const tryOnce = async () => {
+      try {
+        const res = await api.get<{ myDelta: string }>(`/matches/${id}`);
+        if (cancelled) return;
+        if (res.myDelta !== '0' || attempt >= 7) {
+          setMyDelta(res.myDelta);
+          return;
+        }
+      } catch { /* retry */ }
+      attempt += 1;
+      window.setTimeout(() => { void tryOnce(); }, 400);
+    };
+    void tryOnce();
+    return () => { cancelled = true; };
+  }, [id, data]);
+
   // Animate displayedCup from cupBefore → cupAfter (~900 ms ease-out).
   useEffect(() => {
     if (!data || cupAfter == null) return;
@@ -120,13 +146,21 @@ export function ResultPage() {
 
   // Payout badge — show for any match with a stake (STAKE or CASUAL with stakeUsd > 0)
   const stake = Number(data.room?.stakeUsd ?? 0);
+  // Use actual ledger delta when available; fall back to room stake estimate.
+  const payoutAmount = myDelta !== null ? Number(myDelta) : null;
   const payoutLine =
     stake > 0
-      ? outcome === 'win'
-        ? { text: `+$${stake.toFixed(2)}`, cls: 'text-game-cyan' }
-        : outcome === 'loss'
-          ? { text: `-$${stake.toFixed(2)}`, cls: 'text-game-red' }
-          : { text: `$0.00`, cls: 'text-white/50' }
+      ? payoutAmount !== null
+        ? payoutAmount > 0
+          ? { text: `+$${payoutAmount.toFixed(4)}`, cls: 'text-game-cyan' }
+          : payoutAmount < 0
+            ? { text: `-$${Math.abs(payoutAmount).toFixed(4)}`, cls: 'text-game-red' }
+            : { text: `$0.0000`, cls: 'text-white/50' }
+        : outcome === 'win'
+          ? { text: `+$${stake.toFixed(4)}`, cls: 'text-game-cyan' }
+          : outcome === 'loss'
+            ? { text: `-$${stake.toFixed(4)}`, cls: 'text-game-red' }
+            : { text: `$0.0000`, cls: 'text-white/50' }
       : null;
 
   const cupBefore = data.cupBefore ?? 0;

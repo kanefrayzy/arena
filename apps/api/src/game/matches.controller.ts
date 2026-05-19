@@ -74,6 +74,11 @@ export class MatchesController {
     if (m.player1Id !== userId && m.player2Id !== userId) {
       throw new NotFoundException();
     }
-    return m;
+    const deltaRow = await this.prisma.ledger.aggregate({
+      where: { userId, refType: 'match', refId: id },
+      _sum: { amount: true },
+    });
+    const myDelta = (deltaRow._sum.amount ?? new Prisma.Decimal(0)).toString();
+    return { ...m, myDelta };
   }
 }
