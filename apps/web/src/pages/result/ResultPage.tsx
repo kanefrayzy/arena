@@ -180,13 +180,13 @@ export function ResultPage() {
       </div>
 
       {payoutLine && (
-        <div className="flex flex-col items-center gap-1">
-          <div className={`font-display text-4xl font-bold ${payoutLine.cls} drop-shadow-[0_2px_0_rgba(0,0,0,0.6)]`}>
-            {payoutLine.text}
-          </div>
-          <div className="text-sm text-white/50">
-            {t('result.stake', 'ставка')} ${stake.toFixed(4)}
-          </div>
+        <div className={`font-display text-4xl font-bold ${payoutLine.cls} drop-shadow-[0_2px_0_rgba(0,0,0,0.6)] flex items-baseline gap-2`}>
+          <span>{payoutLine.text}</span>
+          {outcome !== 'draw' && (
+            <span className="text-lg font-semibold text-white/40">
+              ({t('result.stake', 'ставка')} ${stake.toFixed(4)})
+            </span>
+          )}
         </div>
       )}
 
