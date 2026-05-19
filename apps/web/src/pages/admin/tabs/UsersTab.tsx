@@ -112,9 +112,9 @@ export function UsersTab() {
                   {u.role === 'ADMIN' ? <Badge tone="info">ADMIN</Badge> : <span className="text-xs text-white/50">{u.role}</span>}
                 </td>
                 <td className="px-3 py-2.5 text-right font-mono tabular-nums">
-                  ${Number(u.balance).toFixed(2)}
+                  ${Number(u.balance).toFixed(4)}
                   {Number(u.locked) > 0 && (
-                    <div className="text-[10px] text-white/40">+${Number(u.locked).toFixed(2)} locked</div>
+                    <div className="text-[10px] text-white/40">+${Number(u.locked).toFixed(4)} locked</div>
                   )}
                 </td>
                 <td className="hidden px-3 py-2.5 text-right tabular-nums md:table-cell">{u.mmr}</td>

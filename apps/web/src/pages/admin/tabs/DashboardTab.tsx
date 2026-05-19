@@ -34,7 +34,7 @@ const fmt = (v: number | string) => {
 };
 const money = (v: string | number) => {
   const n = typeof v === 'string' ? Number(v) : v;
-  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`;
 };
 
 function StatCard({
