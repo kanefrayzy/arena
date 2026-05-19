@@ -128,9 +128,10 @@ export function MatchHistoryModal({ onClose }: { onClose: () => void }) {
             // taken.
             let amountNode: ReactNode = null;
             if (delta > 0) {
+              // Total received = net gain + own stake back (mirrors result page logic)
               amountNode = (
                 <div className="shrink-0 rounded-lg bg-game-green/15 px-2 py-0.5 text-xs font-mono font-bold text-game-green ring-1 ring-game-green/30">
-                  +${delta.toFixed(4)}
+                  +${(delta + stake).toFixed(4)}
                 </div>
               );
             } else if (delta < 0) {
@@ -140,8 +141,6 @@ export function MatchHistoryModal({ onClose }: { onClose: () => void }) {
                 </div>
               );
             }
-            // Suppress unused `stake` var warning in builds; kept for future re-use.
-            void stake;
 
             return (
               <div key={m.id} className="flex items-center gap-3 border-b border-white/5 px-5 py-3">
