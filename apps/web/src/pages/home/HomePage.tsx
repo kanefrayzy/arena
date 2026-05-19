@@ -27,12 +27,6 @@ type Mode = 'casual' | 'stake';
 
 const SELECTABLE_MODES: Mode[] = ['casual', 'stake'];
 
-const STAKE_ROOMS: { id: number; stake: string }[] = [
-  { id: 3, stake: '1' },
-  { id: 4, stake: '5' },
-  { id: 5, stake: '10' },
-];
-
 export function HomePage() {
   const { t } = useTranslation();
   const nav = useNavigate();
@@ -45,6 +39,7 @@ export function HomePage() {
   // Per-mode display labels sourced from /queue/rooms so admins can rename
   // rooms without redeploying the UI (e.g. "Casual" → "Training").
   const [modeLabels, setModeLabels] = useState<Partial<Record<Mode, string>>>({});
+  const [stakeRooms, setStakeRooms] = useState<{ id: number; stake: string; name: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showNotifs, setShowNotifs] = useState(false);
@@ -84,16 +79,20 @@ export function HomePage() {
     })();
   }, [nav, setMe]);
 
-  // Fetch room list once to populate the mode-tab labels from server-side
-  // room names (admin-editable). Falls back to i18n labels on failure.
+  // Fetch room list once to populate the mode-tab labels and stake rooms from
+  // server-side data (admin-editable). Falls back to i18n labels on failure.
   useEffect(() => {
     void (async () => {
       try {
-        const res = await api.get<{ items: { id: number; name: string; mode: 'FREE' | 'CASUAL' | 'STAKE' }[] }>(
+        const res = await api.get<{ items: { id: number; name: string; mode: 'FREE' | 'CASUAL' | 'STAKE'; stakeUsd: string | null }[] }>(
           '/queue/rooms',
         );
         const casual = res.items.find((r) => r.mode === 'CASUAL');
         if (casual) setModeLabels({ casual: casual.name });
+        const stakes = res.items
+          .filter((r) => r.mode === 'STAKE' && r.stakeUsd)
+          .map((r) => ({ id: r.id, stake: r.stakeUsd!, name: r.name }));
+        setStakeRooms(stakes);
       } catch { /* fall back to i18n */ }
     })();
   }, []);
@@ -207,7 +206,7 @@ export function HomePage() {
         {/* Stake room picker */}
         {mode === 'stake' && (
           <div className="mt-2 flex justify-center gap-2 px-6">
-            {STAKE_ROOMS.map((r) => (
+            {stakeRooms.map((r) => (
               <button
                 key={r.id}
                 type="button"
