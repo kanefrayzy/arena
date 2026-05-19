@@ -130,13 +130,13 @@ export function MatchHistoryModal({ onClose }: { onClose: () => void }) {
             if (delta > 0) {
               amountNode = (
                 <div className="shrink-0 rounded-lg bg-game-green/15 px-2 py-0.5 text-xs font-mono font-bold text-game-green ring-1 ring-game-green/30">
-                  +${delta.toFixed(2)}
+                  +${delta.toFixed(4)}
                 </div>
               );
             } else if (delta < 0) {
               amountNode = (
                 <div className="shrink-0 rounded-lg bg-game-red/15 px-2 py-0.5 text-xs font-mono font-bold text-game-red ring-1 ring-game-red/30">
-                  −${Math.abs(delta).toFixed(2)}
+                  −${Math.abs(delta).toFixed(4)}
                 </div>
               );
             }
